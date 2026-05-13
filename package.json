@@ -1,0 +1,24 @@
+{
+  "name": "alice-web-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^28.0.3",
+    "@types/three": "^0.170.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  }
+}
