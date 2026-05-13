@@ -1,0 +1,138 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { createServer } from "../src/server";
+import * as fs from "fs";
+import * as path from "path";
+import type { Express } from "express";
+import request from "supertest";
+
+const TEST_EVIDENCE_DIR = path.resolve(__dirname, "../.test-server-evidence");
+
+describe("server API", () => {
+  let app: Express;
+
+  beforeAll(() => {
+    fs.mkdirSync(TEST_EVIDENCE_DIR, { recursive: true });
+    app = createServer({
+      port: 0,
+      evidenceDir: TEST_EVIDENCE_DIR,
+    });
+  });
+
+  afterAll(() => {
+    fs.rmSync(TEST_EVIDENCE_DIR, { recursive: true, force: true });
+  });
+
+  describe("GET /api/health", () => {
+    it("returns running status", async () => {
+      const res = await request(app).get("/api/health").expect(200);
+      expect(res.body.status).toBe("running");
+      expect(res.body.runtime).toBe("typescript-web-prototype");
+      expect(typeof res.body.pid).toBe("number");
+    });
+  });
+
+  describe("POST /api/launch", () => {
+    it("launches with default project", async () => {
+      const res = await request(app).post("/api/launch").send({}).expect(200);
+      expect(res.body.status).toBe("launched");
+      expect(res.body.sceneObjectCount).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe("POST /api/scene/add-object", () => {
+    it("adds object and writes evidence", async () => {
+      const res = await request(app)
+        .post("/api/scene/add-object")
+        .send({
+          className: "org.lgna.story.SBiped",
+          name: "bunny",
+        })
+        .expect(200);
+
+      expect(res.body.status).toBe("added");
+      expect(res.body.className).toBe("org.lgna.story.SBiped");
+      expect(res.body.sceneFieldCountAfter).toBeGreaterThan(0);
+
+      // Verify evidence artifact was written
+      const artifactPath = path.join(
+        TEST_EVIDENCE_DIR,
+        "scene-object-added.json",
+      );
+      expect(fs.existsSync(artifactPath)).toBe(true);
+      const content = JSON.parse(fs.readFileSync(artifactPath, "utf-8"));
+      expect(content.schema_version).toBe("eatme.alice-scene-object-added/v1");
+    });
+
+    it("rejects missing className", async () => {
+      await request(app)
+        .post("/api/scene/add-object")
+        .send({})
+        .expect(400);
+    });
+  });
+
+  describe("POST /api/code/edit-procedure", () => {
+    it("edits procedure and writes proof artifacts", async () => {
+      const res = await request(app)
+        .post("/api/code/edit-procedure")
+        .send({
+          procedureSelector: "scene.myFirstMethod",
+          editSpec: "append-comment:eatme first lesson edit proof",
+        })
+        .expect(200);
+
+      expect(res.body.schema_version).toBe(
+        "eatme.alice-first-lesson-code-editor-action-proof-result/v1",
+      );
+      expect(res.body.status).toBe("proved");
+      expect(res.body.procedure_selector).toBe("scene.myFirstMethod");
+      expect(res.body.edited_project_artifact).toBe("edited-project.a3p");
+
+      // Verify proof artifact was written
+      const proofPath = path.join(
+        TEST_EVIDENCE_DIR,
+        "first-lesson-code-editor-action-proof.json",
+      );
+      expect(fs.existsSync(proofPath)).toBe(true);
+      const proof = JSON.parse(fs.readFileSync(proofPath, "utf-8"));
+      expect(proof.schema_version).toBe(
+        "eatme.alice-first-lesson-code-editor-action-proof/v1",
+      );
+      expect(proof.status).toBe("proved");
+      expect(proof.success).toBe(true);
+
+      // Verify edited project was written
+      const editedPath = path.join(TEST_EVIDENCE_DIR, "edited-project.a3p");
+      expect(fs.existsSync(editedPath)).toBe(true);
+      expect(fs.statSync(editedPath).size).toBeGreaterThan(0);
+    });
+  });
+
+  describe("POST /api/project/save", () => {
+    it("saves project and writes proof artifacts", async () => {
+      const res = await request(app)
+        .post("/api/project/save")
+        .send({ saveSelector: "scene.myFirstMethod" })
+        .expect(200);
+
+      expect(res.body.schema_version).toBe(
+        "eatme.alice-project-save-result/v1",
+      );
+      expect(res.body.status).toBe("saved");
+      expect(res.body.save_selector).toBe("scene.myFirstMethod");
+      expect(res.body.saved_project_artifact).toBeTruthy();
+      expect(res.body.save_artifact).toBeTruthy();
+    });
+  });
+
+  describe("GET /api/screenshot", () => {
+    it("returns screenshot info", async () => {
+      const res = await request(app).get("/api/screenshot").expect(200);
+      expect(res.body.status).toBe("captured");
+      expect(res.body.path).toContain("screenshot.png");
+
+      const screenshotPath = path.join(TEST_EVIDENCE_DIR, "screenshot.png");
+      expect(fs.existsSync(screenshotPath)).toBe(true);
+    });
+  });
+});

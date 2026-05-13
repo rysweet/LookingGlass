@@ -1,22 +1,32 @@
 {
   "name": "alice-web-prototype",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "alice-web": "./dist-server/cli.js"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "serve": "node dist-server/cli.js serve",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "express": "^5.2.1",
     "jszip": "^3.10.1",
     "three": "^0.170.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/jsdom": "^28.0.3",
+    "@types/node": "^25.7.0",
+    "@types/supertest": "^7.2.0",
     "@types/three": "^0.170.0",
     "jsdom": "^29.1.1",
+    "supertest": "^7.2.2",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
     "vitest": "^3.0.0"
