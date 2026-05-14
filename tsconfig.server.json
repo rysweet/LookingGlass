@@ -11,8 +11,8 @@
     "isolatedModules": true,
     "outDir": "dist-server",
     "declaration": true,
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM"],
     "types": ["node"]
   },
-  "include": ["src/evidence-writer.ts", "src/server.ts", "src/cli.ts"]
+  "include": ["src/evidence-writer.ts", "src/server.ts", "src/cli.ts", "src/a3p-parser.ts", "src/hooks/*.ts"]
 }

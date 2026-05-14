@@ -26,6 +26,7 @@ export interface AliceProject {
 export async function parseA3P(data: ArrayBuffer | Uint8Array): Promise<AliceProject> {
   const zip = await JSZip.loadAsync(data);
 
+  await ensureNodeXml();
   const version = await readTextFile(zip, "version.txt");
   const xmlText = await readXml(zip);
   const doc = parseXmlString(xmlText);
@@ -77,11 +78,24 @@ function decodeUtf16(bytes: Uint8Array, bigEndian: boolean): string {
 }
 
 function parseXmlString(xml: string): Document {
-  if (typeof DOMParser !== "undefined") {
-    return new DOMParser().parseFromString(xml, "application/xml");
+  if (typeof globalThis.DOMParser !== "undefined") {
+    return new globalThis.DOMParser().parseFromString(xml, "application/xml");
   }
-  // Node.js fallback (used in tests via linkedom or similar)
-  throw new Error("DOMParser not available – run in a browser or polyfill it");
+  // Node.js: use the lazily-loaded xmldom parser
+  if (!_xmlDomParser) {
+    throw new Error("Call initNodeXml() before parseXmlString in Node.js");
+  }
+  return _xmlDomParser.parseFromString(xml, "application/xml");
+}
+
+// Lazy-loaded Node.js XML parser
+let _xmlDomParser: InstanceType<typeof DOMParser> | null = null;
+
+async function ensureNodeXml(): Promise<void> {
+  if (typeof globalThis.DOMParser !== "undefined") return;
+  if (_xmlDomParser) return;
+  const mod = await import("@xmldom/xmldom");
+  _xmlDomParser = new (mod.DOMParser as unknown as typeof DOMParser)();
 }
 
 // ---------------------------------------------------------------------------
