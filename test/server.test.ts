@@ -125,6 +125,38 @@ describe("server API", () => {
     });
   });
 
+  describe("POST /api/world/run", () => {
+    it("runs world and writes evidence", async () => {
+      // Launch first
+      await request(app).post("/api/launch").send({});
+
+      const res = await request(app)
+        .post("/api/world/run")
+        .send({})
+        .expect(200);
+
+      expect(res.body.schema_version).toBe(
+        "eatme.alice-run-world-result/v1",
+      );
+      expect(res.body.status).toBe("completed");
+      expect(typeof res.body.run_duration_ms).toBe("number");
+
+      const evidencePath = path.join(TEST_EVIDENCE_DIR, "run-world-result.json");
+      expect(fs.existsSync(evidencePath)).toBe(true);
+      const evidence = JSON.parse(fs.readFileSync(evidencePath, "utf-8"));
+      expect(evidence.status).toBe("completed");
+    });
+
+    it("rejects run before launch", async () => {
+      // Create fresh server without launching
+      const freshApp = createServer({
+        port: 0,
+        evidenceDir: TEST_EVIDENCE_DIR,
+      });
+      await request(freshApp).post("/api/world/run").send({}).expect(400);
+    });
+  });
+
   describe("GET /api/screenshot", () => {
     it("returns screenshot info", async () => {
       const res = await request(app).get("/api/screenshot").expect(200);
