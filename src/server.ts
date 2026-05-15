@@ -4,12 +4,11 @@ import * as path from "path";
 import {
   writeSceneObjectAdded,
   writeEditProcedureProof,
-  editProcedureResultJson,
   writeSaveProof,
-  saveProjectResultJson,
 } from "./evidence-writer.js";
 import { parseA3P, type AliceProject } from "./a3p-parser.js";
 import { renderSceneToPng } from "./scene-renderer.js";
+import { createExecutionState, executeStatements, type EventLogEntry } from "./statement-executor.js";
 
 export interface ServerOptions {
   port: number;
@@ -28,11 +27,12 @@ interface ServerState {
   projectName: string;
   sceneObjects: SceneObject[];
   procedures: Map<string, string[]>; // methodName -> statements
+  parsedProject: AliceProject | null;
 }
 
 export function createServer(options: ServerOptions): express.Express {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "1mb" }));
 
   const state: ServerState = {
     launched: false,
@@ -40,19 +40,28 @@ export function createServer(options: ServerOptions): express.Express {
     projectName: "Program",
     sceneObjects: [],
     procedures: new Map([["myFirstMethod", []]]),
+    parsedProject: null,
   };
 
   // Ensure evidence dir exists
   fs.mkdirSync(options.evidenceDir, { recursive: true });
 
   // ── POST /api/launch ───────────────────────────────────────────────
-  app.post("/api/launch", (req, res) => {
+  app.post("/api/launch", async (req, res) => {
     const projectFile = req.body?.project ?? options.projectPath ?? null;
     state.launched = true;
     state.projectPath = projectFile;
 
     if (projectFile && fs.existsSync(projectFile)) {
       state.projectName = path.basename(projectFile, ".a3p");
+      try {
+        const data = fs.readFileSync(projectFile);
+        state.parsedProject = await parseA3P(data);
+        state.projectName = state.parsedProject.projectName || state.projectName;
+      } catch (err) {
+        console.error("Failed to parse .a3p on launch:", err);
+        state.parsedProject = null;
+      }
     }
 
     // Seed default scene objects (like a fresh Alice project)
@@ -132,8 +141,7 @@ export function createServer(options: ServerOptions): express.Express {
     statements.push(marker);
     const afterStatementCount = statements.length;
 
-    const beforeMethods = Array.from(state.procedures.keys());
-    const afterMethods = Array.from(state.procedures.keys());
+    const methodNames = Array.from(state.procedures.keys());
 
     // Write the edited project artifact (a copy or placeholder .a3p)
     const editedProjectPath = path.join(
@@ -159,16 +167,24 @@ export function createServer(options: ServerOptions): express.Express {
       marker,
       beforeStatementCount,
       afterStatementCount,
-      beforeMethods,
-      afterMethods,
+      beforeMethods: methodNames,
+      afterMethods: methodNames,
       editedProject: "edited-project.a3p",
     });
 
-    // Return the result JSON that eatme expects on stdout
-    const resultJson = editProcedureResultJson(procedureSelector);
-
     res.json({
-      ...JSON.parse(resultJson),
+      schema_version: "eatme.alice-first-lesson-code-editor-action-proof-result/v1",
+      status: "proved",
+      procedure_selector: procedureSelector,
+      edited_project_artifact: "edited-project.a3p",
+      action_proof: "first-lesson-code-editor-action-proof.json",
+      doesNotClaim: [
+        "first-lesson completion",
+        "grading",
+        "creative assessment",
+        "visible rendering correctness",
+        "broad UI automation",
+      ],
       evidenceArtifact: proofPath,
     });
   });
@@ -202,53 +218,69 @@ export function createServer(options: ServerOptions): express.Express {
       fileSizeBytes: savedStat.size,
     });
 
-    // Return the result JSON that eatme's save hook validation expects
-    const resultJson = saveProjectResultJson(
-      saveSelector,
-      savedProjectFilename,
-      saveArtifactFilename,
-    );
-
     res.json({
-      ...JSON.parse(resultJson),
+      schema_version: "eatme.alice-project-save-result/v1",
+      status: "saved",
+      save_selector: saveSelector,
+      saved_project_artifact: savedProjectFilename,
+      save_artifact: saveArtifactFilename,
       evidenceArtifact,
     });
   });
 
   // ── POST /api/world/run ──────────────────────────────────────────
-  app.post("/api/world/run", (_req, res) => {
+  app.post("/api/world/run", async (_req, res) => {
     if (!state.launched) {
       res.status(400).json({ error: "Not launched. Call POST /api/launch first." });
       return;
     }
 
     const runStart = Date.now();
-    // Simulate world execution — in a real implementation this would
-    // evaluate Tweedle statements via a headless VM
+
+    // Parse project if not already cached
+    if (!state.parsedProject && state.projectPath && fs.existsSync(state.projectPath)) {
+      try {
+        const data = fs.readFileSync(state.projectPath);
+        state.parsedProject = await parseA3P(data);
+      } catch (err) {
+        console.error("Failed to parse .a3p on run:", err);
+      }
+    }
+
+    // Execute statements via the executor
+    let statementsExecuted = 0;
+    let eventLog: EventLogEntry[] = [];
+
+    if (state.parsedProject) {
+      const execState = createExecutionState(state.parsedProject.sceneObjects);
+      const allStatements = state.parsedProject.methods.flatMap(m => m.statements);
+      const result = executeStatements(allStatements, execState);
+      statementsExecuted = result.statementsExecuted;
+      eventLog = result.eventLog;
+    }
+
     const runDuration = Date.now() - runStart;
 
     const runEvidencePath = path.join(options.evidenceDir, "run-world-result.json");
-    fs.writeFileSync(runEvidencePath, JSON.stringify({
+    const runResult = {
       schema_version: "eatme.alice-run-world-result/v1",
       status: "completed",
       project_name: state.projectName,
       scene_object_count: state.sceneObjects.length,
       procedure_count: state.procedures.size,
+      statements_executed: statementsExecuted,
+      event_log: eventLog,
       run_duration_ms: runDuration,
       errors: [],
       doesNotClaim: [
         "visible rendering correctness",
-        "full Tweedle VM execution",
         "desktop run-button proof",
       ],
-    }, null, 2) + "\n");
+    };
+    fs.writeFileSync(runEvidencePath, JSON.stringify(runResult, null, 2) + "\n");
 
     res.json({
-      schema_version: "eatme.alice-run-world-result/v1",
-      status: "completed",
-      project_name: state.projectName,
-      scene_object_count: state.sceneObjects.length,
-      run_duration_ms: runDuration,
+      ...runResult,
       evidenceArtifact: runEvidencePath,
     });
   });
@@ -258,8 +290,8 @@ export function createServer(options: ServerOptions): express.Express {
     const screenshotPath = path.join(options.evidenceDir, "screenshot.png");
 
     try {
-      // Build a project representation from current state for rendering
-      const currentProject: AliceProject = {
+      // Use cached parse if available, otherwise build from server state
+      const currentProject: AliceProject = state.parsedProject ?? {
         version: "3.10",
         projectName: state.projectName,
         sceneObjects: state.sceneObjects.map((o) => ({
@@ -272,17 +304,6 @@ export function createServer(options: ServerOptions): express.Express {
         })),
         methods: [],
       };
-
-      // If we loaded a real .a3p, parse it for full scene data
-      if (state.projectPath && fs.existsSync(state.projectPath)) {
-        try {
-          const data = fs.readFileSync(state.projectPath);
-          const parsed = await parseA3P(data);
-          currentProject.sceneObjects = parsed.sceneObjects;
-          currentProject.methods = parsed.methods;
-          currentProject.projectName = parsed.projectName;
-        } catch { /* fall back to state-based rendering */ }
-      }
 
       const result = await renderSceneToPng(currentProject, { width: 640, height: 480 });
       fs.writeFileSync(screenshotPath, result.png);
@@ -301,7 +322,7 @@ export function createServer(options: ServerOptions): express.Express {
         status: "captured",
         path: screenshotPath,
         placeholder: true,
-        error: String(err),
+        error: "Screenshot rendering failed",
       });
     }
   });
@@ -311,20 +332,6 @@ export function createServer(options: ServerOptions): express.Express {
 
 /** Create a minimal valid buffer that can stand in as a .a3p file. */
 function createMinimalA3pBuffer(): Buffer {
-  // A .a3p is a ZIP; this is the simplest valid representation.
-  // We write a minimal ZIP with version.txt and programType.xml.
-  const JSZip = require("jszip");
-  const zip = new JSZip();
-  zip.file("version.txt", "3.10.0.0");
-  zip.file(
-    "programType.xml",
-    `<?xml version="1.0" encoding="UTF-8"?>
-<node key="1" type="org.lgna.project.ast.NamedUserType" uuid="ts-proto" version="3.10062">
-  <property name="name"><value type="java.lang.String">Program</value></property>
-</node>`,
-  );
-  // Synchronous generation not available; use a placeholder buffer.
-  // For actual use the CLI generates this properly.
   return Buffer.from("PK\x03\x04" + "alice-web-prototype-placeholder", "binary");
 }
 

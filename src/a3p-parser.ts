@@ -66,8 +66,8 @@ export async function parseA3P(data: ArrayBuffer | Uint8Array): Promise<AlicePro
   const doc = parseXmlString(xmlText);
 
   const projectName = getProjectName(doc);
-  const sceneObjects = extractSceneObjects(doc);
   const keyMap = buildKeyMap(doc.documentElement);
+  const sceneObjects = extractSceneObjects(doc, keyMap);
   const methods = extractMethods(doc, keyMap);
 
   return { version: version.trim(), projectName, sceneObjects, methods };
@@ -181,11 +181,9 @@ function getProjectName(doc: Document): string {
   return getPropertyText(root, "name") ?? "Unknown";
 }
 
-function extractSceneObjects(doc: Document): AliceObject[] {
+function extractSceneObjects(doc: Document, keyMap: Map<string, Element>): AliceObject[] {
   const objects: AliceObject[] = [];
   const root = doc.documentElement;
-
-  const keyMap = buildKeyMap(root);
 
   // Find the Scene NamedUserType (superType = org.lgna.story.SScene)
   const sceneType = findSceneType(root, keyMap);
@@ -469,13 +467,12 @@ function extractStatements(methodNode: Element, keyMap: Map<string, Element>): A
   if (!stmtsProp) return [];
 
   const results: AliceStatement[] = [];
-  const stmtNodes = stmtsProp.getElementsByTagName("node");
+  const coll = directChild(stmtsProp, "collection");
+  const container = coll ?? stmtsProp;
 
-  for (let i = 0; i < stmtNodes.length; i++) {
-    const s = stmtNodes[i];
-    // Only process direct children of the statements collection
-    if (s.parentElement !== stmtsProp && s.parentElement?.parentElement !== stmtsProp) continue;
-
+  for (let i = 0; i < container.childNodes.length; i++) {
+    const s = container.childNodes[i] as Element;
+    if (s.nodeType !== 1 || s.tagName !== "node") continue;
     const stmt = parseStatement(resolve(s, keyMap), keyMap);
     if (stmt) results.push(stmt);
   }

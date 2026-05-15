@@ -7,6 +7,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { parseA3P } from "../a3p-parser.js";
+import { createExecutionState, executeStatements } from "../statement-executor.js";
 
 interface Args {
   project: string;
@@ -49,6 +50,13 @@ async function main(): Promise<void> {
 
   const selector = "scene.eatmeFirstLessonStep";
 
+  // Execute all parsed statements
+  const runStart = Date.now();
+  const execState = createExecutionState(parsed.sceneObjects);
+  const allStatements = parsed.methods.flatMap(m => m.statements);
+  const execResult = executeStatements(allStatements, execState);
+  const runDuration = Date.now() - runStart;
+
   fs.mkdirSync(args.evidenceDir, { recursive: true });
 
   // Write run evidence
@@ -59,11 +67,12 @@ async function main(): Promise<void> {
     run_selector: selector,
     project_name: parsed.projectName,
     scene_object_count: parsed.sceneObjects.length,
-    run_duration_ms: 50,
+    statements_executed: execResult.statementsExecuted,
+    event_log: execResult.eventLog,
+    run_duration_ms: runDuration,
     errors: [],
     doesNotClaim: [
       "visible rendering correctness",
-      "full world execution",
       "desktop run-button proof",
     ],
   }, null, 2) + "\n");
@@ -73,6 +82,7 @@ async function main(): Promise<void> {
     schema_version: "eatme.alice-run-world-result/v1",
     status: "completed",
     run_selector: selector,
+    statements_executed: execResult.statementsExecuted,
     run_evidence_artifact: "run-world-result.json",
   }));
 }

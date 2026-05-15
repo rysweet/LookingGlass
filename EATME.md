@@ -55,6 +55,20 @@ Simulate editing a procedure. Writes `first-lesson-code-editor-action-proof.json
 }
 ```
 
+### `POST /api/world/run`
+Execute Tweedle statements from the launched project. Returns execution trace
+including object position mutations and an ordered event log.
+See [docs/statement-execution.md](docs/statement-execution.md) for full details.
+```jsonc
+// Response (new fields alongside existing ones)
+{
+  "schema_version": "eatme.alice-run-world-result/v1",
+  "status": "completed",
+  "statements_executed": 5,
+  "event_log": [{ "action": "move", "object": "bunny", "detail": "z+1 → {x:0,y:0,z:1}" }]
+}
+```
+
 ### `POST /api/project/save`
 Save the project. Writes save proof artifacts.
 ```json
@@ -74,6 +88,7 @@ All artifacts match the exact JSON schemas that Java Alice produces:
 | `first-lesson-code-editor-action-proof.json` | `eatme.alice-first-lesson-code-editor-action-proof/v1` |
 | `edited-project.a3p` | (binary .a3p project file) |
 | `desktop-save-operation-result.json` | `eatme.alice-desktop-save-operation-result/v1` |
+| `run-world-result.json` | `eatme.alice-run-world-result/v1` |
 
 ## Eatme Comparison Target
 
@@ -90,21 +105,25 @@ export ALICE_TYPESCRIPT_API_URL=http://localhost:3000
 
 ```
 src/
-  evidence-writer.ts  — Writes JSON proof artifacts matching Java schemas
-  server.ts           — Express HTTP API server
-  cli.ts              — CLI entry point (alice-web serve ...)
-  a3p-parser.ts       — .a3p ZIP/XML parser (existing)
-  scene-builder.ts    — Three.js scene builder (existing)
+  evidence-writer.ts    — Writes JSON proof artifacts matching Java schemas
+  server.ts             — Express HTTP API server
+  cli.ts                — CLI entry point (alice-web serve ...)
+  a3p-parser.ts         — .a3p ZIP/XML parser (existing)
+  statement-executor.ts — Tweedle statement interpreter (pure, zero I/O)
+  scene-builder.ts      — Three.js scene builder (existing)
+  scene-renderer.ts     — PNG scene renderer (existing)
   hooks/
-    place-object.ts   — CLI hook: object placement proof
-    edit-procedure.ts — CLI hook: procedure edit proof
-    run-world.ts      — CLI hook: world run proof
-    save-project.ts   — CLI hook: project save proof
+    place-object.ts     — CLI hook: object placement proof
+    edit-procedure.ts   — CLI hook: procedure edit proof
+    run-world.ts        — CLI hook: world run proof (with statement execution)
+    save-project.ts     — CLI hook: project save proof
 tools/
   eatme-place-object    — Shell wrapper for place-object hook
   eatme-edit-procedure  — Shell wrapper for edit-procedure hook
   eatme-run-world       — Shell wrapper for run-world hook
   eatme-save-project    — Shell wrapper for save-project hook
+docs/
+  statement-execution.md — Full statement execution documentation
 ```
 
 ## CLI Hooks (eatme-compatible)
