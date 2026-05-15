@@ -5,3 +5,4 @@ dist-server/
 .test-server-evidence/
 .test-cli-evidence/
 .claude/runtime/
+results.json

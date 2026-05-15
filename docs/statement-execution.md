@@ -45,7 +45,7 @@ curl -X POST http://localhost:3000/api/world/run
 | `CountLoop` | Executes `body` statements × `count` iterations (capped at 10,000). |
 | `IfElse` | Evaluates `condition` string: `"true"` → executes `ifBody`, anything else → executes `elseBody`. |
 | `EventListener` | Logs `{action: "registerEvent", event: "..."}` to the event log. No side effects. |
-| `ReturnStatement` | Logs `{action: "return", detail: expression}`. Terminates method execution. |
+| `ReturnStatement` | Logs `{action: "return", detail: expression}`. Does **not** terminate execution (statements after the return still run). |
 | `Comment` | No-op. Skipped silently. |
 | `VariableDeclaration` | Logs `{action: "declare", name: "...", detail: "type = value"}`. |
 | Unknown | Logs `{action: "skipped", detail: "Unknown kind: ..."}`. Not fatal. |
