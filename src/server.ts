@@ -4,9 +4,7 @@ import * as path from "path";
 import {
   writeSceneObjectAdded,
   writeEditProcedureProof,
-  editProcedureResultJson,
   writeSaveProof,
-  saveProjectResultJson,
 } from "./evidence-writer.js";
 import { parseA3P, type AliceProject } from "./a3p-parser.js";
 import { renderSceneToPng } from "./scene-renderer.js";
@@ -143,8 +141,7 @@ export function createServer(options: ServerOptions): express.Express {
     statements.push(marker);
     const afterStatementCount = statements.length;
 
-    const beforeMethods = Array.from(state.procedures.keys());
-    const afterMethods = Array.from(state.procedures.keys());
+    const methodNames = Array.from(state.procedures.keys());
 
     // Write the edited project artifact (a copy or placeholder .a3p)
     const editedProjectPath = path.join(
@@ -170,16 +167,24 @@ export function createServer(options: ServerOptions): express.Express {
       marker,
       beforeStatementCount,
       afterStatementCount,
-      beforeMethods,
-      afterMethods,
+      beforeMethods: methodNames,
+      afterMethods: methodNames,
       editedProject: "edited-project.a3p",
     });
 
-    // Return the result JSON that eatme expects on stdout
-    const resultJson = editProcedureResultJson(procedureSelector);
-
     res.json({
-      ...JSON.parse(resultJson),
+      schema_version: "eatme.alice-first-lesson-code-editor-action-proof-result/v1",
+      status: "proved",
+      procedure_selector: procedureSelector,
+      edited_project_artifact: "edited-project.a3p",
+      action_proof: "first-lesson-code-editor-action-proof.json",
+      doesNotClaim: [
+        "first-lesson completion",
+        "grading",
+        "creative assessment",
+        "visible rendering correctness",
+        "broad UI automation",
+      ],
       evidenceArtifact: proofPath,
     });
   });
@@ -213,15 +218,12 @@ export function createServer(options: ServerOptions): express.Express {
       fileSizeBytes: savedStat.size,
     });
 
-    // Return the result JSON that eatme's save hook validation expects
-    const resultJson = saveProjectResultJson(
-      saveSelector,
-      savedProjectFilename,
-      saveArtifactFilename,
-    );
-
     res.json({
-      ...JSON.parse(resultJson),
+      schema_version: "eatme.alice-project-save-result/v1",
+      status: "saved",
+      save_selector: saveSelector,
+      saved_project_artifact: savedProjectFilename,
+      save_artifact: saveArtifactFilename,
       evidenceArtifact,
     });
   });
@@ -260,7 +262,7 @@ export function createServer(options: ServerOptions): express.Express {
     const runDuration = Date.now() - runStart;
 
     const runEvidencePath = path.join(options.evidenceDir, "run-world-result.json");
-    fs.writeFileSync(runEvidencePath, JSON.stringify({
+    const runResult = {
       schema_version: "eatme.alice-run-world-result/v1",
       status: "completed",
       project_name: state.projectName,
@@ -274,16 +276,11 @@ export function createServer(options: ServerOptions): express.Express {
         "visible rendering correctness",
         "desktop run-button proof",
       ],
-    }, null, 2) + "\n");
+    };
+    fs.writeFileSync(runEvidencePath, JSON.stringify(runResult, null, 2) + "\n");
 
     res.json({
-      schema_version: "eatme.alice-run-world-result/v1",
-      status: "completed",
-      project_name: state.projectName,
-      scene_object_count: state.sceneObjects.length,
-      statements_executed: statementsExecuted,
-      event_log: eventLog,
-      run_duration_ms: runDuration,
+      ...runResult,
       evidenceArtifact: runEvidencePath,
     });
   });
@@ -335,20 +332,6 @@ export function createServer(options: ServerOptions): express.Express {
 
 /** Create a minimal valid buffer that can stand in as a .a3p file. */
 function createMinimalA3pBuffer(): Buffer {
-  // A .a3p is a ZIP; this is the simplest valid representation.
-  // We write a minimal ZIP with version.txt and programType.xml.
-  const JSZip = require("jszip");
-  const zip = new JSZip();
-  zip.file("version.txt", "3.10.0.0");
-  zip.file(
-    "programType.xml",
-    `<?xml version="1.0" encoding="UTF-8"?>
-<node key="1" type="org.lgna.project.ast.NamedUserType" uuid="ts-proto" version="3.10062">
-  <property name="name"><value type="java.lang.String">Program</value></property>
-</node>`,
-  );
-  // Synchronous generation not available; use a placeholder buffer.
-  // For actual use the CLI generates this properly.
   return Buffer.from("PK\x03\x04" + "alice-web-prototype-placeholder", "binary");
 }
 
