@@ -64,15 +64,15 @@ export function executeProject(project: AliceProject): ExecutionResult {
 
 function runStatements(stmts: AliceStatement[], state: VMState): void {
   for (const stmt of stmts) {
-    if (state.stepCounter >= MAX_TOTAL_STEPS) break;
     if (state.returned) break;
+    if (state.stepCounter >= MAX_TOTAL_STEPS) break;
     executeOne(stmt, state);
   }
 }
 
 function executeOne(stmt: AliceStatement, state: VMState): void {
-  if (state.stepCounter >= MAX_TOTAL_STEPS) return;
   if (state.returned) return;
+  if (state.stepCounter >= MAX_TOTAL_STEPS) return;
 
   if (state.depth >= MAX_DEPTH) {
     state.stepCounter++;
@@ -144,10 +144,12 @@ function execCountLoop(stmt: AliceStatement, state: VMState): void {
     detail: `repeat ${count} times`,
   });
 
+  if (count === 0 || body.length === 0) return;
+
   state.depth++;
   for (let i = 0; i < count; i++) {
-    if (state.stepCounter >= MAX_TOTAL_STEPS) break;
     if (state.returned) break;
+    if (state.stepCounter >= MAX_TOTAL_STEPS) break;
     runStatements(body, state);
   }
   state.depth--;
@@ -167,6 +169,8 @@ function execIfElse(stmt: AliceStatement, state: VMState): void {
   const branch = conditionValue
     ? (stmt.ifBody ?? [])
     : (stmt.elseBody ?? []);
+
+  if (branch.length === 0) return;
 
   state.depth++;
   runStatements(branch, state);
@@ -214,8 +218,8 @@ function execVariableDeclaration(stmt: AliceStatement, state: VMState): void {
     detail: `${name}: ${varType} = ${value}`,
   });
 
-  // Cap variables per scope; allow re-assignment of existing names
-  if (state.variables.size < MAX_VARIABLES_PER_SCOPE || state.variables.has(name)) {
+  // Allow re-assignment of existing names; cap new variables per scope
+  if (state.variables.has(name) || state.variables.size < MAX_VARIABLES_PER_SCOPE) {
     state.variables.set(name, value);
   }
 }

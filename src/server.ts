@@ -238,9 +238,10 @@ export function createServer(options: ServerOptions): express.Express {
     const runStart = Date.now();
 
     // Parse project if not already cached
-    if (!state.parsedProject && state.projectPath && fs.existsSync(state.projectPath)) {
+    if (!state.parsedProject && state.projectPath) {
       try {
-        const data = fs.readFileSync(state.projectPath);
+        await fs.promises.access(state.projectPath);
+        const data = await fs.promises.readFile(state.projectPath);
         state.parsedProject = await parseA3P(data);
       } catch (err) {
         console.error("Failed to parse .a3p on run:", err);
@@ -275,7 +276,8 @@ export function createServer(options: ServerOptions): express.Express {
         "desktop run-button proof",
       ],
     };
-    fs.writeFileSync(runEvidencePath, JSON.stringify(runResult, null, 2) + "\n");
+    // Write evidence asynchronously to avoid blocking the event loop
+    await fs.promises.writeFile(runEvidencePath, JSON.stringify(runResult, null, 2) + "\n");
 
     res.json({
       ...runResult,
