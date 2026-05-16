@@ -66,8 +66,8 @@ export async function parseA3P(data: ArrayBuffer | Uint8Array): Promise<AlicePro
   const doc = parseXmlString(xmlText);
 
   const projectName = getProjectName(doc);
-  const keyMap = buildKeyMap(doc.documentElement);
-  const sceneObjects = extractSceneObjects(doc, keyMap);
+  const { keyMap, sceneType } = buildKeyMapAndFindScene(doc.documentElement);
+  const sceneObjects = extractSceneObjects(sceneType, keyMap);
   const methods = extractMethods(doc, keyMap);
 
   return { version: version.trim(), projectName, sceneObjects, methods };
@@ -139,26 +139,33 @@ async function ensureNodeXml(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * Alice XML uses a key-based reference system: `<node key="X" type="...">...children...</node>`
- * is a definition, while `<node key="X"/>` (no type, no children) is a reference.
- * Build a map from key → definition element so we can resolve references.
+ * Single-pass: build the key→definition map AND locate the Scene type node.
+ * Avoids two separate getElementsByTagName("node") traversals.
  */
-function buildKeyMap(root: Element): Map<string, Element> {
-  const map = new Map<string, Element>();
+function buildKeyMapAndFindScene(root: Element): { keyMap: Map<string, Element>; sceneType: Element | null } {
+  const keyMap = new Map<string, Element>();
+  let sceneType: Element | null = null;
   const allNodes = root.getElementsByTagName("node");
   for (let i = 0; i < allNodes.length; i++) {
     const n = allNodes[i];
+
+    // Key map: store first definition for each key
     const key = n.getAttribute("key");
-    if (!key) continue;
-    // A definition has a `type` attribute or has child elements
-    if (n.getAttribute("type") || n.childNodes.length > 0) {
-      // Only store first definition (some keys appear multiple times as refs)
-      if (!map.has(key)) {
-        map.set(key, n);
+    if (key && !keyMap.has(key)) {
+      if (n.getAttribute("type") || n.childNodes.length > 0) {
+        keyMap.set(key, n);
+      }
+    }
+
+    // Scene type detection (first match wins)
+    if (!sceneType && n.getAttribute("type") === "org.lgna.project.ast.NamedUserType") {
+      const superType = getSuperTypeName(n, keyMap);
+      if (superType && superType.includes("SScene")) {
+        sceneType = n;
       }
     }
   }
-  return map;
+  return { keyMap, sceneType };
 }
 
 /** Resolve a node: if it's a keyref (no type, no children), return the definition. */
@@ -181,12 +188,8 @@ function getProjectName(doc: Document): string {
   return getPropertyText(root, "name") ?? "Unknown";
 }
 
-function extractSceneObjects(doc: Document, keyMap: Map<string, Element>): AliceObject[] {
+function extractSceneObjects(sceneType: Element | null, keyMap: Map<string, Element>): AliceObject[] {
   const objects: AliceObject[] = [];
-  const root = doc.documentElement;
-
-  // Find the Scene NamedUserType (superType = org.lgna.story.SScene)
-  const sceneType = findSceneType(root, keyMap);
   if (!sceneType) return objects;
 
   // Gather all field nodes inside the scene's "fields" property, resolving refs
@@ -201,19 +204,6 @@ function extractSceneObjects(doc: Document, keyMap: Map<string, Element>): Alice
   enrichFromMethods(sceneType, objects, keyMap);
 
   return objects;
-}
-
-function findSceneType(root: Element, keyMap: Map<string, Element>): Element | null {
-  // Walk all <node type="org.lgna.project.ast.NamedUserType"> and find the one
-  // whose superType contains "SScene".
-  const allNodes = root.getElementsByTagName("node");
-  for (let i = 0; i < allNodes.length; i++) {
-    const n = allNodes[i];
-    if (n.getAttribute("type") !== "org.lgna.project.ast.NamedUserType") continue;
-    const superType = getSuperTypeName(n, keyMap);
-    if (superType && superType.includes("SScene")) return n;
-  }
-  return null;
 }
 
 function getSuperTypeName(typeNode: Element, keyMap: Map<string, Element>): string | null {

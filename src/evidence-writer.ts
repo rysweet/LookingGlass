@@ -203,14 +203,18 @@ export function saveProjectResultJson(
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+const validatedDirs = new Set<string>();
+
 function validateEvidenceDir(dir: string): void {
   const resolved = path.resolve(dir);
+  if (validatedDirs.has(resolved)) return;
   const stat = fs.statSync(resolved, { throwIfNoEntry: false });
   if (!stat) {
     fs.mkdirSync(resolved, { recursive: true });
   } else if (!stat.isDirectory()) {
     throw new Error(`Evidence path is not a directory: ${dir}`);
   }
+  validatedDirs.add(resolved);
 }
 
 function writeAtomically(filePath: string, content: string): void {

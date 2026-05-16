@@ -30,6 +30,7 @@ interface ServerState {
   procedures: Map<string, string[]>; // methodName -> statements
   parsedProject: AliceProject | null;
   methods: AliceMethod[];
+  methodNames: Set<string>; // O(1) duplicate check for method creation
 }
 
 export function createServer(options: ServerOptions): express.Express {
@@ -44,6 +45,7 @@ export function createServer(options: ServerOptions): express.Express {
     procedures: new Map([["myFirstMethod", []]]),
     parsedProject: null,
     methods: [],
+    methodNames: new Set(),
   };
 
   // Ensure evidence dir exists
@@ -225,7 +227,7 @@ export function createServer(options: ServerOptions): express.Express {
       paramNames.add(pName);
     }
 
-    if (state.procedures.has(name) || state.methods.some((m) => m.name === name)) {
+    if (state.procedures.has(name) || state.methodNames.has(name)) {
       return { error: `method already exists: ${name}`, status: 409 };
     }
 
@@ -241,6 +243,7 @@ export function createServer(options: ServerOptions): express.Express {
     };
 
     state.methods.push(method);
+    state.methodNames.add(method.name);
     return { method };
   }
 
