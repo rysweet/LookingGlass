@@ -1439,6 +1439,59 @@ describe("lexer – string escapes", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 11b. LEXER ERROR HANDLING
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("lexer error handling", () => {
+  it("throws on unrecognized character", () => {
+    expect(() => parseTweedle("class X { # }")).toThrow(TweedleParseError);
+    try {
+      parseTweedle("class X { # }");
+    } catch (e) {
+      expect((e as Error).message).toContain("#");
+    }
+  });
+
+  it("throws on lone & without &&", () => {
+    expect(() => parseTweedle("class X { Boolean b() { return true & false; } }")).toThrow(TweedleParseError);
+    try {
+      parseTweedle("class X { Boolean b() { return true & false; } }");
+    } catch (e) {
+      expect((e as Error).message).toContain("&");
+    }
+  });
+
+  it("throws on lone | without ||", () => {
+    expect(() => parseTweedle("class X { Boolean b() { return true | false; } }")).toThrow(TweedleParseError);
+    try {
+      parseTweedle("class X { Boolean b() { return true | false; } }");
+    } catch (e) {
+      expect((e as Error).message).toContain("|");
+    }
+  });
+
+  it("throws on bare = (Tweedle uses <- for assignment)", () => {
+    expect(() => parseTweedle("class X { void m() { WholeNumber x = 1; } }")).toThrow(TweedleParseError);
+    try {
+      parseTweedle("class X { void m() { WholeNumber x = 1; } }");
+    } catch (e) {
+      expect((e as Error).message).toContain("=");
+    }
+  });
+
+  it("reports correct line and column for unrecognized character", () => {
+    try {
+      parseTweedle("class X {\n  void m() {\n    #\n  }\n}");
+    } catch (e) {
+      const pe = e as InstanceType<typeof TweedleParseError>;
+      expect(pe.line).toBe(3);
+      expect(pe.column).toBeGreaterThanOrEqual(4);
+      expect(pe.found).toBe("#");
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 12. UNSUPPORTED CONSTRUCTS
 // ═══════════════════════════════════════════════════════════════════════════
 

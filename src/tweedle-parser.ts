@@ -320,9 +320,11 @@ function tokenize(source: string): Token[] {
         break;
       case "&":
         if (ch() === "&") { advance(); emit(TT.AND_AND, "&&", sLine, sCol); }
+        else throw new TweedleParseError(`Unexpected character '&' (did you mean '&&'?)`, sLine, sCol, "&", "&&");
         break;
       case "|":
         if (ch() === "|") { advance(); emit(TT.OR_OR, "||", sLine, sCol); }
+        else throw new TweedleParseError(`Unexpected character '|' (did you mean '||'?)`, sLine, sCol, "|", "||");
         break;
       case "-":
         if (ch() === ">") { advance(); emit(TT.ARROW, "->", sLine, sCol); }
@@ -336,8 +338,10 @@ function tokenize(source: string): Token[] {
       case "*": emit(TT.STAR, "*", sLine, sCol); break;
       case "=":
         if (ch() === "=") { advance(); emit(TT.EQ_EQ, "==", sLine, sCol); }
+        else throw new TweedleParseError(`Unexpected character '=' (Tweedle uses '<-' for assignment and '==' for equality)`, sLine, sCol, "=", "<- or ==");
         break;
-      // Unknown characters are silently skipped
+      default:
+        throw new TweedleParseError(`Unexpected character '${c0}'`, sLine, sCol, c0, "valid token");
     }
   }
 
