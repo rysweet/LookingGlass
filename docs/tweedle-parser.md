@@ -418,9 +418,13 @@ Expected: class name (identifier)
 |-----------|----------|
 | Lambda expressions `(x) -> { ... }` | Throws `TweedleParseError` with message "Lambda expressions are not yet supported" |
 | Enum declarations | Throws `TweedleParseError` with message "Enum declarations are not yet supported" |
+| Unrecognized characters (`#`, `~`, `^`, etc.) | Throws `TweedleParseError` identifying the character |
+| Lone `&` (without `&&`) | Throws `TweedleParseError` suggesting `&&` |
+| Lone `|` (without `||`) | Throws `TweedleParseError` suggesting `||` |
+| Bare `=` (without `==`) | Throws `TweedleParseError` explaining Tweedle uses `<-` for assignment |
 
-These constructs are not used in Lessons 1–4 student code and can be added in
-future iterations.
+Lambda and enum constructs are not used in Lessons 1–4 student code and can be
+added in future iterations.
 
 ## Tweedle Language Constructs
 
