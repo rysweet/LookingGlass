@@ -5,6 +5,8 @@ import {
   writeSceneObjectAdded,
   writeEditProcedureProof,
   writeSaveProof,
+  writeEventRegister,
+  writeEventFire,
 } from "./evidence-writer.js";
 import { parseA3P, type AliceProject } from "./a3p-parser.js";
 import { renderSceneToPng } from "./scene-renderer.js";
@@ -16,18 +18,44 @@ export interface ServerOptions {
   projectPath?: string;
 }
 
+interface Position {
+  x: number;
+  y: number;
+  z: number;
+}
+
 interface SceneObject {
   name: string;
   className: string;
+  position: Position;
 }
+
+const VALID_EVENT_TYPES = ["sceneActivated", "keyPress", "proximity"] as const;
+type EventType = (typeof VALID_EVENT_TYPES)[number];
+
+interface EventRegistration {
+  id: string;
+  eventType: EventType;
+  handlerName: string;
+  key?: string;
+  targetObjects?: [string, string];
+  threshold?: number;
+}
+
+const MAX_REGISTRATIONS = 1000;
+const DEFAULT_THRESHOLD = 2.0;
+const DEFAULT_POSITION: Position = { x: 0, y: 0, z: 0 };
 
 interface ServerState {
   launched: boolean;
   projectPath: string | null;
   projectName: string;
-  sceneObjects: SceneObject[];
+  sceneObjects: Map<string, SceneObject>;
   procedures: Map<string, string[]>; // methodName -> statements
   parsedProject: AliceProject | null;
+  registrationsByType: Map<EventType, EventRegistration[]>;
+  registrationCount: number;
+  nextEventId: number;
 }
 
 export function createServer(options: ServerOptions): express.Express {
@@ -38,9 +66,12 @@ export function createServer(options: ServerOptions): express.Express {
     launched: false,
     projectPath: null,
     projectName: "Program",
-    sceneObjects: [],
+    sceneObjects: new Map(),
     procedures: new Map([["myFirstMethod", []]]),
     parsedProject: null,
+    registrationsByType: new Map(),
+    registrationCount: 0,
+    nextEventId: 1,
   };
 
   // Ensure evidence dir exists
@@ -50,6 +81,12 @@ export function createServer(options: ServerOptions): express.Express {
   app.post("/api/launch", async (req, res) => {
     const projectFile = req.body?.project ?? options.projectPath ?? null;
     state.launched = true;
+
+    // Validate project path: must end with .a3p to prevent arbitrary file reads
+    if (projectFile && typeof projectFile === "string" && !projectFile.endsWith(".a3p")) {
+      res.status(400).json({ error: "project path must be an .a3p file" });
+      return;
+    }
     state.projectPath = projectFile;
 
     if (projectFile && fs.existsSync(projectFile)) {
@@ -65,18 +102,23 @@ export function createServer(options: ServerOptions): express.Express {
     }
 
     // Seed default scene objects (like a fresh Alice project)
-    if (state.sceneObjects.length === 0) {
-      state.sceneObjects = [
-        { name: "ground", className: "org.lgna.story.SGround" },
-        { name: "camera", className: "org.lgna.story.SCamera" },
-      ];
+    if (state.sceneObjects.size === 0) {
+      const ground: SceneObject = { name: "ground", className: "org.lgna.story.SGround", position: { ...DEFAULT_POSITION } };
+      const camera: SceneObject = { name: "camera", className: "org.lgna.story.SCamera", position: { ...DEFAULT_POSITION } };
+      state.sceneObjects.set("ground", ground);
+      state.sceneObjects.set("camera", camera);
     }
+
+    // Reset event state on re-launch
+    state.registrationsByType = new Map();
+    state.registrationCount = 0;
+    state.nextEventId = 1;
 
     res.json({
       status: "launched",
       project: state.projectPath,
       projectName: state.projectName,
-      sceneObjectCount: state.sceneObjects.length,
+      sceneObjectCount: state.sceneObjects.size,
     });
   });
 
@@ -100,18 +142,18 @@ export function createServer(options: ServerOptions): express.Express {
     }
     const objectName =
       name ?? className.split(".").pop()?.toLowerCase() ?? "object";
-    state.sceneObjects.push({ name: objectName, className });
+    state.sceneObjects.set(objectName, { name: objectName, className, position: { ...DEFAULT_POSITION } });
 
     const artifactPath = writeSceneObjectAdded(options.evidenceDir, {
       objectClassName: className,
-      sceneFieldCountAfter: state.sceneObjects.length,
+      sceneFieldCountAfter: state.sceneObjects.size,
     });
 
     res.json({
       status: "added",
       objectName,
       className,
-      sceneFieldCountAfter: state.sceneObjects.length,
+      sceneFieldCountAfter: state.sceneObjects.size,
       evidenceArtifact: artifactPath,
     });
   });
@@ -265,7 +307,7 @@ export function createServer(options: ServerOptions): express.Express {
       schema_version: "eatme.alice-run-world-result/v1",
       status: "completed",
       project_name: state.projectName,
-      scene_object_count: state.sceneObjects.length,
+      scene_object_count: state.sceneObjects.size,
       procedure_count: state.procedures.size,
       statements_executed: statementsExecuted,
       execution_log: executionLog,
@@ -294,7 +336,7 @@ export function createServer(options: ServerOptions): express.Express {
       const currentProject: AliceProject = state.parsedProject ?? {
         version: "3.10",
         projectName: state.projectName,
-        sceneObjects: state.sceneObjects.map((o) => ({
+        sceneObjects: Array.from(state.sceneObjects.values()).map((o) => ({
           name: o.name,
           typeName: o.className,
           resourceType: null,
@@ -327,7 +369,163 @@ export function createServer(options: ServerOptions): express.Express {
     }
   });
 
+  // ── POST /api/events/register ────────────────────────────────────
+  app.post("/api/events/register", (req, res) => {
+    if (!state.launched) {
+      res.status(400).json({ error: "not launched" });
+      return;
+    }
+
+    const { eventType, handlerName: rawHandler, key, targetObjects, threshold } = req.body ?? {};
+
+    if (!eventType) {
+      res.status(400).json({ error: "eventType is required" });
+      return;
+    }
+    if (!VALID_EVENT_TYPES.includes(eventType)) {
+      res.status(400).json({ error: `unknown eventType: ${eventType}` });
+      return;
+    }
+
+    const handlerName: string = rawHandler ?? "handler";
+
+    // keyPress-specific validation
+    if (eventType === "keyPress") {
+      if (!key) {
+        res.status(400).json({ error: "key is required for keyPress events" });
+        return;
+      }
+    }
+
+    // proximity-specific validation
+    let resolvedThreshold = DEFAULT_THRESHOLD;
+    if (eventType === "proximity") {
+      if (!Array.isArray(targetObjects) || targetObjects.length !== 2) {
+        res.status(400).json({ error: "proximity requires targetObjects with exactly 2 entries" });
+        return;
+      }
+      // Validate objects exist in scene
+      for (const objName of targetObjects) {
+        if (!state.sceneObjects.has(objName)) {
+          res.status(400).json({ error: `unknown object: ${objName}` });
+          return;
+        }
+      }
+      if (threshold !== undefined) {
+        if (threshold <= 0 || threshold > 1000) {
+          res.status(400).json({ error: "threshold must be > 0 and <= 1000" });
+          return;
+        }
+        resolvedThreshold = threshold;
+      }
+    }
+
+    if (state.registrationCount >= MAX_REGISTRATIONS) {
+      res.status(400).json({ error: `registration limit reached (${MAX_REGISTRATIONS})` });
+      return;
+    }
+
+    const registrationId = `evt-${state.nextEventId++}`;
+    const registration: EventRegistration = {
+      id: registrationId,
+      eventType: eventType as EventType,
+      handlerName,
+    };
+    if (eventType === "keyPress") {
+      registration.key = key;
+    }
+    if (eventType === "proximity") {
+      registration.targetObjects = targetObjects as [string, string];
+      registration.threshold = resolvedThreshold;
+    }
+
+    // Index by type for O(1) fire lookups
+    const typedEvent = eventType as EventType;
+    const typeList = state.registrationsByType.get(typedEvent);
+    if (typeList) {
+      typeList.push(registration);
+    } else {
+      state.registrationsByType.set(typedEvent, [registration]);
+    }
+    state.registrationCount++;
+
+    const evidenceArtifact = writeEventRegister(options.evidenceDir, {
+      registrationId,
+      eventType,
+      handlerName,
+      totalRegistrations: state.registrationCount,
+    });
+
+    res.json({
+      registrationId,
+      eventType,
+      handlerName,
+      evidenceArtifact,
+    });
+  });
+
+  // ── POST /api/events/fire ──────────────────────────────────────────
+  app.post("/api/events/fire", (req, res) => {
+    if (!state.launched) {
+      res.status(400).json({ error: "not launched" });
+      return;
+    }
+
+    const { eventType, payload } = req.body ?? {};
+
+    if (!eventType) {
+      res.status(400).json({ error: "eventType is required" });
+      return;
+    }
+    if (!VALID_EVENT_TYPES.includes(eventType)) {
+      res.status(400).json({ error: `unknown eventType: ${eventType}` });
+      return;
+    }
+
+    const candidates = state.registrationsByType.get(eventType as EventType) ?? [];
+    const toEntry = (r: EventRegistration) => ({
+      id: r.id, eventType: r.eventType, handlerName: r.handlerName,
+    });
+
+    let triggered: { id: string; eventType: string; handlerName: string }[];
+
+    if (eventType === "sceneActivated") {
+      triggered = candidates.map(toEntry);
+    } else if (eventType === "keyPress") {
+      const firedKey = payload?.key;
+      triggered = firedKey
+        ? candidates.filter((r) => r.key === firedKey).map(toEntry)
+        : [];
+    } else {
+      const sourceObject: string | undefined = payload?.sourceObject;
+      triggered = candidates
+        .filter((reg) => {
+          if (sourceObject && !reg.targetObjects!.includes(sourceObject)) return false;
+          const posA = state.sceneObjects.get(reg.targetObjects![0])?.position;
+          const posB = state.sceneObjects.get(reg.targetObjects![1])?.position;
+          return posA && posB && euclideanDistance(posA, posB) <= reg.threshold!;
+        })
+        .map(toEntry);
+    }
+
+    const evidenceArtifact = writeEventFire(options.evidenceDir, {
+      eventType,
+      registrationsEvaluated: candidates.length,
+      triggeredCount: triggered.length,
+      triggered: triggered.map((t) => t.id),
+    });
+
+    res.json({
+      triggered,
+      evidenceArtifact,
+    });
+  });
+
   return app;
+}
+
+function euclideanDistance(a: Position, b: Position): number {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
 }
 
 /** Create a minimal valid buffer that can stand in as a .a3p file. */

@@ -53,7 +53,7 @@ async function main(): Promise<void> {
   }
 
   const app = createServer({ port, evidenceDir, projectPath: project });
-  const server = app.listen(port, () => {
+  const server = app.listen(port, "127.0.0.1", () => {
     console.log(
       JSON.stringify({
         status: "listening",

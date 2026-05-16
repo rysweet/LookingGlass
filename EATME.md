@@ -55,6 +55,24 @@ Simulate editing a procedure. Writes `first-lesson-code-editor-action-proof.json
 }
 ```
 
+### `POST /api/events/register`
+Register an event listener. Supports `sceneActivated`, `keyPress`, and
+`proximity` event types. Returns a unique registration ID.
+```json
+{ "eventType": "sceneActivated", "handlerName": "initScene" }
+```
+Response: `{"registrationId": "evt-1", "eventType": "sceneActivated", "handlerName": "initScene", "evidenceArtifact": "./evidence/event-register.json"}`
+
+### `POST /api/events/fire`
+Fire an event. Evaluates all matching registrations and returns which triggered.
+```json
+{ "eventType": "sceneActivated" }
+```
+Response: `{"triggered": [{"id": "evt-1", "eventType": "sceneActivated", "handlerName": "initScene"}], "evidenceArtifact": "./evidence/event-fire.json"}`
+
+See [docs/event-system.md](docs/event-system.md) for full event system
+documentation including proximity detection and key press handling.
+
 ### `POST /api/world/run`
 Execute all methods through the Tweedle VM. Returns a structured `execution_log`
 with `{step, kind, detail}` entries tracing every statement dispatched.
@@ -90,6 +108,8 @@ All artifacts match the exact JSON schemas that Java Alice produces:
 
 | Artifact | Schema Version |
 |---|---|
+| `event-register.json` | `eatme.alice-event-register/v1` |
+| `event-fire.json` | `eatme.alice-event-fire/v1` |
 | `scene-object-added.json` | `eatme.alice-scene-object-added/v1` |
 | `first-lesson-code-editor-action-proof.json` | `eatme.alice-first-lesson-code-editor-action-proof/v1` |
 | `edited-project.a3p` | (binary .a3p project file) |
@@ -130,6 +150,7 @@ tools/
   eatme-save-project    — Shell wrapper for save-project hook
 docs/
   statement-execution.md — Full statement execution documentation
+  event-system.md        — Event system & object interaction documentation
 ```
 
 ## CLI Hooks (eatme-compatible)
