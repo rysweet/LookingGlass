@@ -592,15 +592,6 @@ describe("event system", () => {
 
   describe("registration limit", () => {
     it("rejects registration beyond 1000 cap", async () => {
-      // We can't register 1000 in a test, but we can check the error format
-      // by verifying the error message pattern is correct at boundary.
-      // This test verifies the server enforces the cap.
-      // In practice, we'll test with a smaller approach: register a bunch and
-      // check the final rejection. But since this is a spec test that will
-      // pass once implementation is done, we simply register one and verify
-      // the structure — the 1000-cap unit test belongs in the implementation
-      // when we can mock nextEventId.
-
       // For now, just verify that registration works up to a reasonable count
       for (let i = 0; i < 5; i++) {
         await request(app)
@@ -616,6 +607,24 @@ describe("event system", () => {
 
       expect(res.body.triggered).toHaveLength(5);
     });
+
+    it("enforces registration cap at boundary (999 ok, 1000 ok, 1001 rejected)", async () => {
+      // Register 1000 events (the cap)
+      for (let i = 0; i < 1000; i++) {
+        await request(app)
+          .post("/api/events/register")
+          .send({ eventType: "sceneActivated", handlerName: `h${i}` })
+          .expect(200);
+      }
+
+      // 1001st should be rejected
+      const res = await request(app)
+        .post("/api/events/register")
+        .send({ eventType: "sceneActivated", handlerName: "overflow" })
+        .expect(400);
+
+      expect(res.body.error).toBe("registration limit reached (1000)");
+    }, 30_000);
   });
 
   // ── Integration: mixed event workflow ─────────────────────────────

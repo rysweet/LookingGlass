@@ -45,6 +45,7 @@ interface EventRegistration {
 const MAX_REGISTRATIONS = 1000;
 const DEFAULT_THRESHOLD = 2.0;
 const DEFAULT_POSITION: Position = { x: 0, y: 0, z: 0 };
+const MAX_STRING_LENGTH = 500;
 
 interface ServerState {
   launched: boolean;
@@ -86,6 +87,16 @@ export function createServer(options: ServerOptions): express.Express {
       res.status(400).json({ error: "project path must be an .a3p file" });
       return;
     }
+
+    // Prevent path traversal: resolve to absolute and verify within cwd
+    if (projectFile && typeof projectFile === "string") {
+      const resolved = path.resolve(projectFile);
+      const cwd = process.cwd();
+      if (!resolved.startsWith(cwd + path.sep) && resolved !== cwd) {
+        res.status(400).json({ error: "project path must be within the working directory" });
+        return;
+      }
+    }
     state.launched = true;
     state.projectPath = projectFile;
 
@@ -96,7 +107,8 @@ export function createServer(options: ServerOptions): express.Express {
         state.parsedProject = await parseA3P(data);
         state.projectName = state.parsedProject.projectName || state.projectName;
       } catch (err) {
-        console.error("Failed to parse .a3p on launch:", err);
+        const msg = err instanceof Error ? err.message : "parse failed";
+        console.error("Failed to parse .a3p on launch:", msg);
         state.parsedProject = null;
       }
     }
@@ -140,8 +152,17 @@ export function createServer(options: ServerOptions): express.Express {
       res.status(400).json({ error: "className is required" });
       return;
     }
+    if (typeof className === "string" && className.length > MAX_STRING_LENGTH) {
+      res.status(400).json({ error: `className exceeds ${MAX_STRING_LENGTH} character limit` });
+      return;
+    }
+    if (name && typeof name === "string" && name.length > MAX_STRING_LENGTH) {
+      res.status(400).json({ error: `name exceeds ${MAX_STRING_LENGTH} character limit` });
+      return;
+    }
     const objectName =
       name ?? className.split(".").pop()?.toLowerCase() ?? "object";
+    const isDuplicate = state.sceneObjects.has(objectName);
     state.sceneObjects.set(objectName, { name: objectName, className, position: { ...DEFAULT_POSITION } });
 
     const artifactPath = writeSceneObjectAdded(options.evidenceDir, {
@@ -153,6 +174,7 @@ export function createServer(options: ServerOptions): express.Express {
       status: "added",
       objectName,
       className,
+      replaced: isDuplicate,
       sceneFieldCountAfter: state.sceneObjects.size,
       evidenceArtifact: artifactPath,
     });
@@ -286,8 +308,8 @@ export function createServer(options: ServerOptions): express.Express {
           await fs.promises.access(state.projectPath);
           const data = await fs.promises.readFile(state.projectPath);
           state.parsedProject = await parseA3P(data);
-        } catch (err) {
-          console.error("Failed to parse .a3p on run:", err);
+        } catch {
+          // Parse failure is non-fatal; VM runs with empty project
         }
       }
 
@@ -327,8 +349,8 @@ export function createServer(options: ServerOptions): express.Express {
         evidenceArtifact: runEvidencePath,
       });
     } catch (err) {
-      console.error("Error in /api/world/run:", err);
-      res.status(500).json({ error: "Internal error during world run" });
+      const message = err instanceof Error ? err.message : "world run failed";
+      res.status(500).json({ error: message });
     }
   });
 
@@ -393,6 +415,11 @@ export function createServer(options: ServerOptions): express.Express {
     }
 
     const handlerName: string = rawHandler ?? "handler";
+
+    if (handlerName.length > MAX_STRING_LENGTH) {
+      res.status(400).json({ error: `handlerName exceeds ${MAX_STRING_LENGTH} character limit` });
+      return;
+    }
 
     // keyPress-specific validation
     if (eventType === "keyPress") {
