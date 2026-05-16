@@ -79,7 +79,6 @@ describe("generateUserMethodXml", () => {
       isFunction: false,
       returnType: "void",
       parameters: [],
-      statements: [],
     });
 
     // Must contain UserMethod type
@@ -104,7 +103,6 @@ describe("generateUserMethodXml", () => {
       isFunction: true,
       returnType: "java.lang.Double",
       parameters: [],
-      statements: [],
     });
 
     expect(xml).toContain(">true</value>"); // isFunction
@@ -122,7 +120,6 @@ describe("generateUserMethodXml", () => {
         { name: "distance", type: "java.lang.Double" },
         { name: "direction", type: "java.lang.Integer" },
       ],
-      statements: [],
     });
 
     // Must contain UserParameter nodes
@@ -147,7 +144,6 @@ describe("generateUserMethodXml", () => {
       isFunction: false,
       returnType: "void",
       parameters: [{ name: 'param"evil', type: "java.lang.Double" }],
-      statements: [],
     });
 
     // Names must be escaped
@@ -166,7 +162,6 @@ describe("generateUserMethodXml", () => {
         { name: "a", type: "java.lang.Double" },
         { name: "b", type: "java.lang.Double" },
       ],
-      statements: [],
     });
 
     // Extract all UUIDs
@@ -184,7 +179,6 @@ describe("generateUserMethodXml", () => {
       isFunction: false,
       returnType: "void",
       parameters: [],
-      statements: [],
     });
 
     expect(xml).toContain('type="org.lgna.project.ast.BlockStatement"');
