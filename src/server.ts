@@ -196,6 +196,7 @@ export function createServer(options: ServerOptions): express.Express {
 
   // ── Method creation helpers ─────────────────────────────────────────
   const METHOD_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/;
+  const JAVA_TYPE_RE = /^[a-zA-Z_][\w.]{0,255}$/;
 
   function validateAndCreateMethod(input: {
     name: string;
@@ -221,6 +222,10 @@ export function createServer(options: ServerOptions): express.Express {
       if (!METHOD_NAME_RE.test(pName)) {
         return { error: `invalid parameter name: ${pName}`, status: 400 };
       }
+      const pType = p.type ?? "java.lang.Double";
+      if (!JAVA_TYPE_RE.test(pType)) {
+        return { error: `invalid parameter type: ${pType}`, status: 400 };
+      }
       if (paramNames.has(pName)) {
         return { error: `duplicate parameter name: ${pName}`, status: 400 };
       }
@@ -229,6 +234,10 @@ export function createServer(options: ServerOptions): express.Express {
 
     if (state.procedures.has(name) || state.methodNames.has(name)) {
       return { error: `method already exists: ${name}`, status: 409 };
+    }
+
+    if (isFunction && !JAVA_TYPE_RE.test(returnType)) {
+      return { error: `invalid return type: ${returnType}`, status: 400 };
     }
 
     const method: AliceMethod = {
@@ -454,6 +463,19 @@ export function createServer(options: ServerOptions): express.Express {
       });
     }
   });
+
+  // Global error handler — prevent stack trace leakage
+  app.use(
+    (
+      err: Error,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      console.error("Unhandled error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    },
+  );
 
   return app;
 }
