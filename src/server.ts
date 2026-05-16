@@ -50,10 +50,11 @@ interface ServerState {
   launched: boolean;
   projectPath: string | null;
   projectName: string;
-  sceneObjects: SceneObject[];
+  sceneObjects: Map<string, SceneObject>;
   procedures: Map<string, string[]>; // methodName -> statements
   parsedProject: AliceProject | null;
-  eventRegistrations: EventRegistration[];
+  registrationsByType: Map<EventType, EventRegistration[]>;
+  registrationCount: number;
   nextEventId: number;
 }
 
@@ -65,10 +66,11 @@ export function createServer(options: ServerOptions): express.Express {
     launched: false,
     projectPath: null,
     projectName: "Program",
-    sceneObjects: [],
+    sceneObjects: new Map(),
     procedures: new Map([["myFirstMethod", []]]),
     parsedProject: null,
-    eventRegistrations: [],
+    registrationsByType: new Map(),
+    registrationCount: 0,
     nextEventId: 1,
   };
 
@@ -79,6 +81,12 @@ export function createServer(options: ServerOptions): express.Express {
   app.post("/api/launch", async (req, res) => {
     const projectFile = req.body?.project ?? options.projectPath ?? null;
     state.launched = true;
+
+    // Validate project path: must end with .a3p to prevent arbitrary file reads
+    if (projectFile && typeof projectFile === "string" && !projectFile.endsWith(".a3p")) {
+      res.status(400).json({ error: "project path must be an .a3p file" });
+      return;
+    }
     state.projectPath = projectFile;
 
     if (projectFile && fs.existsSync(projectFile)) {
@@ -94,22 +102,23 @@ export function createServer(options: ServerOptions): express.Express {
     }
 
     // Seed default scene objects (like a fresh Alice project)
-    if (state.sceneObjects.length === 0) {
-      state.sceneObjects = [
-        { name: "ground", className: "org.lgna.story.SGround", position: { ...DEFAULT_POSITION } },
-        { name: "camera", className: "org.lgna.story.SCamera", position: { ...DEFAULT_POSITION } },
-      ];
+    if (state.sceneObjects.size === 0) {
+      const ground: SceneObject = { name: "ground", className: "org.lgna.story.SGround", position: { ...DEFAULT_POSITION } };
+      const camera: SceneObject = { name: "camera", className: "org.lgna.story.SCamera", position: { ...DEFAULT_POSITION } };
+      state.sceneObjects.set("ground", ground);
+      state.sceneObjects.set("camera", camera);
     }
 
     // Reset event state on re-launch
-    state.eventRegistrations = [];
+    state.registrationsByType = new Map();
+    state.registrationCount = 0;
     state.nextEventId = 1;
 
     res.json({
       status: "launched",
       project: state.projectPath,
       projectName: state.projectName,
-      sceneObjectCount: state.sceneObjects.length,
+      sceneObjectCount: state.sceneObjects.size,
     });
   });
 
@@ -133,18 +142,18 @@ export function createServer(options: ServerOptions): express.Express {
     }
     const objectName =
       name ?? className.split(".").pop()?.toLowerCase() ?? "object";
-    state.sceneObjects.push({ name: objectName, className, position: { ...DEFAULT_POSITION } });
+    state.sceneObjects.set(objectName, { name: objectName, className, position: { ...DEFAULT_POSITION } });
 
     const artifactPath = writeSceneObjectAdded(options.evidenceDir, {
       objectClassName: className,
-      sceneFieldCountAfter: state.sceneObjects.length,
+      sceneFieldCountAfter: state.sceneObjects.size,
     });
 
     res.json({
       status: "added",
       objectName,
       className,
-      sceneFieldCountAfter: state.sceneObjects.length,
+      sceneFieldCountAfter: state.sceneObjects.size,
       evidenceArtifact: artifactPath,
     });
   });
@@ -298,7 +307,7 @@ export function createServer(options: ServerOptions): express.Express {
       schema_version: "eatme.alice-run-world-result/v1",
       status: "completed",
       project_name: state.projectName,
-      scene_object_count: state.sceneObjects.length,
+      scene_object_count: state.sceneObjects.size,
       procedure_count: state.procedures.size,
       statements_executed: statementsExecuted,
       execution_log: executionLog,
@@ -327,7 +336,7 @@ export function createServer(options: ServerOptions): express.Express {
       const currentProject: AliceProject = state.parsedProject ?? {
         version: "3.10",
         projectName: state.projectName,
-        sceneObjects: state.sceneObjects.map((o) => ({
+        sceneObjects: Array.from(state.sceneObjects.values()).map((o) => ({
           name: o.name,
           typeName: o.className,
           resourceType: null,
@@ -397,7 +406,7 @@ export function createServer(options: ServerOptions): express.Express {
       }
       // Validate objects exist in scene
       for (const objName of targetObjects) {
-        if (!state.sceneObjects.some((o) => o.name === objName)) {
+        if (!state.sceneObjects.has(objName)) {
           res.status(400).json({ error: `unknown object: ${objName}` });
           return;
         }
@@ -411,7 +420,7 @@ export function createServer(options: ServerOptions): express.Express {
       }
     }
 
-    if (state.eventRegistrations.length >= MAX_REGISTRATIONS) {
+    if (state.registrationCount >= MAX_REGISTRATIONS) {
       res.status(400).json({ error: `registration limit reached (${MAX_REGISTRATIONS})` });
       return;
     }
@@ -429,13 +438,22 @@ export function createServer(options: ServerOptions): express.Express {
       registration.targetObjects = targetObjects as [string, string];
       registration.threshold = resolvedThreshold;
     }
-    state.eventRegistrations.push(registration);
+
+    // Index by type for O(1) fire lookups
+    const typedEvent = eventType as EventType;
+    const typeList = state.registrationsByType.get(typedEvent);
+    if (typeList) {
+      typeList.push(registration);
+    } else {
+      state.registrationsByType.set(typedEvent, [registration]);
+    }
+    state.registrationCount++;
 
     const evidenceArtifact = writeEventRegister(options.evidenceDir, {
       registrationId,
       eventType,
       handlerName,
-      totalRegistrations: state.eventRegistrations.length,
+      totalRegistrations: state.registrationCount,
     });
 
     res.json({
@@ -464,35 +482,30 @@ export function createServer(options: ServerOptions): express.Express {
       return;
     }
 
-    const candidates = state.eventRegistrations.filter((r) => r.eventType === eventType);
-    const triggered: { id: string; eventType: string; handlerName: string }[] = [];
+    const candidates = state.registrationsByType.get(eventType as EventType) ?? [];
+    const toEntry = (r: EventRegistration) => ({
+      id: r.id, eventType: r.eventType, handlerName: r.handlerName,
+    });
 
-    for (const reg of candidates) {
-      if (eventType === "sceneActivated") {
-        triggered.push({ id: reg.id, eventType: reg.eventType, handlerName: reg.handlerName });
-      } else if (eventType === "keyPress") {
-        const firedKey = payload?.key;
-        if (firedKey && reg.key === firedKey) {
-          triggered.push({ id: reg.id, eventType: reg.eventType, handlerName: reg.handlerName });
-        }
-      } else if (eventType === "proximity") {
-        const sourceObject: string | undefined = payload?.sourceObject;
-        // If sourceObject is provided, only evaluate registrations that include it
-        if (sourceObject && !reg.targetObjects!.includes(sourceObject)) {
-          continue;
-        }
-        const [objA, objB] = reg.targetObjects!;
-        const posA = state.sceneObjects.find((o) => o.name === objA)?.position;
-        const posB = state.sceneObjects.find((o) => o.name === objB)?.position;
-        if (posA && posB) {
-          const dist = Math.sqrt(
-            (posA.x - posB.x) ** 2 + (posA.y - posB.y) ** 2 + (posA.z - posB.z) ** 2,
-          );
-          if (dist <= reg.threshold!) {
-            triggered.push({ id: reg.id, eventType: reg.eventType, handlerName: reg.handlerName });
-          }
-        }
-      }
+    let triggered: { id: string; eventType: string; handlerName: string }[];
+
+    if (eventType === "sceneActivated") {
+      triggered = candidates.map(toEntry);
+    } else if (eventType === "keyPress") {
+      const firedKey = payload?.key;
+      triggered = firedKey
+        ? candidates.filter((r) => r.key === firedKey).map(toEntry)
+        : [];
+    } else {
+      const sourceObject: string | undefined = payload?.sourceObject;
+      triggered = candidates
+        .filter((reg) => {
+          if (sourceObject && !reg.targetObjects!.includes(sourceObject)) return false;
+          const posA = state.sceneObjects.get(reg.targetObjects![0])?.position;
+          const posB = state.sceneObjects.get(reg.targetObjects![1])?.position;
+          return posA && posB && euclideanDistance(posA, posB) <= reg.threshold!;
+        })
+        .map(toEntry);
     }
 
     const evidenceArtifact = writeEventFire(options.evidenceDir, {
@@ -509,6 +522,10 @@ export function createServer(options: ServerOptions): express.Express {
   });
 
   return app;
+}
+
+function euclideanDistance(a: Position, b: Position): number {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
 }
 
 /** Create a minimal valid buffer that can stand in as a .a3p file. */
