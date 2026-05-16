@@ -26,7 +26,7 @@ Create a void procedure (no return value) with optional parameters.
 | `name`       | string   | yes      | —                    | Method name. Must match `^[a-zA-Z_][a-zA-Z0-9_]{0,127}$` |
 | `parameters` | array    | no       | `[]`                 | Formal parameters. Max 50 entries.       |
 | `parameters[].name` | string | yes | —               | Parameter name. Same regex as method name. |
-| `parameters[].type` | string | no  | `java.lang.Double`  | Alice/Java type string.                  |
+| `parameters[].type` | string | no  | `java.lang.Double`  | Alice/Java type string. Must match `^[a-zA-Z_][\w.]{0,255}$` |
 
 **Response (201):**
 
@@ -52,6 +52,7 @@ Create a void procedure (no return value) with optional parameters.
 | 400    | Missing `name`                          | `{ "error": "name is required" }`             |
 | 400    | Invalid name format                     | `{ "error": "invalid method name" }`          |
 | 400    | Invalid parameter name                  | `{ "error": "invalid parameter name: ..." }`  |
+| 400    | Invalid parameter type format           | `{ "error": "invalid parameter type: ..." }`  |
 | 400    | Duplicate parameter name                | `{ "error": "duplicate parameter name: ..." }` |
 | 400    | Parameters exceeds 50                   | `{ "error": "too many parameters (max 50)" }` |
 | 409    | Name collides with existing method      | `{ "error": "method already exists: ..." }`   |
@@ -77,10 +78,10 @@ Create a typed function (has a return value) with optional parameters.
 | Field        | Type     | Required | Default              | Description                              |
 |------------- |--------- |--------- |--------------------- |----------------------------------------- |
 | `name`       | string   | yes      | —                    | Method name. Same regex as procedures.   |
-| `returnType` | string   | no       | `java.lang.Double`   | Return type. Any valid Alice/Java type.  |
+| `returnType` | string   | no       | `java.lang.Double`   | Return type. Must match `^[a-zA-Z_][\w.]{0,255}$` |
 | `parameters` | array    | no       | `[]`                 | Formal parameters. Max 50 entries.       |
 | `parameters[].name` | string | yes | —               | Parameter name. Same regex as method name. |
-| `parameters[].type` | string | no  | `java.lang.Double`  | Alice/Java type string.                  |
+| `parameters[].type` | string | no  | `java.lang.Double`  | Alice/Java type string. Must match `^[a-zA-Z_][\w.]{0,255}$` |
 
 **Response (201):**
 
@@ -103,6 +104,7 @@ Create a typed function (has a return value) with optional parameters.
 | Status | Condition                               | Body                                              |
 |------- |---------------------------------------- |-------------------------------------------------- |
 | 400    | Invalid `returnType` (empty string)     | `{ "error": "returnType must be non-empty" }`     |
+| 400    | Invalid `returnType` format             | `{ "error": "invalid return type: ..." }`         |
 
 ---
 
@@ -281,6 +283,8 @@ curl -X POST http://localhost:3000/api/code/create-procedure \
 |------------------------- |--------------------------------------------- |
 | Method name format       | `/^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/`          |
 | Parameter name format    | Same regex as method name                    |
+| Parameter type format    | `/^[a-zA-Z_][\w.]{0,255}$/`                 |
+| Return type format       | Same regex as parameter type (functions only)|
 | Parameter name uniqueness | No duplicate names within a method           |
 | Max parameters           | 50 per method                                |
 | Default parameter type   | `java.lang.Double`                           |
@@ -293,7 +297,9 @@ curl -X POST http://localhost:3000/api/code/create-procedure \
 ## Security
 
 - **Name validation** — Regex rejects injection attempts via method/parameter names.
+- **Type validation** — `returnType` and `parameters[].type` validated against `/^[a-zA-Z_][\w.]{0,255}$/` before reaching XML generation.
 - **XML escaping** — `escapeXml()` applied to all values written to `.a3p` XML.
 - **Body size** — Express JSON parser limited to 1 MB (`express.json({ limit: "1mb" })`).
 - **Parameter cap** — Hard limit of 50 parameters prevents payload abuse.
+- **Global error handler** — Unhandled exceptions return generic 500; stack traces logged server-side only.
 - **Localhost only** — No authentication required; server binds to localhost.
