@@ -53,8 +53,8 @@ Response:
   "execution_log": [
     { "step": 1, "kind": "MethodCall", "detail": "this.move()" },
     { "step": 2, "kind": "MethodCall", "detail": "this.turn()" },
-    { "step": 3, "kind": "CountLoop", "detail": "repeat 3 times (6 body statements)" },
-    { "step": 4, "kind": "VariableDeclaration", "detail": "declare x: Number = 0" },
+    { "step": 3, "kind": "CountLoop", "detail": "repeat 3 times" },
+    { "step": 4, "kind": "VariableDeclaration", "detail": "x: Number = 0" },
     { "step": 5, "kind": "ReturnStatement", "detail": "return 42" }
   ],
   "run_duration_ms": 3,
