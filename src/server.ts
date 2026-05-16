@@ -80,13 +80,13 @@ export function createServer(options: ServerOptions): express.Express {
   // ── POST /api/launch ───────────────────────────────────────────────
   app.post("/api/launch", async (req, res) => {
     const projectFile = req.body?.project ?? options.projectPath ?? null;
-    state.launched = true;
 
     // Validate project path: must end with .a3p to prevent arbitrary file reads
     if (projectFile && typeof projectFile === "string" && !projectFile.endsWith(".a3p")) {
       res.status(400).json({ error: "project path must be an .a3p file" });
       return;
     }
+    state.launched = true;
     state.projectPath = projectFile;
 
     if (projectFile && fs.existsSync(projectFile)) {
@@ -277,54 +277,59 @@ export function createServer(options: ServerOptions): express.Express {
       return;
     }
 
-    const runStart = Date.now();
+    try {
+      const runStart = Date.now();
 
-    // Parse project if not already cached
-    if (!state.parsedProject && state.projectPath) {
-      try {
-        await fs.promises.access(state.projectPath);
-        const data = await fs.promises.readFile(state.projectPath);
-        state.parsedProject = await parseA3P(data);
-      } catch (err) {
-        console.error("Failed to parse .a3p on run:", err);
+      // Parse project if not already cached
+      if (!state.parsedProject && state.projectPath) {
+        try {
+          await fs.promises.access(state.projectPath);
+          const data = await fs.promises.readFile(state.projectPath);
+          state.parsedProject = await parseA3P(data);
+        } catch (err) {
+          console.error("Failed to parse .a3p on run:", err);
+        }
       }
+
+      // Execute via the Tweedle VM
+      let executionLog: LogEntry[] = [];
+      let statementsExecuted = 0;
+
+      if (state.parsedProject) {
+        const vmResult = executeProject(state.parsedProject);
+        executionLog = vmResult.execution_log;
+        statementsExecuted = executionLog.length;
+      }
+
+      const runDuration = Date.now() - runStart;
+
+      const runEvidencePath = path.join(options.evidenceDir, "run-world-result.json");
+      const runResult = {
+        schema_version: "eatme.alice-run-world-result/v1",
+        status: "completed",
+        project_name: state.projectName,
+        scene_object_count: state.sceneObjects.size,
+        procedure_count: state.procedures.size,
+        statements_executed: statementsExecuted,
+        execution_log: executionLog,
+        run_duration_ms: runDuration,
+        errors: [],
+        doesNotClaim: [
+          "visible rendering correctness",
+          "desktop run-button proof",
+        ],
+      };
+      // Write evidence asynchronously to avoid blocking the event loop
+      await fs.promises.writeFile(runEvidencePath, JSON.stringify(runResult, null, 2) + "\n");
+
+      res.json({
+        ...runResult,
+        evidenceArtifact: runEvidencePath,
+      });
+    } catch (err) {
+      console.error("Error in /api/world/run:", err);
+      res.status(500).json({ error: "Internal error during world run" });
     }
-
-    // Execute via the Tweedle VM
-    let executionLog: LogEntry[] = [];
-    let statementsExecuted = 0;
-
-    if (state.parsedProject) {
-      const vmResult = executeProject(state.parsedProject);
-      executionLog = vmResult.execution_log;
-      statementsExecuted = executionLog.length;
-    }
-
-    const runDuration = Date.now() - runStart;
-
-    const runEvidencePath = path.join(options.evidenceDir, "run-world-result.json");
-    const runResult = {
-      schema_version: "eatme.alice-run-world-result/v1",
-      status: "completed",
-      project_name: state.projectName,
-      scene_object_count: state.sceneObjects.size,
-      procedure_count: state.procedures.size,
-      statements_executed: statementsExecuted,
-      execution_log: executionLog,
-      run_duration_ms: runDuration,
-      errors: [],
-      doesNotClaim: [
-        "visible rendering correctness",
-        "desktop run-button proof",
-      ],
-    };
-    // Write evidence asynchronously to avoid blocking the event loop
-    await fs.promises.writeFile(runEvidencePath, JSON.stringify(runResult, null, 2) + "\n");
-
-    res.json({
-      ...runResult,
-      evidenceArtifact: runEvidencePath,
-    });
   });
 
   // ── GET /api/screenshot ────────────────────────────────────────────
@@ -500,10 +505,11 @@ export function createServer(options: ServerOptions): express.Express {
       const sourceObject: string | undefined = payload?.sourceObject;
       triggered = candidates
         .filter((reg) => {
-          if (sourceObject && !reg.targetObjects!.includes(sourceObject)) return false;
-          const posA = state.sceneObjects.get(reg.targetObjects![0])?.position;
-          const posB = state.sceneObjects.get(reg.targetObjects![1])?.position;
-          return posA && posB && euclideanDistance(posA, posB) <= reg.threshold!;
+          if (!reg.targetObjects || reg.targetObjects.length < 2 || reg.threshold === undefined) return false;
+          if (sourceObject && !reg.targetObjects.includes(sourceObject)) return false;
+          const posA = state.sceneObjects.get(reg.targetObjects[0])?.position;
+          const posB = state.sceneObjects.get(reg.targetObjects[1])?.position;
+          return posA && posB && euclideanDistance(posA, posB) <= reg.threshold;
         })
         .map(toEntry);
     }
