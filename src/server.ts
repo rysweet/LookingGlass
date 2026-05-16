@@ -8,7 +8,7 @@ import {
 } from "./evidence-writer.js";
 import { parseA3P, type AliceProject } from "./a3p-parser.js";
 import { renderSceneToPng } from "./scene-renderer.js";
-import { createExecutionState, executeStatements, type EventLogEntry } from "./statement-executor.js";
+import { executeProject, type LogEntry } from "./tweedle-vm.js";
 
 export interface ServerOptions {
   port: number;
@@ -247,16 +247,14 @@ export function createServer(options: ServerOptions): express.Express {
       }
     }
 
-    // Execute statements via the executor
+    // Execute via the Tweedle VM
+    let executionLog: LogEntry[] = [];
     let statementsExecuted = 0;
-    let eventLog: EventLogEntry[] = [];
 
     if (state.parsedProject) {
-      const execState = createExecutionState(state.parsedProject.sceneObjects);
-      const allStatements = state.parsedProject.methods.flatMap(m => m.statements);
-      const result = executeStatements(allStatements, execState);
-      statementsExecuted = result.statementsExecuted;
-      eventLog = result.eventLog;
+      const vmResult = executeProject(state.parsedProject);
+      executionLog = vmResult.execution_log;
+      statementsExecuted = executionLog.length;
     }
 
     const runDuration = Date.now() - runStart;
@@ -269,7 +267,7 @@ export function createServer(options: ServerOptions): express.Express {
       scene_object_count: state.sceneObjects.length,
       procedure_count: state.procedures.size,
       statements_executed: statementsExecuted,
-      event_log: eventLog,
+      execution_log: executionLog,
       run_duration_ms: runDuration,
       errors: [],
       doesNotClaim: [
