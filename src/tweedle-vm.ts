@@ -29,7 +29,7 @@ interface VMState {
   returned: boolean;
   returnValue: unknown;
   scopes: Map<string, string>[];
-  methods: AliceMethod[];
+  methodMap: Map<string, AliceMethod>;
   returnValues: Map<string, unknown>;
 }
 
@@ -88,6 +88,11 @@ export function executeProject(project: AliceProject): ExecutionResult {
   const log: LogEntry[] = [];
   let stepCounter = 0;
 
+  const methodMap = new Map<string, AliceMethod>();
+  for (const m of project.methods) {
+    methodMap.set(m.name, m);
+  }
+
   for (const method of project.methods) {
     const state: VMState = {
       stepCounter,
@@ -96,7 +101,7 @@ export function executeProject(project: AliceProject): ExecutionResult {
       returned: false,
       returnValue: undefined,
       scopes: [new Map()],
-      methods: project.methods,
+      methodMap,
       returnValues,
     };
 
@@ -177,7 +182,7 @@ function execMethodCall(stmt: AliceStatement, state: VMState): void {
   const objectName = stmt.object ?? "this";
   const method = stmt.method ?? "unknown";
   const args = stmt.arguments ?? [];
-  const argsStr = args.length > 0 ? `(${args.join(", ")})` : "()";
+  const argsStr = `(${args.join(", ")})`;
 
   state.stepCounter++;
   state.log.push({
@@ -188,7 +193,7 @@ function execMethodCall(stmt: AliceStatement, state: VMState): void {
 
   // Dispatch to user-defined method when object is "this"
   if (objectName === "this") {
-    const target = state.methods.find(m => m.name === method);
+    const target = state.methodMap.get(method);
     if (target) {
       dispatchMethod(target, args, state);
     }
