@@ -139,6 +139,11 @@ src/
   tweedle-vm.ts         — Tweedle VM: executeProject(), VMScope, 7 handlers
   scene-builder.ts      — Three.js scene builder (existing)
   scene-renderer.ts     — PNG scene renderer (existing)
+  story-api/
+    index.ts            — Barrel exports for typed scene/entity model
+    types.ts            — Position, Orientation, Size, JointId value types
+    entities.ts         — Entity class hierarchy (SThing → SBiped, etc.)
+    scene.ts            — Scene container + fromProject() bridge
   hooks/
     place-object.ts     — CLI hook: object placement proof
     edit-procedure.ts   — CLI hook: procedure edit proof
@@ -153,6 +158,7 @@ docs/
   tweedle-parser.md     — Tweedle AST parser API & language reference
   statement-execution.md — Full statement execution documentation
   event-system.md        — Event system & object interaction documentation
+  story-api.md           — Scene/entity model: types, hierarchy, Scene container
 ```
 
 ## CLI Hooks (eatme-compatible)
