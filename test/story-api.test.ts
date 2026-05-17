@@ -237,7 +237,7 @@ describe("Entity property mutation", () => {
 // 5. JOINTS (STUBBED)
 // ===========================================================================
 
-describe("Joints (stubbed)", () => {
+describe("Joints (not yet populated)", () => {
   it("SBiped.getJoint returns undefined for any joint name", () => {
     const b = new SBiped();
     expect(b.getJoint("LEFT_SHOULDER")).toBeUndefined();
