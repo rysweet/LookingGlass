@@ -245,7 +245,7 @@ interface VMState {
   returned: boolean;
   returnValue: unknown;
   scopes: Map<string, string>[];   // scope stack (innermost frame last)
-  methods: AliceMethod[];          // project methods for dispatch lookup
+  methodMap: Map<string, AliceMethod>; // project methods for O(1) dispatch lookup
 }
 ```
 
