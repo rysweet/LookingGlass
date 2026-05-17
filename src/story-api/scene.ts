@@ -35,14 +35,6 @@ function createEntityForType(typeName: string): SThing {
   return new SProp();
 }
 
-function validateFinite(label: string, values: Record<string, number>): void {
-  for (const [key, val] of Object.entries(values)) {
-    if (!Number.isFinite(val)) {
-      throw new TypeError(`${label} ${key} must be a finite number`);
-    }
-  }
-}
-
 /** Runtime container for scene entities (analogous to Java's SceneImp). */
 export class Scene {
   private readonly _entities = new Map<string, SThing>();
@@ -83,7 +75,13 @@ export class Scene {
         `entity "${name}" (${entity.constructor.name}) does not support position`,
       );
     }
-    validateFinite("position", { x: position.x, y: position.y, z: position.z });
+    if (
+      !Number.isFinite(position.x) ||
+      !Number.isFinite(position.y) ||
+      !Number.isFinite(position.z)
+    ) {
+      throw new TypeError("position coordinates must be finite numbers");
+    }
     entity.position = position;
   }
 
@@ -97,12 +95,14 @@ export class Scene {
         `entity "${name}" (${entity.constructor.name}) does not support orientation`,
       );
     }
-    validateFinite("orientation", {
-      x: orientation.x,
-      y: orientation.y,
-      z: orientation.z,
-      w: orientation.w,
-    });
+    if (
+      !Number.isFinite(orientation.x) ||
+      !Number.isFinite(orientation.y) ||
+      !Number.isFinite(orientation.z) ||
+      !Number.isFinite(orientation.w)
+    ) {
+      throw new TypeError("orientation components must be finite numbers");
+    }
     entity.orientation = orientation;
   }
 
