@@ -792,6 +792,278 @@ describe("tweedle-vm", () => {
     });
   });
 
+  // ── Block-level scoping ──────────────────────────────────────────────
+
+  describe("block-level scoping", () => {
+    it("variables declared inside a CountLoop are not visible after the loop exits", () => {
+      const p = project([obj("bunny")], [
+        procedure("run", [
+          {
+            kind: "CountLoop",
+            count: 1,
+            body: [
+              { kind: "VariableDeclaration", name: "inner", varType: "Boolean", value: "false" },
+            ],
+          },
+          // After the loop, 'inner' should be out of scope → unknown → defaults to true
+          {
+            kind: "IfElse",
+            condition: "inner",
+            ifBody: [methodCall("bunny", "move")],
+            elseBody: [methodCall("bunny", "turn")],
+          },
+        ]),
+      ]);
+      const result = executeProject(p);
+
+      const calls = result.execution_log.filter(e => e.kind === "MethodCall");
+      // 'inner' out of scope → unknown → true → ifBody (move) runs
+      expect(calls.some(c => c.detail.includes("move"))).toBe(true);
+      expect(calls.some(c => c.detail.includes("turn"))).toBe(false);
+    });
+
+    it("inner scope shadows outer variable; outer value restored after block exit", () => {
+      const p = project([obj("bunny")], [
+        procedure("run", [
+          { kind: "VariableDeclaration", name: "x", varType: "Boolean", value: "false" },
+          {
+            kind: "CountLoop",
+            count: 1,
+            body: [
+              // Shadow 'x' in inner scope
+              { kind: "VariableDeclaration", name: "x", varType: "Boolean", value: "true" },
+              {
+                kind: "IfElse",
+                condition: "x",
+                ifBody: [methodCall("bunny", "wave")],
+                elseBody: [methodCall("bunny", "sit")],
+              },
+            ],
+          },
+          // After loop, outer 'x' should be restored to "false"
+          {
+            kind: "IfElse",
+            condition: "x",
+            ifBody: [methodCall("bunny", "move")],
+            elseBody: [methodCall("bunny", "turn")],
+          },
+        ]),
+      ]);
+      const result = executeProject(p);
+
+      const calls = result.execution_log.filter(e => e.kind === "MethodCall");
+      // Inner: x=true → wave runs
+      expect(calls.some(c => c.detail.includes("wave"))).toBe(true);
+      // Outer after loop: x=false → turn runs, move doesn't
+      expect(calls.some(c => c.detail.includes("turn"))).toBe(true);
+      expect(calls.some(c => c.detail.includes("move"))).toBe(false);
+    });
+  });
+
+  // ── VariableAssignment ──────────────────────────────────────────────
+
+  describe("VariableAssignment", () => {
+    it("updates the nearest scope containing the variable", () => {
+      const p = project([obj("bunny")], [
+        procedure("run", [
+          { kind: "VariableDeclaration", name: "x", varType: "Boolean", value: "false" },
+          {
+            kind: "CountLoop",
+            count: 1,
+            body: [
+              // Assign to outer x (not declaring a new one)
+              { kind: "VariableAssignment", name: "x", value: "true" },
+            ],
+          },
+          // After loop, x should be "true" (assignment modified outer scope)
+          {
+            kind: "IfElse",
+            condition: "x",
+            ifBody: [methodCall("bunny", "move")],
+            elseBody: [methodCall("bunny", "turn")],
+          },
+        ]),
+      ]);
+      const result = executeProject(p);
+
+      const calls = result.execution_log.filter(e => e.kind === "MethodCall");
+      expect(calls.some(c => c.detail.includes("move"))).toBe(true);
+      expect(calls.some(c => c.detail.includes("turn"))).toBe(false);
+    });
+
+    it("logs but does not create variable when assigning to undeclared name", () => {
+      const p = project([obj("bunny")], [
+        procedure("run", [
+          { kind: "VariableAssignment", name: "y", value: "false" },
+          {
+            kind: "IfElse",
+            condition: "y",
+            ifBody: [methodCall("bunny", "move")],
+            elseBody: [methodCall("bunny", "turn")],
+          },
+        ]),
+      ]);
+      const result = executeProject(p);
+
+      // Should log the assignment attempt with kind "VariableAssignment"
+      const assignEntry = result.execution_log.find(e => e.kind === "VariableAssignment");
+      expect(assignEntry).toBeDefined();
+
+      // 'y' was never declared → unknown → defaults to true → move runs
+      const calls = result.execution_log.filter(e => e.kind === "MethodCall");
+      expect(calls.some(c => c.detail.includes("move"))).toBe(true);
+    });
+  });
+
+  // ── Parameter binding & function dispatch ───────────────────────────
+
+  describe("parameter binding and function dispatch", () => {
+    it("dispatches this.method() to user-defined method with 0 params", () => {
+      const p = project([obj("bunny")], [
+        procedure("greet", [methodCall("bunny", "wave")]),
+        procedure("caller", [methodCall("this", "greet")]),
+      ]);
+      const result = executeProject(p);
+
+      // greet runs twice: once dispatched from caller, once top-level
+      const waveCalls = result.execution_log.filter(
+        e => e.kind === "MethodCall" && e.detail.includes("wave"),
+      );
+      expect(waveCalls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("binds 1 positional argument to callee parameter", () => {
+      const greetMethod: AliceMethod = {
+        name: "greet",
+        isFunction: false,
+        returnType: "void",
+        parameters: [{ name: "flag", type: "Boolean" }],
+        statements: [
+          {
+            kind: "IfElse",
+            condition: "flag",
+            ifBody: [methodCall("bunny", "wave")],
+            elseBody: [methodCall("bunny", "sit")],
+          },
+        ],
+      };
+      // caller runs first; dispatch should inline greet's body before "done"
+      const callerMethod = procedure("caller", [
+        { kind: "MethodCall", object: "this", method: "greet", arguments: ["true"] },
+        methodCall("bunny", "done"),
+      ]);
+
+      const p = project([obj("bunny")], [callerMethod, greetMethod]);
+      const result = executeProject(p);
+
+      // With dispatch: caller → dispatch greet(true) → flag=true → wave, then done
+      // wave from dispatch must appear before done
+      const waveSteps = result.execution_log
+        .filter(e => e.kind === "MethodCall" && e.detail.includes("wave"))
+        .map(e => e.step);
+      const doneSteps = result.execution_log
+        .filter(e => e.kind === "MethodCall" && e.detail.includes("done"))
+        .map(e => e.step);
+      expect(waveSteps.length).toBeGreaterThanOrEqual(1);
+      expect(doneSteps.length).toBeGreaterThanOrEqual(1);
+      expect(Math.min(...waveSteps)).toBeLessThan(Math.min(...doneSteps));
+    });
+
+    it("binds N positional arguments to callee parameters", () => {
+      const doStuffMethod: AliceMethod = {
+        name: "doStuff",
+        isFunction: false,
+        returnType: "void",
+        parameters: [
+          { name: "a", type: "Boolean" },
+          { name: "b", type: "Boolean" },
+        ],
+        statements: [
+          {
+            kind: "IfElse",
+            condition: "a",
+            ifBody: [methodCall("bunny", "hop")],
+            elseBody: [],
+          },
+          {
+            kind: "IfElse",
+            condition: "b",
+            ifBody: [methodCall("bunny", "wave")],
+            elseBody: [],
+          },
+        ],
+      };
+      const callerMethod = procedure("caller", [
+        { kind: "MethodCall", object: "this", method: "doStuff", arguments: ["true", "false"] },
+      ]);
+
+      const p = project([obj("bunny")], [doStuffMethod, callerMethod]);
+      const result = executeProject(p);
+
+      // Dispatch: a="true"→hop, b="false"→no wave (1 hop, 0 wave from dispatch)
+      // Top-level doStuff: a/b unknown→true→both run (1 hop, 1 wave)
+      // Total: 2 hops, 1 wave
+      const hopCalls = result.execution_log.filter(
+        e => e.kind === "MethodCall" && e.detail.includes("hop"),
+      );
+      const waveCalls = result.execution_log.filter(
+        e => e.kind === "MethodCall" && e.detail.includes("wave"),
+      );
+      expect(hopCalls.length).toBeGreaterThanOrEqual(2);
+      expect(waveCalls.length).toBe(1);
+    });
+  });
+
+  // ── Return value propagation ────────────────────────────────────────
+
+  describe("return value propagation", () => {
+    it("resolves variable references in return expressions via scoped lookup", () => {
+      const p = project([], [
+        func("getScore", "Integer", [
+          { kind: "VariableDeclaration", name: "score", varType: "Integer", value: "100" },
+          { kind: "ReturnStatement", expression: "score" },
+        ]),
+      ]);
+      const result = executeProject(p);
+
+      // 'return score' should resolve score → "100" via scoped lookup
+      expect(result.returnValues.get("getScore")).toBe("100");
+    });
+
+    it("dispatched function call log entries appear before caller continues", () => {
+      const doubleFunc: AliceMethod = {
+        name: "double",
+        isFunction: true,
+        returnType: "Integer",
+        parameters: [{ name: "n", type: "Integer" }],
+        statements: [
+          methodCall("bunny", "compute"),
+          { kind: "ReturnStatement", expression: "10" },
+        ],
+      };
+      const callerMethod = procedure("caller", [
+        { kind: "MethodCall", object: "this", method: "double", arguments: ["5"] },
+        methodCall("bunny", "done"),
+      ]);
+
+      const p = project([obj("bunny")], [callerMethod, doubleFunc]);
+      const result = executeProject(p);
+
+      // With dispatch: caller → dispatch double → compute + return → done
+      // compute must appear BEFORE done (inline dispatch)
+      const computeSteps = result.execution_log
+        .filter(e => e.kind === "MethodCall" && e.detail.includes("compute"))
+        .map(e => e.step);
+      const doneSteps = result.execution_log
+        .filter(e => e.kind === "MethodCall" && e.detail.includes("done"))
+        .map(e => e.step);
+
+      expect(computeSteps.length).toBeGreaterThanOrEqual(1);
+      expect(doneSteps.length).toBeGreaterThanOrEqual(1);
+      expect(Math.min(...computeSteps)).toBeLessThan(Math.min(...doneSteps));
+    });
+  });
+
   // ── Integration with real .a3p ─────────────────────────────────────
 
   describe("integration with real .a3p", () => {

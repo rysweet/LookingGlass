@@ -1,4 +1,4 @@
-import type { AliceProject, AliceStatement } from "./a3p-parser.js";
+import type { AliceProject, AliceMethod, AliceStatement } from "./a3p-parser.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -28,7 +28,56 @@ interface VMState {
   log: LogEntry[];
   returned: boolean;
   returnValue: unknown;
-  variables: Map<string, string>;
+  scopes: Map<string, string>[];
+  methods: AliceMethod[];
+  returnValues: Map<string, unknown>;
+}
+
+// ── Scope helpers ──────────────────────────────────────────────────────
+
+function pushScope(state: VMState): void {
+  state.scopes.push(new Map());
+}
+
+function popScope(state: VMState): void {
+  if (state.scopes.length > 1) {
+    state.scopes.pop();
+  }
+}
+
+/** Walk scopes innermost→outermost, return first match or undefined. */
+function scopeLookup(state: VMState, name: string): string | undefined {
+  for (let i = state.scopes.length - 1; i >= 0; i--) {
+    if (state.scopes[i].has(name)) {
+      return state.scopes[i].get(name)!;
+    }
+  }
+  return undefined;
+}
+
+/** Write to the innermost (current) scope frame, respecting per-frame cap. */
+function scopeSet(state: VMState, name: string, value: string): void {
+  const current = state.scopes[state.scopes.length - 1];
+  if (current.has(name) || current.size < MAX_VARIABLES_PER_SCOPE) {
+    current.set(name, value);
+  }
+}
+
+/** Update the nearest scope containing `name`. Returns false if undeclared. */
+function scopeAssign(state: VMState, name: string, value: string): boolean {
+  for (let i = state.scopes.length - 1; i >= 0; i--) {
+    if (state.scopes[i].has(name)) {
+      state.scopes[i].set(name, value);
+      return true;
+    }
+  }
+  return false;
+}
+
+/** If `expr` matches a variable name, return its value; otherwise return expr as-is. */
+function resolveValue(state: VMState, expr: string): string {
+  const val = scopeLookup(state, expr);
+  return val !== undefined ? val : expr;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────
@@ -46,7 +95,9 @@ export function executeProject(project: AliceProject): ExecutionResult {
       log,
       returned: false,
       returnValue: undefined,
-      variables: new Map(),
+      scopes: [new Map()],
+      methods: project.methods,
+      returnValues,
     };
 
     runStatements(method.statements, state);
@@ -100,6 +151,9 @@ function executeOne(stmt: AliceStatement, state: VMState): void {
     case "VariableDeclaration":
       execVariableDeclaration(stmt, state);
       break;
+    case "VariableAssignment":
+      execVariableAssignment(stmt, state);
+      break;
     case "EventListener":
       execEventListener(stmt, state);
       break;
@@ -120,17 +174,63 @@ function executeOne(stmt: AliceStatement, state: VMState): void {
 // ── Statement handlers ─────────────────────────────────────────────────
 
 function execMethodCall(stmt: AliceStatement, state: VMState): void {
-  state.stepCounter++;
   const objectName = stmt.object ?? "this";
   const method = stmt.method ?? "unknown";
   const args = stmt.arguments ?? [];
   const argsStr = args.length > 0 ? `(${args.join(", ")})` : "()";
 
+  state.stepCounter++;
   state.log.push({
     step: state.stepCounter,
     kind: "MethodCall",
     detail: `${objectName}.${method}${argsStr}`,
   });
+
+  // Dispatch to user-defined method when object is "this"
+  if (objectName === "this") {
+    const target = state.methods.find(m => m.name === method);
+    if (target) {
+      dispatchMethod(target, args, state);
+    }
+  }
+}
+
+function dispatchMethod(
+  target: AliceMethod,
+  args: string[],
+  state: VMState,
+): void {
+  // Resolve args in caller's scope before creating callee scope
+  const resolvedArgs: string[] = [];
+  for (let i = 0; i < target.parameters.length && i < args.length; i++) {
+    resolvedArgs.push(resolveValue(state, args[i]));
+  }
+
+  // Save and reset return state for callee
+  const callerReturned = state.returned;
+  const callerReturnValue = state.returnValue;
+  state.returned = false;
+  state.returnValue = undefined;
+
+  pushScope(state);
+  for (let i = 0; i < resolvedArgs.length; i++) {
+    scopeSet(state, target.parameters[i].name, resolvedArgs[i]);
+  }
+
+  state.depth++;
+  runStatements(target.statements, state);
+  state.depth--;
+
+  // Capture callee return value
+  if (state.returned && state.returnValue !== undefined) {
+    state.returnValues.set(target.name, state.returnValue);
+  }
+
+  popScope(state);
+
+  // Restore caller return state
+  state.returned = callerReturned;
+  state.returnValue = callerReturnValue;
 }
 
 function execCountLoop(stmt: AliceStatement, state: VMState): void {
@@ -146,6 +246,7 @@ function execCountLoop(stmt: AliceStatement, state: VMState): void {
 
   if (count === 0 || body.length === 0) return;
 
+  pushScope(state);
   state.depth++;
   for (let i = 0; i < count; i++) {
     if (state.returned) break;
@@ -153,6 +254,7 @@ function execCountLoop(stmt: AliceStatement, state: VMState): void {
     runStatements(body, state);
   }
   state.depth--;
+  popScope(state);
 }
 
 function execIfElse(stmt: AliceStatement, state: VMState): void {
@@ -172,18 +274,20 @@ function execIfElse(stmt: AliceStatement, state: VMState): void {
 
   if (branch.length === 0) return;
 
+  pushScope(state);
   state.depth++;
   runStatements(branch, state);
   state.depth--;
+  popScope(state);
 }
 
 function evaluateCondition(condition: string, state: VMState): boolean {
   if (condition === "true") return true;
   if (condition === "false") return false;
 
-  // Variable lookup
-  if (state.variables.has(condition)) {
-    const val = state.variables.get(condition)!;
+  // Variable lookup via scoped resolution
+  const val = scopeLookup(state, condition);
+  if (val !== undefined) {
     if (val === "true") return true;
     if (val === "false") return false;
   }
@@ -203,7 +307,7 @@ function execReturn(stmt: AliceStatement, state: VMState): void {
   });
 
   state.returned = true;
-  state.returnValue = expr;
+  state.returnValue = resolveValue(state, expr);
 }
 
 function execVariableDeclaration(stmt: AliceStatement, state: VMState): void {
@@ -218,10 +322,22 @@ function execVariableDeclaration(stmt: AliceStatement, state: VMState): void {
     detail: `${name}: ${varType} = ${value}`,
   });
 
-  // Allow re-assignment of existing names; cap new variables per scope
-  if (state.variables.has(name) || state.variables.size < MAX_VARIABLES_PER_SCOPE) {
-    state.variables.set(name, value);
-  }
+  scopeSet(state, name, value);
+}
+
+function execVariableAssignment(stmt: AliceStatement, state: VMState): void {
+  state.stepCounter++;
+  const name = stmt.name ?? "unknown";
+  const value = stmt.value ?? "";
+
+  state.log.push({
+    step: state.stepCounter,
+    kind: "VariableAssignment",
+    detail: `${name} = ${value}`,
+  });
+
+  // Only update if variable exists in some scope; no-op if undeclared
+  scopeAssign(state, name, value);
 }
 
 function execEventListener(stmt: AliceStatement, state: VMState): void {
