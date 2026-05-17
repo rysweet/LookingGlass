@@ -56,7 +56,7 @@ export class Scene {
   }
 
   addEntity(name: string, entity: SThing): void {
-    if (!name || !name.trim()) {
+    if (!name.trim()) {
       throw new TypeError("entity name must be a non-empty string");
     }
     if (this._entities.has(name)) {
@@ -122,21 +122,12 @@ export class Scene {
 
 function applyTransforms(entity: SThing, obj: AliceObject): void {
   if (entity instanceof SMovableTurnable && obj.position) {
-    entity.position = { x: obj.position.x, y: obj.position.y, z: obj.position.z };
+    entity.position = obj.position;
   }
   if (entity instanceof STurnable && obj.orientation) {
-    entity.orientation = {
-      x: obj.orientation.x,
-      y: obj.orientation.y,
-      z: obj.orientation.z,
-      w: obj.orientation.w,
-    };
+    entity.orientation = obj.orientation;
   }
   if (entity instanceof SModel && obj.size) {
-    entity.size = {
-      width: obj.size.width,
-      height: obj.size.height,
-      depth: obj.size.depth,
-    };
+    entity.size = obj.size;
   }
 }
