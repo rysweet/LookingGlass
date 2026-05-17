@@ -12,7 +12,7 @@ When you call `POST /api/world/run`, the server:
 1. Uses the cached parse from `POST /api/launch` (or parses on first run)
 2. Calls `executeProject(parsedProject)` which walks every `AliceMethod`
    in `methods[]` order
-3. Each method gets its own `VMScope` for local variables
+3. Each method gets its own scope stack for local variables
 4. Dispatches each `AliceStatement` by `kind` — updating object state,
    managing variables, evaluating conditions, and appending to the
    execution log
@@ -53,8 +53,8 @@ Response:
   "execution_log": [
     { "step": 1, "kind": "MethodCall", "detail": "this.move()" },
     { "step": 2, "kind": "MethodCall", "detail": "this.turn()" },
-    { "step": 3, "kind": "CountLoop", "detail": "repeat 3 times (6 body statements)" },
-    { "step": 4, "kind": "VariableDeclaration", "detail": "declare x: Number = 0" },
+    { "step": 3, "kind": "CountLoop", "detail": "repeat 3 times" },
+    { "step": 4, "kind": "VariableDeclaration", "detail": "x: Number = 0" },
     { "step": 5, "kind": "ReturnStatement", "detail": "return 42" }
   ],
   "run_duration_ms": 3,
@@ -66,11 +66,12 @@ Response:
 
 | Kind | Behavior |
 |------|----------|
-| `MethodCall` | Logs `object.method(args)`. Updates object state for known methods (`move` → position z+1). Unknown objects/methods are logged without error. |
-| `CountLoop` | Repeats `body` statements exactly `count` times (capped at 10,000 iterations). Logged once with total body statement count. |
-| `IfElse` | Evaluates `condition`: `"true"` literal → ifBody, `"false"` literal → elseBody, variable name → scope lookup, unknown → defaults to `true` (ifBody). |
+| `MethodCall` | If `object` is `"this"` and `method` matches a project method → dispatches with parameter binding (see [vm-scoping-and-functions.md](./vm-scoping-and-functions.md)). Otherwise logs `object.method(args)`. Unknown objects/methods are logged without error. |
+| `CountLoop` | Pushes a new scope frame, repeats `body` statements exactly `count` times (capped at 10,000 iterations), pops scope frame. Logged once with total body statement count. |
+| `IfElse` | Pushes scope frame. Evaluates `condition`: `"true"` literal → ifBody, `"false"` literal → elseBody, variable name → scoped lookup, unknown → defaults to `true` (ifBody). Pops scope frame on exit. |
 | `ReturnStatement` | Sets `returned` flag and `returnValue` on scope. **Halts execution of the current method** — remaining statements in that method are skipped. |
-| `VariableDeclaration` | Creates variable in current scope. If a variable with that name already exists, updates its value (assignment semantics). |
+| `VariableDeclaration` | Creates variable in the innermost scope frame. If a variable with that name already exists in that frame, updates its value. |
+| `VariableAssignment` | Updates an existing variable in the nearest enclosing scope. No-op if undeclared. See [vm-scoping-and-functions.md](./vm-scoping-and-functions.md). |
 | `EventListener` | Registers handler in the event listener map. Logged but **never dispatched** during VM run. |
 | `Comment` | Silently skipped. Not counted in `execution_log`. |
 | Unknown | Logged with `kind: "Unknown"`. Not fatal — execution continues. |
@@ -162,13 +163,14 @@ interface LogEntry {
 
 | Kind | Detail format | Example |
 |------|---------------|---------|
-| `MethodCall` | `"{object}.{method}()"` | `"this.move()"` |
-| `CountLoop` | `"repeat {N} times ({M} body statements)"` | `"repeat 3 times (6 body statements)"` |
-| `IfElse` | `"condition '{cond}' → {branch}"` | `"condition 'true' → ifBody"` |
+| `MethodCall` | `"{object}.{method}({args})"` | `"this.move()"` or `"this.greet(target) (dispatch)"` |
+| `CountLoop` | `"repeat {N} times"` | `"repeat 3 times"` |
+| `IfElse` | `"condition "{cond}" → {result}"` | `"condition "true" → true"` |
 | `ReturnStatement` | `"return {expression}"` | `"return 42"` |
-| `VariableDeclaration` | `"declare {name}: {type} = {value}"` | `"declare x: Number = 0"` |
-| `EventListener` | `"registered {event}"` | `"registered SceneActivation"` |
-| `Unknown` | `"unknown statement: {kind}"` | `"unknown statement: FooBar"` |
+| `VariableDeclaration` | `"{name}: {type} = {value}"` | `"x: Number = 0"` |
+| `VariableAssignment` | `"{name} = {value}"` | `"score = 200"` |
+| `EventListener` | `"register "{event}""` | `"register "SceneActivation""` |
+| `Unknown` | `"Unknown statement kind: {kind}"` | `"Unknown statement kind: FooBar"` |
 
 ## CLI Hook: `eatme-run-world`
 
@@ -204,7 +206,7 @@ tools/eatme-run-world --project starter.a3p --evidence-dir ./evidence --json
     { "step": 2, "kind": "MethodCall", "detail": "this.turn()" },
     { "step": 3, "kind": "MethodCall", "detail": "this.say()" },
     { "step": 4, "kind": "EventListener", "detail": "registered SceneActivation" },
-    { "step": 5, "kind": "VariableDeclaration", "detail": "declare count: Number = 0" }
+    { "step": 5, "kind": "VariableDeclaration", "detail": "count: Number = 0" }
   ],
   "run_duration_ms": 3,
   "errors": [],
@@ -235,12 +237,15 @@ interface ExecutionResult {
   returnValues: Map<string, unknown>;
 }
 
-/** Variable scope with parent chain. */
-interface VMScope {
-  variables: Map<string, unknown>;
-  parent: VMScope | null;
+/** Internal VM state (not exported — shown for maintainer reference). */
+interface VMState {
+  stepCounter: number;
+  depth: number;
+  log: LogEntry[];
   returned: boolean;
   returnValue: unknown;
+  scopes: Map<string, string>[];   // scope stack (innermost frame last)
+  methodMap: Map<string, AliceMethod>; // project methods for O(1) dispatch lookup
 }
 ```
 
@@ -249,8 +254,8 @@ interface VMScope {
 #### `executeProject(project: AliceProject): ExecutionResult`
 
 Entry point. Walks all methods in `project.methods[]` in order. Each method
-gets its own `VMScope`. Returns the combined execution log and any return
-values keyed by method name.
+gets its own `VMState` with a fresh scope stack. Returns the combined
+execution log and any return values keyed by method name.
 
 ```typescript
 import { executeProject } from "./tweedle-vm.js";
@@ -266,9 +271,14 @@ console.log(result.returnValues);          // Map { "myFunction" => 42 }
 
 #### Variable Scoping
 
-Each method creates a fresh `VMScope`. Variables declared with
-`VariableDeclaration` are stored in the current scope. Variable lookup
-walks the scope chain (current → parent → ... → null).
+The VM uses a **scope stack** — an array of `Map<string, string>` frames.
+Each method starts with a single root frame. `CountLoop` and `IfElse` push
+a new frame on entry and pop it on exit, providing block-level scoping.
+Variable lookup walks innermost → outermost (first match wins).
+
+For full details on scoping, shadowing, variable assignment, parameter
+binding, and function dispatch, see
+[vm-scoping-and-functions.md](./vm-scoping-and-functions.md).
 
 ```typescript
 // In method "myFirstMethod":
@@ -279,13 +289,9 @@ walks the scope chain (current → parent → ... → null).
 // Since "x" exists and is truthy, it takes the ifBody branch.
 ```
 
-**Assignment semantics:** If a `VariableDeclaration` names a variable that
-already exists in scope, the value is updated rather than creating a shadow.
-
-```typescript
-// VariableDeclaration { name: "x", value: "1" }  → creates x = "1"
-// VariableDeclaration { name: "x", value: "2" }  → updates x = "2"
-```
+**Assignment semantics:** `VariableDeclaration` writes to the innermost
+scope frame. The `VariableAssignment` statement kind updates the nearest
+enclosing scope containing the variable name.
 
 #### IfElse Condition Evaluation
 
@@ -303,10 +309,13 @@ scope lookup.
 
 When a `ReturnStatement` is encountered:
 
-1. The `returned` flag is set on the current `VMScope`
-2. The `returnValue` is stored on the scope
-3. The method's remaining statements are skipped
-4. The return value is stored in `ExecutionResult.returnValues` keyed
+1. The expression is resolved via `resolveValue` (scoped variable lookup;
+   if the expression matches a variable name, the variable's value is
+   returned; otherwise the literal string is used)
+2. The `returned` flag is set on the current `VMState`
+3. The resolved value is stored as `returnValue`
+4. The method's remaining statements are skipped
+5. The return value is stored in `ExecutionResult.returnValues` keyed
    by method name
 
 ```typescript
@@ -315,7 +324,8 @@ When a `ReturnStatement` is encountered:
 //   ReturnStatement { expression: "score" }
 //   MethodCall { method: "say" }  ← NEVER EXECUTED
 //
-// result.returnValues.get("calculateScore") → "score"
+// "score" is resolved via scope lookup → "100"
+// result.returnValues.get("calculateScore") → "100"
 ```
 
 #### Event Listener Registration
@@ -386,13 +396,13 @@ const result = executeProject(project);
 console.log(result.execution_log);
 // [
 //   { step: 1, kind: "MethodCall", detail: "bunny.move()" },
-//   { step: 2, kind: "CountLoop", detail: "repeat 3 times (3 body statements)" },
+//   { step: 2, kind: "CountLoop", detail: "repeat 3 times" },
 //   { step: 3, kind: "MethodCall", detail: "bunny.turn()" },
 //   { step: 4, kind: "MethodCall", detail: "bunny.turn()" },
 //   { step: 5, kind: "MethodCall", detail: "bunny.turn()" },
 //   { step: 6, kind: "IfElse", detail: "condition 'true' → ifBody" },
 //   { step: 7, kind: "MethodCall", detail: "bunny.say()" },
-//   { step: 8, kind: "VariableDeclaration", detail: "declare score: Number = 100" },
+//   { step: 8, kind: "VariableDeclaration", detail: "score: Number = 100" },
 // ]
 ```
 
@@ -404,7 +414,7 @@ The VM enforces hard caps to prevent runaway execution:
 |-------|-------|--------|
 | Total steps | 50,000 | Execution halts after 50,000 step dispatches. Partial log is returned. |
 | Loop iterations | 10,000 | `CountLoop.count` clamped to 10,000. |
-| Nesting depth | 100 | Nested CountLoop/IfElse beyond depth 100 → logged and skipped. |
+| Nesting depth | 100 | Nested CountLoop/IfElse/function dispatch beyond depth 100 → logged and skipped. |
 | Variables per scope | 1,000 | `VariableDeclaration` beyond 1,000 in a single scope → logged and skipped. |
 | Condition eval | String + scope lookup | `"true"` / `"false"` literals and variable lookup. Never calls `eval()`. |
 | Module purity | Zero I/O imports | No `fs`, `path`, `child_process`, or network access in VM module. |
@@ -435,7 +445,7 @@ npm run build:server
 
 ```
 src/
-  tweedle-vm.ts           ← VM module: executeProject(), VMScope, 7 handlers
+  tweedle-vm.ts           ← VM module: executeProject(), scope stack, 8 handlers + dispatch
   a3p-parser.ts           ← Parses .a3p → AliceProject
   server.ts               ← Wires VM into POST /api/world/run
   hooks/
@@ -455,11 +465,13 @@ src/
 
 ```
 AliceMethod
-  → create VMScope (fresh variable scope)
+  → create VMState (scope stack with root frame, methods[] for dispatch)
   → walk statements[]
     → dispatch by kind (switch/case, no eval)
+    → push/pop scope frames on CountLoop/IfElse entry/exit
+    → MethodCall "this.X" → dispatch to user-defined method if found
     → append LogEntry to execution_log
-    → if ReturnStatement: set returned flag, break
+    → if ReturnStatement: resolve expression via scope, set returned flag, break
   → store returnValue in result (if function)
   → next method
 ```
@@ -499,6 +511,15 @@ The test suite covers:
 | 21 | Cap: depth | 100 nesting limit | Logged as skipped |
 | 22 | Cap: variables | 1K per scope | Logged as skipped |
 | 23 | Integration | Real .a3p | Parse + execute against actual project file |
+| 24 | Block scope | Cleanup after loop | Variables in loop body gone after loop exits |
+| 25 | Block scope | Shadowing | Inner "x" shadows outer "x"; outer unchanged after pop |
+| 26 | VariableAssignment | Correct scope | Updates nearest enclosing frame with the variable |
+| 27 | VariableAssignment | Undeclared | No-op, logged with "(undeclared, ignored)" |
+| 28 | Params | 0 parameters | Dispatch with no args, callee scope empty |
+| 29 | Params | 1 parameter | Single arg resolved and bound to parameter name |
+| 30 | Params | N parameters | Multiple args positionally bound |
+| 31 | Return | Propagation | Dispatched function's return stored in returnValues |
+| 32 | Dispatch | Cross-method | Method A dispatches to B; B's return in returnValues |
 
 ### Example Test
 
