@@ -55,7 +55,8 @@ function findByDebugType(scene: THREE.Scene, debugType: string): THREE.Object3D[
 /** Filter scene children that are instances of a given Three.js class. */
 function findByType<T extends THREE.Object3D>(
   scene: THREE.Scene,
-  ctor: new (...args: unknown[]) => T,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ctor: new (...args: any[]) => T,
 ): T[] {
   return collectSceneChildren(scene).filter((obj) => obj instanceof ctor) as T[];
 }
