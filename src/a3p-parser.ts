@@ -74,12 +74,12 @@ export async function parseA3PFromZip(zip: JSZip): Promise<AliceProject> {
   const doc = parseXmlString(xmlText);
 
   const projectName = getProjectName(doc);
-  const keyMap = buildKeyMap(doc.documentElement);
-  const sceneObjects = extractSceneObjects(doc, keyMap);
-  const methods = extractMethods(doc, keyMap);
-  const jointHierarchy = extractJointHierarchy(doc);
-  const boundingBoxes = extractBoundingBoxes(doc);
-  const textureRefs = extractTextureRefs(doc, zip);
+  const idx = indexNodes(doc.documentElement);
+  const sceneObjects = extractSceneObjects(idx);
+  const methods = extractMethods(idx.userMethods, idx.keyMap);
+  const jointHierarchy = extractJointHierarchy(idx.jointImplementations);
+  const boundingBoxes = extractBoundingBoxes(idx.modelResourceInfos);
+  const textureRefs = extractTextureRefs(idx.textureReferences, zip);
 
   return { version: version.trim(), projectName, sceneObjects, methods, jointHierarchy, boundingBoxes, textureRefs };
 }
@@ -149,27 +149,59 @@ async function ensureNodeXml(): Promise<void> {
 // Key-based reference resolution
 // ---------------------------------------------------------------------------
 
-/**
- * Alice XML uses a key-based reference system: `<node key="X" type="...">...children...</node>`
- * is a definition, while `<node key="X"/>` (no type, no children) is a reference.
- * Build a map from key → definition element so we can resolve references.
- */
-function buildKeyMap(root: Element): Map<string, Element> {
-  const map = new Map<string, Element>();
+/** Pre-classified node buckets from a single getElementsByTagName pass. */
+interface NodeIndex {
+  keyMap: Map<string, Element>;
+  namedUserTypes: Element[];
+  userMethods: Element[];
+  jointImplementations: Element[];
+  modelResourceInfos: Element[];
+  textureReferences: Element[];
+}
+
+/** Single-pass: build key map and classify nodes by type. Eliminates 5 redundant DOM traversals. */
+function indexNodes(root: Element): NodeIndex {
+  const keyMap = new Map<string, Element>();
+  const namedUserTypes: Element[] = [];
+  const userMethods: Element[] = [];
+  const jointImplementations: Element[] = [];
+  const modelResourceInfos: Element[] = [];
+  const textureReferences: Element[] = [];
+
   const allNodes = root.getElementsByTagName("node");
   for (let i = 0; i < allNodes.length; i++) {
     const n = allNodes[i];
+    const nodeType = n.getAttribute("type");
+
+    // Build key map (definitions only)
     const key = n.getAttribute("key");
-    if (!key) continue;
-    // A definition has a `type` attribute or has child elements
-    if (n.getAttribute("type") || n.childNodes.length > 0) {
-      // Only store first definition (some keys appear multiple times as refs)
-      if (!map.has(key)) {
-        map.set(key, n);
+    if (key && !keyMap.has(key)) {
+      if (nodeType || n.childNodes.length > 0) {
+        keyMap.set(key, n);
       }
     }
+
+    // Classify by type
+    switch (nodeType) {
+      case "org.lgna.project.ast.NamedUserType":
+        namedUserTypes.push(n);
+        break;
+      case "org.lgna.project.ast.UserMethod":
+        userMethods.push(n);
+        break;
+      case "org.lgna.story.resourceutilities.JointImplementation":
+        jointImplementations.push(n);
+        break;
+      case "org.lgna.story.resourceutilities.ModelResourceInfo":
+        modelResourceInfos.push(n);
+        break;
+      case "org.lgna.story.resourceutilities.TextureReference":
+        textureReferences.push(n);
+        break;
+    }
   }
-  return map;
+
+  return { keyMap, namedUserTypes, userMethods, jointImplementations, modelResourceInfos, textureReferences };
 }
 
 /** Resolve a node: if it's a keyref (no type, no children), return the definition. */
@@ -192,35 +224,29 @@ function getProjectName(doc: Document): string {
   return getPropertyText(root, "name") ?? "Unknown";
 }
 
-function extractSceneObjects(doc: Document, keyMap: Map<string, Element>): AliceObject[] {
+function extractSceneObjects(idx: NodeIndex): AliceObject[] {
   const objects: AliceObject[] = [];
-  const root = doc.documentElement;
 
   // Find the Scene NamedUserType (superType = org.lgna.story.SScene)
-  const sceneType = findSceneType(root, keyMap);
+  const sceneType = findSceneType(idx.namedUserTypes, idx.keyMap);
   if (!sceneType) return objects;
 
   // Gather all field nodes inside the scene's "fields" property, resolving refs
-  const fieldNodes = getCollectionNodesResolved(sceneType, "fields", keyMap);
+  const fieldNodes = getCollectionNodesResolved(sceneType, "fields", idx.keyMap);
 
   for (const field of fieldNodes) {
-    const obj = parseUserField(field, keyMap);
+    const obj = parseUserField(field, idx.keyMap);
     if (obj) objects.push(obj);
   }
 
   // Extract position/orientation/size from scene setup methods
-  enrichFromMethods(sceneType, objects, keyMap);
+  enrichFromMethods(sceneType, objects, idx.keyMap);
 
   return objects;
 }
 
-function findSceneType(root: Element, keyMap: Map<string, Element>): Element | null {
-  // Walk all <node type="org.lgna.project.ast.NamedUserType"> and find the one
-  // whose superType contains "SScene".
-  const allNodes = root.getElementsByTagName("node");
-  for (let i = 0; i < allNodes.length; i++) {
-    const n = allNodes[i];
-    if (n.getAttribute("type") !== "org.lgna.project.ast.NamedUserType") continue;
+function findSceneType(namedUserTypes: Element[], keyMap: Map<string, Element>): Element | null {
+  for (const n of namedUserTypes) {
     const superType = getSuperTypeName(n, keyMap);
     if (superType && superType.includes("SScene")) return n;
   }
@@ -409,15 +435,10 @@ function extractDoubleArgs(methodInvocation: Element): number[] {
 // Method / procedure / function extraction
 // ---------------------------------------------------------------------------
 
-function extractMethods(doc: Document, keyMap: Map<string, Element>): AliceMethod[] {
+function extractMethods(userMethods: Element[], keyMap: Map<string, Element>): AliceMethod[] {
   const methods: AliceMethod[] = [];
-  const allNodes = doc.getElementsByTagName("node");
 
-  for (let i = 0; i < allNodes.length; i++) {
-    const node = allNodes[i];
-    const nodeType = node.getAttribute("type");
-    if (nodeType !== "org.lgna.project.ast.UserMethod") continue;
-
+  for (const node of userMethods) {
     const name = getPropertyText(node, "name");
     if (!name || name === "main") continue;
 
@@ -553,13 +574,10 @@ interface JointData {
   orientation: { x: number; y: number; z: number; w: number };
 }
 
-function extractJointHierarchy(doc: Document): JointNode[] {
-  const allNodes = doc.getElementsByTagName("node");
+function extractJointHierarchy(jointNodes: Element[]): JointNode[] {
   const joints: JointData[] = [];
 
-  for (let i = 0; i < allNodes.length; i++) {
-    const n = allNodes[i];
-    if (n.getAttribute("type") !== "org.lgna.story.resourceutilities.JointImplementation") continue;
+  for (const n of jointNodes) {
 
     const name = getPropertyText(n, "jointName");
     if (!name) continue;
@@ -623,13 +641,10 @@ function extractJointHierarchy(doc: Document): JointNode[] {
 // Sprint 2: Bounding Box Extraction
 // ---------------------------------------------------------------------------
 
-function extractBoundingBoxes(doc: Document): Record<string, BoundingBox> {
+function extractBoundingBoxes(resourceInfoNodes: Element[]): Record<string, BoundingBox> {
   const boxes: Record<string, BoundingBox> = {};
-  const allNodes = doc.getElementsByTagName("node");
 
-  for (let i = 0; i < allNodes.length; i++) {
-    const n = allNodes[i];
-    if (n.getAttribute("type") !== "org.lgna.story.resourceutilities.ModelResourceInfo") continue;
+  for (const n of resourceInfoNodes) {
 
     const name = getPropertyText(n, "resourceName");
     if (!name) continue;
@@ -659,14 +674,11 @@ const IMAGE_EXTENSIONS = new Set([
   ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".webp",
 ]);
 
-function extractTextureRefs(doc: Document, zip: JSZip): string[] {
+function extractTextureRefs(textureNodes: Element[], zip: JSZip): string[] {
   const refs = new Set<string>();
 
   // Source 1: TextureReference nodes in XML
-  const allNodes = doc.getElementsByTagName("node");
-  for (let i = 0; i < allNodes.length; i++) {
-    const n = allNodes[i];
-    if (n.getAttribute("type") !== "org.lgna.story.resourceutilities.TextureReference") continue;
+  for (const n of textureNodes) {
     const texPath = getPropertyText(n, "texturePath");
     if (texPath) refs.add(texPath);
   }

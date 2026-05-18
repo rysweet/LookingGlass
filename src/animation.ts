@@ -68,7 +68,8 @@ export function nlerp(a: Orientation, b: Orientation, t: number): Orientation {
   if (len === 0) {
     return { x: 0, y: 0, z: 0, w: 1 };
   }
-  return { x: x / len, y: y / len, z: z / len, w: w / len };
+  const invLen = 1 / len;
+  return { x: x * invLen, y: y * invLen, z: z * invLen, w: w * invLen };
 }
 
 export function lerpScalar(a: number, b: number, t: number): number {

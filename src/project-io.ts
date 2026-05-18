@@ -44,31 +44,25 @@ export async function readProject(
     validatePath(path);
   }
 
-  // Parse the project model from the already-loaded ZIP (no re-parse)
-  const project = await parseA3PFromZip(zip);
-
-  // Extract original XML for round-trip pass-through (with provenance marker)
+  // Parse project model + read XML/manifest/thumbnail in parallel
   const xmlEntry = zip.file("programType.xml");
   if (!xmlEntry) {
     throw new Error("No programType.xml found in .a3p archive");
   }
-  const xmlText = await xmlEntry.async("string");
-  const storedXml = ORIGINAL_XML_MARKER + xmlText;
-
-  // Read manifest.json if present
-  let manifest: Record<string, unknown> | null = null;
   const manifestEntry = zip.file("manifest.json");
-  if (manifestEntry) {
-    const text = await manifestEntry.async("string");
-    manifest = JSON.parse(text) as Record<string, unknown>;
-  }
-
-  // Read thumbnail.png if present
-  let thumbnail: Uint8Array | null = null;
   const thumbEntry = zip.file("thumbnail.png");
-  if (thumbEntry) {
-    thumbnail = await thumbEntry.async("uint8array");
-  }
+
+  const [project, xmlText, manifestText, thumbnail] = await Promise.all([
+    parseA3PFromZip(zip),
+    xmlEntry.async("string"),
+    manifestEntry ? manifestEntry.async("string") : Promise.resolve(null),
+    thumbEntry ? thumbEntry.async("uint8array") : Promise.resolve(null),
+  ]);
+
+  const storedXml = ORIGINAL_XML_MARKER + xmlText;
+  const manifest: Record<string, unknown> | null = manifestText
+    ? JSON.parse(manifestText) as Record<string, unknown>
+    : null;
 
   // Collect all non-special resources + __original_xml__
   const resources = new Map<string, Uint8Array>();
