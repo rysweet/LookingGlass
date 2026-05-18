@@ -130,8 +130,8 @@ prevents race conditions between server startup and the first API request:
   method: GET
   url: "http://127.0.0.1:${PORT}/api/health"
   retry:
-    max_attempts: 10
-    interval: 500ms
+    max_attempts: 3
+    interval: 200ms
   description: "Wait for server to be ready"
 
 - action: verify_response
@@ -291,7 +291,7 @@ Maps Java Alice's `modifyAndWriteA3P` through the server API.
 4. `POST /api/code/edit-procedure` with `editSpec: "append-comment:gadugi-round-trip-proof"` → verify `status: "proved"`, `edited_project_artifact: "edited-project.a3p"`
 5. `POST /api/project/save` → verify `status: "saved"`, `saved_project_artifact` present
 6. Send SIGTERM, verify clean exit
-7. Re-launch server with `--project $EVIDENCE_DIR/project-save/saved-project.a3p`
+7. Re-launch server (no `--project` flag — project path passed via API body)
 8. Health check gate
 9. `POST /api/launch` with saved project → verify `status: "launched"`
 10. Send SIGTERM, verify exit code 0
@@ -409,8 +409,8 @@ scenario:
       method: GET
       url: "http://127.0.0.1:${PORT}/api/health"
       retry:
-        max_attempts: 10
-        interval: 500ms
+        max_attempts: 3
+        interval: 200ms
 
     - action: verify_response
       status: 200
