@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import type { JointNode, BoundingBox } from "./story-api/types";
 
 /** A single object extracted from an Alice scene. */
 export interface AliceObject {
@@ -51,6 +52,9 @@ export interface AliceProject {
   projectName: string;
   sceneObjects: AliceObject[];
   methods: AliceMethod[];
+  jointHierarchy?: JointNode[];
+  boundingBoxes?: Record<string, BoundingBox>;
+  textureRefs?: string[];
 }
 
 /**
@@ -69,8 +73,11 @@ export async function parseA3P(data: ArrayBuffer | Uint8Array): Promise<AlicePro
   const keyMap = buildKeyMap(doc.documentElement);
   const sceneObjects = extractSceneObjects(doc, keyMap);
   const methods = extractMethods(doc, keyMap);
+  const jointHierarchy = extractJointHierarchy(doc);
+  const boundingBoxes = extractBoundingBoxes(doc);
+  const textureRefs = extractTextureRefs(doc, zip);
 
-  return { version: version.trim(), projectName, sceneObjects, methods };
+  return { version: version.trim(), projectName, sceneObjects, methods, jointHierarchy, boundingBoxes, textureRefs };
 }
 
 // ---------------------------------------------------------------------------
@@ -527,4 +534,147 @@ function parseStatement(node: Element, keyMap: Map<string, Element>): AliceState
   }
 
   return { kind: nodeType.split(".").pop() ?? "Unknown" };
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 2: Joint Hierarchy Extraction
+// ---------------------------------------------------------------------------
+
+const MAX_JOINT_DEPTH = 64;
+
+interface JointData {
+  name: string;
+  parentName: string | null;
+  position: { x: number; y: number; z: number };
+  orientation: { x: number; y: number; z: number; w: number };
+}
+
+function extractJointHierarchy(doc: Document): JointNode[] {
+  const allNodes = doc.getElementsByTagName("node");
+  const joints: JointData[] = [];
+
+  for (let i = 0; i < allNodes.length; i++) {
+    const n = allNodes[i];
+    if (n.getAttribute("type") !== "org.lgna.story.resourceutilities.JointImplementation") continue;
+
+    const name = getPropertyText(n, "jointName");
+    if (!name) continue;
+
+    const parentName = getPropertyText(n, "parent") ?? null;
+    joints.push({
+      name,
+      parentName: parentName || null,
+      position: {
+        x: parseFloat(getPropertyText(n, "positionX") ?? "0"),
+        y: parseFloat(getPropertyText(n, "positionY") ?? "0"),
+        z: parseFloat(getPropertyText(n, "positionZ") ?? "0"),
+      },
+      orientation: {
+        x: parseFloat(getPropertyText(n, "orientationX") ?? "0"),
+        y: parseFloat(getPropertyText(n, "orientationY") ?? "0"),
+        z: parseFloat(getPropertyText(n, "orientationZ") ?? "0"),
+        w: parseFloat(getPropertyText(n, "orientationW") ?? "1"),
+      },
+    });
+  }
+
+  // Group children by parent name
+  const childrenMap = new Map<string, JointData[]>();
+  const roots: JointData[] = [];
+
+  for (const j of joints) {
+    if (j.parentName) {
+      let siblings = childrenMap.get(j.parentName);
+      if (!siblings) {
+        siblings = [];
+        childrenMap.set(j.parentName, siblings);
+      }
+      siblings.push(j);
+    } else {
+      roots.push(j);
+    }
+  }
+
+  function buildNode(data: JointData, depth: number): JointNode {
+    const children =
+      depth < MAX_JOINT_DEPTH
+        ? (childrenMap.get(data.name) ?? []).map((c) => buildNode(c, depth + 1))
+        : [];
+
+    return {
+      name: data.name,
+      parentName: data.parentName,
+      children,
+      localTransform: {
+        position: data.position,
+        orientation: data.orientation,
+      },
+    };
+  }
+
+  return roots.map((r) => buildNode(r, 1));
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 2: Bounding Box Extraction
+// ---------------------------------------------------------------------------
+
+function extractBoundingBoxes(doc: Document): Record<string, BoundingBox> {
+  const boxes: Record<string, BoundingBox> = {};
+  const allNodes = doc.getElementsByTagName("node");
+
+  for (let i = 0; i < allNodes.length; i++) {
+    const n = allNodes[i];
+    if (n.getAttribute("type") !== "org.lgna.story.resourceutilities.ModelResourceInfo") continue;
+
+    const name = getPropertyText(n, "resourceName");
+    if (!name) continue;
+
+    boxes[name] = {
+      min: {
+        x: parseFloat(getPropertyText(n, "boundingBoxMinX") ?? "0"),
+        y: parseFloat(getPropertyText(n, "boundingBoxMinY") ?? "0"),
+        z: parseFloat(getPropertyText(n, "boundingBoxMinZ") ?? "0"),
+      },
+      max: {
+        x: parseFloat(getPropertyText(n, "boundingBoxMaxX") ?? "0"),
+        y: parseFloat(getPropertyText(n, "boundingBoxMaxY") ?? "0"),
+        z: parseFloat(getPropertyText(n, "boundingBoxMaxZ") ?? "0"),
+      },
+    };
+  }
+
+  return boxes;
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 2: Texture Reference Extraction
+// ---------------------------------------------------------------------------
+
+const IMAGE_EXTENSIONS = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".webp",
+]);
+
+function extractTextureRefs(doc: Document, zip: JSZip): string[] {
+  const refs = new Set<string>();
+
+  // Source 1: TextureReference nodes in XML
+  const allNodes = doc.getElementsByTagName("node");
+  for (let i = 0; i < allNodes.length; i++) {
+    const n = allNodes[i];
+    if (n.getAttribute("type") !== "org.lgna.story.resourceutilities.TextureReference") continue;
+    const texPath = getPropertyText(n, "texturePath");
+    if (texPath) refs.add(texPath);
+  }
+
+  // Source 2: Image files in ZIP directory
+  for (const zipPath of Object.keys(zip.files)) {
+    if (zip.files[zipPath].dir) continue;
+    const dotIdx = zipPath.lastIndexOf(".");
+    if (dotIdx === -1) continue;
+    const ext = zipPath.substring(dotIdx).toLowerCase();
+    if (IMAGE_EXTENSIONS.has(ext)) refs.add(zipPath);
+  }
+
+  return [...refs].sort();
 }
