@@ -144,6 +144,12 @@ function genExpr(expr: Expression, depth: number): string {
       return `${genExpr(expr.expression, depth + 1)} instanceof ${genTypeRef(expr.testType)}`;
     case "Parenthesized":
       return `(${genExpr(expr.expression, depth + 1)})`;
+    case "ArrayLiteral": {
+      const elements = expr.elements
+        .map((e) => genExpr(e, depth + 1))
+        .join(", ");
+      return `{${elements}}`;
+    }
   }
 
   throw new TweedleCodegenError(
@@ -206,6 +212,34 @@ function genStmt(stmt: Statement, indent: string, depth: number): string {
     case "CountUpTo": {
       const count = genExpr(stmt.count, depth + 1);
       return genBody(stmt.body, `countUpTo (${count})`, indent, depth + 1);
+    }
+    case "WhileLoop": {
+      const cond = genExpr(stmt.condition, depth + 1);
+      return genBody(stmt.body, `while (${cond})`, indent, depth + 1);
+    }
+    case "TryCatch": {
+      const catchType = genTypeRef(stmt.catchType);
+      let result = genBody(stmt.tryBody, "try", indent, depth + 1);
+      result += " " + genBody(stmt.catchBody, `catch (${catchType} ${stmt.catchVariable})`, indent, depth + 1);
+      return result;
+    }
+    case "SwitchCase": {
+      const switchExpr = genExpr(stmt.expression, depth + 1);
+      const inner = indent + "  ";
+      const caseLines: string[] = [];
+      for (const c of stmt.cases) {
+        const val = genExpr(c.value, depth + 1);
+        const body = genBody(c.body, "", inner, depth + 1);
+        caseLines.push(`${inner}case ${val}: ${body}`);
+      }
+      if (stmt.defaultCase !== null) {
+        const body = genBody(stmt.defaultCase, "", inner, depth + 1);
+        caseLines.push(`${inner}default: ${body}`);
+      }
+      const casesStr = caseLines.join("\n");
+      return casesStr.length > 0
+        ? `switch (${switchExpr}) {\n${casesStr}\n${indent}}`
+        : `switch (${switchExpr}) {}`;
     }
     case "Return":
       return stmt.expression !== null

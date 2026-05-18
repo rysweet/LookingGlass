@@ -17,6 +17,7 @@ enum TT {
   FOR_EACH, DO_IN_ORDER, DO_TOGETHER, COUNT_UP_TO,
   THIS, SUPER, TRUE, FALSE, NULL_LIT,
   AS, INSTANCEOF, ENUM, IN,
+  WHILE, TRY, CATCH, SWITCH, CASE, DEFAULT,
   LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET,
   SEMI, COMMA, DOT, COLON, ELLIPSIS,
   PLUS, MINUS, STAR, SLASH, PERCENT,
@@ -38,6 +39,8 @@ const KEYWORDS = new Map<string, TT>([
   ["true", TT.TRUE], ["false", TT.FALSE], ["null", TT.NULL_LIT],
   ["as", TT.AS], ["instanceof", TT.INSTANCEOF],
   ["enum", TT.ENUM], ["in", TT.IN],
+  ["while", TT.WHILE], ["try", TT.TRY], ["catch", TT.CATCH],
+  ["switch", TT.SWITCH], ["case", TT.CASE], ["default", TT.DEFAULT],
 ]);
 
 interface Token {
@@ -72,6 +75,9 @@ export type Statement =
   | { type: "IfElse"; condition: Expression; ifBody: Statement[]; elseBody: Statement[] | null }
   | { type: "ForEach"; itemType: TypeRef; itemName: string; collection: Expression; body: Statement[] }
   | { type: "CountUpTo"; count: Expression; body: Statement[] }
+  | { type: "WhileLoop"; condition: Expression; body: Statement[] }
+  | { type: "TryCatch"; tryBody: Statement[]; catchType: TypeRef; catchVariable: string; catchBody: Statement[] }
+  | { type: "SwitchCase"; expression: Expression; cases: Array<{ value: Expression; body: Statement[] }>; defaultCase: Statement[] | null }
   | { type: "Return"; expression: Expression | null }
   | { type: "ExpressionStatement"; expression: Expression }
   | { type: "LocalVariableDeclaration"; name: string; varType: TypeRef; initializer: Expression; isConstant: boolean }
@@ -87,6 +93,7 @@ export type Expression =
   | { type: "MethodInvocation"; target: Expression | null; methodName: string; arguments: Argument[] }
   | { type: "NewInstance"; className: string; arguments: Argument[] }
   | { type: "NewArray"; elementType: TypeRef; elements: Expression[]; size: Expression | null }
+  | { type: "ArrayLiteral"; elements: Expression[] }
   | { type: "BinaryOp"; operator: string; left: Expression; right: Expression }
   | { type: "UnaryOp"; operator: string; operand: Expression }
   | { type: "Assignment"; target: Expression; value: Expression }
@@ -643,6 +650,57 @@ class Parser {
       return { type: "CountUpTo", count, body };
     }
 
+    // while (cond) { ... }
+    if (this.check(TT.WHILE)) {
+      this.advance();
+      this.expect(TT.LPAREN, "'('");
+      const condition = this.parseExpression();
+      this.expect(TT.RPAREN, "')'");
+      const body = this.parseBlock();
+      return { type: "WhileLoop", condition, body };
+    }
+
+    // try { ... } catch (Type name) { ... }
+    if (this.check(TT.TRY)) {
+      this.advance();
+      const tryBody = this.parseBlock();
+      this.expect(TT.CATCH, "'catch'");
+      this.expect(TT.LPAREN, "'('");
+      const catchType = this.parseTypeRef();
+      const catchVariable = this.expect(TT.IDENTIFIER, "variable name").text;
+      this.expect(TT.RPAREN, "')'");
+      const catchBody = this.parseBlock();
+      return { type: "TryCatch", tryBody, catchType, catchVariable, catchBody };
+    }
+
+    // switch (expr) { case val: { ... } ... default: { ... } }
+    if (this.check(TT.SWITCH)) {
+      this.advance();
+      this.expect(TT.LPAREN, "'('");
+      const expression = this.parseExpression();
+      this.expect(TT.RPAREN, "')'");
+      this.expect(TT.LBRACE, "'{'");
+      const cases: Array<{ value: Expression; body: Statement[] }> = [];
+      let defaultCase: Statement[] | null = null;
+      while (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
+        if (this.check(TT.CASE)) {
+          this.advance();
+          const value = this.parseExpression();
+          this.expect(TT.COLON, "':'");
+          const body = this.parseBlock();
+          cases.push({ value, body });
+        } else if (this.check(TT.DEFAULT)) {
+          this.advance();
+          this.expect(TT.COLON, "':'");
+          defaultCase = this.parseBlock();
+        } else {
+          this.fail("Expected 'case' or 'default'");
+        }
+      }
+      this.expect(TT.RBRACE, "'}'");
+      return { type: "SwitchCase", expression, cases, defaultCase };
+    }
+
     // return [expr];
     if (this.check(TT.RETURN)) {
       this.advance();
@@ -840,6 +898,20 @@ class Parser {
     if (tok.type === TT.IDENTIFIER) {
       this.advance();
       return { type: "Identifier", name: tok.text };
+    }
+
+    // array literal: {expr, expr, ...}
+    if (tok.type === TT.LBRACE) {
+      this.advance();
+      const elements: Expression[] = [];
+      if (!this.check(TT.RBRACE)) {
+        elements.push(this.parseExpression());
+        while (this.match(TT.COMMA)) {
+          elements.push(this.parseExpression());
+        }
+      }
+      this.expect(TT.RBRACE, "'}'");
+      return { type: "ArrayLiteral", elements };
     }
 
     this.fail(`Unexpected token '${tok.text || "end of input"}'`, tok);
