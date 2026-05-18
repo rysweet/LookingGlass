@@ -127,10 +127,6 @@ scenario:
       greater_than_or_equal: 0
       description: "Run duration is non-negative"
 
-    # ── Verify world/run before launch returns 400 ────────────────────
-    # (Covered implicitly by the order: launch must come first.
-    #  A standalone negative test would need a separate scenario.)
-
     # ── Graceful shutdown ─────────────────────────────────────────────
     - action: send_input
       value: ""
