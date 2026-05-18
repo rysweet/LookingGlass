@@ -51,11 +51,7 @@ export interface SceneBuildResult {
 
 // ── Constants ─────────────────────────────────────────────────────────
 
-const TYPE_COLORS: Record<string, number> = {
-  "org.lgna.story.SGround": 0x4a7c3f,
-  "org.lgna.story.SCamera": 0x666666,
-};
-
+const GROUND_COLOR = 0x4a7c3f;
 const PROP_COLOR = 0xb5651d;
 const MODEL_COLOR = 0xcc7722;
 const DEFAULT_COLOR = 0x8888cc;
@@ -316,7 +312,7 @@ function createMeshForObject(obj: AliceObject): THREE.Object3D | null {
 
 function createGround(obj: AliceObject): THREE.Mesh {
   const geo = new THREE.PlaneGeometry(200, 200);
-  const mat = new THREE.MeshLambertMaterial({ color: TYPE_COLORS["org.lgna.story.SGround"] });
+  const mat = new THREE.MeshLambertMaterial({ color: GROUND_COLOR });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.receiveShadow = true;
