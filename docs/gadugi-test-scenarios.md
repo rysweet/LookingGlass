@@ -185,7 +185,7 @@ the expected statement types.
 1. Launch `alice-web serve --port $PORT --evidence-dir $EVIDENCE_DIR --project $A3P_FILE`
 2. Health check gate
 3. `POST /api/launch` with project → verify launched
-4. `POST /api/world/run` → verify `status: "completed"`, `statements_executed >= 0`, `execution_log` is array
+4. `POST /api/world/run` → verify `status: "completed"`, `statements_executed >= 1`, `execution_log` is array
 5. Send SIGTERM, verify exit code 0
 
 **Validates:**
