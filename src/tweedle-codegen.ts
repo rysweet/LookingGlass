@@ -145,10 +145,10 @@ function genExpr(expr: Expression, depth: number): string {
     case "Parenthesized":
       return `(${genExpr(expr.expression, depth + 1)})`;
     case "ArrayLiteral": {
-      const elems = expr.elements
+      const elements = expr.elements
         .map((e) => genExpr(e, depth + 1))
         .join(", ");
-      return `{${elems}}`;
+      return `{${elements}}`;
     }
   }
 
@@ -213,6 +213,34 @@ function genStmt(stmt: Statement, indent: string, depth: number): string {
       const count = genExpr(stmt.count, depth + 1);
       return genBody(stmt.body, `countUpTo (${count})`, indent, depth + 1);
     }
+    case "WhileLoop": {
+      const cond = genExpr(stmt.condition, depth + 1);
+      return genBody(stmt.body, `while (${cond})`, indent, depth + 1);
+    }
+    case "TryCatch": {
+      const catchType = genTypeRef(stmt.catchType);
+      let result = genBody(stmt.tryBody, "try", indent, depth + 1);
+      result += " " + genBody(stmt.catchBody, `catch (${catchType} ${stmt.catchVariable})`, indent, depth + 1);
+      return result;
+    }
+    case "SwitchCase": {
+      const switchExpr = genExpr(stmt.expression, depth + 1);
+      const inner = indent + "  ";
+      const caseLines: string[] = [];
+      for (const c of stmt.cases) {
+        const val = genExpr(c.value, depth + 1);
+        const body = genBody(c.body, "", inner, depth + 1);
+        caseLines.push(`${inner}case ${val}: ${body}`);
+      }
+      if (stmt.defaultCase !== null) {
+        const body = genBody(stmt.defaultCase, "", inner, depth + 1);
+        caseLines.push(`${inner}default: ${body}`);
+      }
+      const casesStr = caseLines.join("\n");
+      return casesStr.length > 0
+        ? `switch (${switchExpr}) {\n${casesStr}\n${indent}}`
+        : `switch (${switchExpr}) {}`;
+    }
     case "Return":
       return stmt.expression !== null
         ? `return ${genExpr(stmt.expression, depth + 1)};`
@@ -229,32 +257,6 @@ function genStmt(stmt: Statement, indent: string, depth: number): string {
       return genBody(stmt.body, "", indent, depth + 1);
     case "DisabledBlock":
       return `*<${stmt.raw}>*`;
-    case "WhileLoop": {
-      const cond = genExpr(stmt.condition, depth + 1);
-      return genBody(stmt.body, `while (${cond})`, indent, depth + 1);
-    }
-    case "TryCatch": {
-      let result = genBody(stmt.tryBody, "try", indent, depth + 1);
-      const catchType = genTypeRef(stmt.catchType);
-      result += " " + genBody(stmt.catchBody, `catch (${catchType} ${stmt.catchVariable})`, indent, depth + 1);
-      return result;
-    }
-    case "SwitchCase": {
-      const swExpr = genExpr(stmt.expression, depth + 1);
-      const swInner = indent + "  ";
-      const entries: string[] = [];
-      for (const c of stmt.cases) {
-        const val = genExpr(c.value, depth + 1);
-        entries.push(swInner + genBody(c.body, `case ${val}:`, swInner, depth + 1));
-      }
-      if (stmt.defaultCase !== null) {
-        entries.push(swInner + genBody(stmt.defaultCase, "default:", swInner, depth + 1));
-      }
-      const swBody = entries.join("\n");
-      return swBody.length > 0
-        ? `switch (${swExpr}) {\n${swBody}\n${indent}}`
-        : `switch (${swExpr}) {}`;
-    }
   }
 
   throw new TweedleCodegenError(

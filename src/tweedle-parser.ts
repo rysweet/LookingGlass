@@ -75,14 +75,14 @@ export type Statement =
   | { type: "IfElse"; condition: Expression; ifBody: Statement[]; elseBody: Statement[] | null }
   | { type: "ForEach"; itemType: TypeRef; itemName: string; collection: Expression; body: Statement[] }
   | { type: "CountUpTo"; count: Expression; body: Statement[] }
+  | { type: "WhileLoop"; condition: Expression; body: Statement[] }
+  | { type: "TryCatch"; tryBody: Statement[]; catchType: TypeRef; catchVariable: string; catchBody: Statement[] }
+  | { type: "SwitchCase"; expression: Expression; cases: Array<{ value: Expression; body: Statement[] }>; defaultCase: Statement[] | null }
   | { type: "Return"; expression: Expression | null }
   | { type: "ExpressionStatement"; expression: Expression }
   | { type: "LocalVariableDeclaration"; name: string; varType: TypeRef; initializer: Expression; isConstant: boolean }
   | { type: "Block"; body: Statement[] }
-  | { type: "DisabledBlock"; raw: string }
-  | { type: "WhileLoop"; condition: Expression; body: Statement[] }
-  | { type: "TryCatch"; tryBody: Statement[]; catchType: TypeRef; catchVariable: string; catchBody: Statement[] }
-  | { type: "SwitchCase"; expression: Expression; cases: Array<{ value: Expression; body: Statement[] }>; defaultCase: Statement[] | null };
+  | { type: "DisabledBlock"; raw: string };
 
 export type Expression =
   | { type: "Literal"; value: number | string | boolean | null; literalType: "number" | "string" | "boolean" | "null" }
@@ -93,14 +93,14 @@ export type Expression =
   | { type: "MethodInvocation"; target: Expression | null; methodName: string; arguments: Argument[] }
   | { type: "NewInstance"; className: string; arguments: Argument[] }
   | { type: "NewArray"; elementType: TypeRef; elements: Expression[]; size: Expression | null }
+  | { type: "ArrayLiteral"; elements: Expression[] }
   | { type: "BinaryOp"; operator: string; left: Expression; right: Expression }
   | { type: "UnaryOp"; operator: string; operand: Expression }
   | { type: "Assignment"; target: Expression; value: Expression }
   | { type: "ArrayAccess"; target: Expression; index: Expression }
   | { type: "TypeCast"; expression: Expression; targetType: TypeRef }
   | { type: "InstanceOf"; expression: Expression; testType: TypeRef }
-  | { type: "Parenthesized"; expression: Expression }
-  | { type: "ArrayLiteral"; elements: Expression[] };
+  | { type: "Parenthesized"; expression: Expression };
 
 export type ConstructorDecl = {
   type: "ConstructorDeclaration";
@@ -234,45 +234,27 @@ function tokenize(source: string): Token[] {
       continue;
     }
 
-    // String literal — fast path uses slice when no escape sequences present
+    // String literal
     if (c0 === '"') {
       advance();
-      const strStart = pos;
-      let hasEscapes = false;
-      while (pos < len && source[pos] !== '"') {
-        if (source[pos] === "\\") { hasEscapes = true; break; }
-        if (source[pos] === "\n") { line++; lineStart = pos + 1; }
-        pos++;
-      }
-      if (!hasEscapes) {
-        const value = source.slice(strStart, pos);
-        if (pos < len) pos++; // closing "
-        emit(TT.STRING, value, sLine, sCol);
-        continue;
-      }
-      // Slow path: string contains escape sequences
-      let value = source.slice(strStart, pos);
-      while (pos < len && source[pos] !== '"') {
-        if (source[pos] === "\\") {
-          pos++;
-          if (pos < len) {
-            const esc = source[pos++];
-            if (esc === "\n") { line++; lineStart = pos; }
-            switch (esc) {
-              case "n": value += "\n"; break;
-              case "t": value += "\t"; break;
-              case "r": value += "\r"; break;
-              case '"': value += '"'; break;
-              case "\\": value += "\\"; break;
-              default: value += esc;
-            }
+      let value = "";
+      while (pos < len && ch() !== '"') {
+        if (ch() === "\\") {
+          advance();
+          const esc = advance();
+          switch (esc) {
+            case "n": value += "\n"; break;
+            case "t": value += "\t"; break;
+            case "r": value += "\r"; break;
+            case '"': value += '"'; break;
+            case "\\": value += "\\"; break;
+            default: value += esc;
           }
         } else {
-          if (source[pos] === "\n") { line++; lineStart = pos + 1; }
-          value += source[pos++];
+          value += advance();
         }
       }
-      if (pos < len) pos++; // closing "
+      if (pos < len) advance(); // closing "
       emit(TT.STRING, value, sLine, sCol);
       continue;
     }
@@ -306,12 +288,12 @@ function tokenize(source: string): Token[] {
       continue;
     }
 
-    // Annotation (@Identifier) — use slice to avoid O(n²) concatenation
+    // Annotation (@Identifier)
     if (c0 === "@") {
       advance();
-      const annoStart = pos;
-      while (pos < len && isIdentPart(source[pos])) pos++;
-      emit(TT.ANNOTATION, "@" + source.slice(annoStart, pos), sLine, sCol);
+      let name = "@";
+      while (pos < len && isIdentPart(ch())) name += advance();
+      emit(TT.ANNOTATION, name, sLine, sCol);
       continue;
     }
 
@@ -668,7 +650,7 @@ class Parser {
       return { type: "CountUpTo", count, body };
     }
 
-    // while (condition) { ... }
+    // while (cond) { ... }
     if (this.check(TT.WHILE)) {
       this.advance();
       this.expect(TT.LPAREN, "'('");
@@ -678,24 +660,24 @@ class Parser {
       return { type: "WhileLoop", condition, body };
     }
 
-    // try { ... } catch (Type var) { ... }
+    // try { ... } catch (Type name) { ... }
     if (this.check(TT.TRY)) {
       this.advance();
       const tryBody = this.parseBlock();
       this.expect(TT.CATCH, "'catch'");
       this.expect(TT.LPAREN, "'('");
       const catchType = this.parseTypeRef();
-      const catchVariable = this.expect(TT.IDENTIFIER, "exception variable name").text;
+      const catchVariable = this.expect(TT.IDENTIFIER, "variable name").text;
       this.expect(TT.RPAREN, "')'");
       const catchBody = this.parseBlock();
       return { type: "TryCatch", tryBody, catchType, catchVariable, catchBody };
     }
 
-    // switch (expr) { case value: { ... } ... default: { ... } }
+    // switch (expr) { case val: { ... } ... default: { ... } }
     if (this.check(TT.SWITCH)) {
       this.advance();
       this.expect(TT.LPAREN, "'('");
-      const switchExpr = this.parseExpression();
+      const expression = this.parseExpression();
       this.expect(TT.RPAREN, "')'");
       this.expect(TT.LBRACE, "'{'");
       const cases: Array<{ value: Expression; body: Statement[] }> = [];
@@ -705,18 +687,18 @@ class Parser {
           this.advance();
           const value = this.parseExpression();
           this.expect(TT.COLON, "':'");
-          const caseBody = this.parseBlock();
-          cases.push({ value, body: caseBody });
+          const body = this.parseBlock();
+          cases.push({ value, body });
         } else if (this.check(TT.DEFAULT)) {
           this.advance();
           this.expect(TT.COLON, "':'");
           defaultCase = this.parseBlock();
         } else {
-          this.fail("Expected 'case' or 'default' in switch block");
+          this.fail("Expected 'case' or 'default'");
         }
       }
       this.expect(TT.RBRACE, "'}'");
-      return { type: "SwitchCase", expression: switchExpr, cases, defaultCase };
+      return { type: "SwitchCase", expression, cases, defaultCase };
     }
 
     // return [expr];
@@ -912,22 +894,24 @@ class Parser {
       return this.parseNewExpression();
     }
 
-    // Array literal: {expr, expr, ...}
-    if (tok.type === TT.LBRACE) {
-      this.advance();
-      const elements: Expression[] = [];
-      while (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
-        if (elements.length > 0) this.expect(TT.COMMA, "','");
-        elements.push(this.parseExpression());
-      }
-      this.expect(TT.RBRACE, "'}'");
-      return { type: "ArrayLiteral", elements };
-    }
-
     // identifier
     if (tok.type === TT.IDENTIFIER) {
       this.advance();
       return { type: "Identifier", name: tok.text };
+    }
+
+    // array literal: {expr, expr, ...}
+    if (tok.type === TT.LBRACE) {
+      this.advance();
+      const elements: Expression[] = [];
+      if (!this.check(TT.RBRACE)) {
+        elements.push(this.parseExpression());
+        while (this.match(TT.COMMA)) {
+          elements.push(this.parseExpression());
+        }
+      }
+      this.expect(TT.RBRACE, "'}'");
+      return { type: "ArrayLiteral", elements };
     }
 
     this.fail(`Unexpected token '${tok.text || "end of input"}'`, tok);
