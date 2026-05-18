@@ -127,6 +127,26 @@ export ALICE_TYPESCRIPT_HOME=/path/to/alice-web-prototype
 export ALICE_TYPESCRIPT_API_URL=http://localhost:3000
 ```
 
+## Gadugi Integration Test Scenarios
+
+Five gadugi-compatible YAML scenarios in `gadugi/` provide outside-in
+integration tests covering the full API surface:
+
+```bash
+gadugi-agentic-test run gadugi/ --verbose
+```
+
+| Scenario | Tests |
+|---|---|
+| `01-a3p-open-parse-render` | Project load → parse → screenshot |
+| `02-tweedle-ast-vm-execution` | VM execution with execution log |
+| `03-scene-entity-manipulation` | Add objects → screenshot |
+| `04-event-system` | Register → fire → verify triggers |
+| `05-save-export-roundtrip` | Edit → save → re-launch → verify |
+
+See [docs/gadugi-test-scenarios.md](docs/gadugi-test-scenarios.md) for full
+scenario documentation, schema reference, and writing guide.
+
 ## Architecture
 
 ```
