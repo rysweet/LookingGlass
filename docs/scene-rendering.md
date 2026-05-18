@@ -492,8 +492,6 @@ const { scene, camera, cameraConfig, lights } = buildScene(project, {
   cameraMinDistance: 2,
   cameraMaxDistance: 100,
 });
-    minDistance: 2,
-    maxDistance: 100,
 currentScene = scene;
 currentCamera = camera;
 resizeRenderer();
