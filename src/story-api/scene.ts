@@ -15,8 +15,21 @@ import {
   SProp,
 } from "./entities";
 
-/** Type mapping entries checked in order — first match wins. */
-const TYPE_MAP: Array<[substring: string, factory: () => SThing]> = [
+/** O(1) lookup by exact suffix (e.g. "org.lgna.story.SBiped" → "SBiped"). */
+const SUFFIX_TYPE_MAP = new Map<string, () => SThing>([
+  ["SBiped", () => new SBiped()],
+  ["SFlyer", () => new SFlyer()],
+  ["SQuadruped", () => new SQuadruped()],
+  ["SProp", () => new SProp()],
+  ["SGround", () => new SGround()],
+  ["SCamera", () => new SCamera()],
+  ["SScene", () => new SScene()],
+  ["SJointedModel", () => new SJointedModel()],
+  ["SModel", () => new SModel()],
+]);
+
+/** Fallback: substring scan for non-standard type names. */
+const TYPE_MAP_FALLBACK: Array<[substring: string, factory: () => SThing]> = [
   ["SBiped", () => new SBiped()],
   ["SFlyer", () => new SFlyer()],
   ["SQuadruped", () => new SQuadruped()],
@@ -29,7 +42,14 @@ const TYPE_MAP: Array<[substring: string, factory: () => SThing]> = [
 ];
 
 export function createEntityForType(typeName: string): SThing {
-  for (const [substring, factory] of TYPE_MAP) {
+  // Fast path: extract suffix after last dot for O(1) Map lookup
+  const dotIdx = typeName.lastIndexOf(".");
+  const suffix = dotIdx >= 0 ? typeName.substring(dotIdx + 1) : typeName;
+  const fast = SUFFIX_TYPE_MAP.get(suffix);
+  if (fast) return fast();
+
+  // Slow path: substring scan for unconventional type names
+  for (const [substring, factory] of TYPE_MAP_FALLBACK) {
     if (typeName.includes(substring)) return factory();
   }
   return new SProp();
