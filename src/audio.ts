@@ -106,8 +106,10 @@ export async function loadAudioFromA3P(
     throw new Error(`Audio resource not found in .a3p archive: ${resourcePath}`);
   }
   const buffer = await entry.async("arraybuffer");
-  const name = resourcePath.split("/").pop() ?? resourcePath;
-  const format = name.split(".").pop() ?? "unknown";
+  const lastSlash = resourcePath.lastIndexOf("/");
+  const name = lastSlash !== -1 ? resourcePath.slice(lastSlash + 1) : resourcePath;
+  const lastDot = name.lastIndexOf(".");
+  const format = lastDot !== -1 ? name.slice(lastDot + 1) : "unknown";
   return {
     id: resourcePath,
     name,

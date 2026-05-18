@@ -234,27 +234,45 @@ function tokenize(source: string): Token[] {
       continue;
     }
 
-    // String literal
+    // String literal — fast path uses slice when no escape sequences present
     if (c0 === '"') {
       advance();
-      let value = "";
-      while (pos < len && ch() !== '"') {
-        if (ch() === "\\") {
-          advance();
-          const esc = advance();
-          switch (esc) {
-            case "n": value += "\n"; break;
-            case "t": value += "\t"; break;
-            case "r": value += "\r"; break;
-            case '"': value += '"'; break;
-            case "\\": value += "\\"; break;
-            default: value += esc;
+      const strStart = pos;
+      let hasEscapes = false;
+      while (pos < len && source[pos] !== '"') {
+        if (source[pos] === "\\") { hasEscapes = true; break; }
+        if (source[pos] === "\n") { line++; lineStart = pos + 1; }
+        pos++;
+      }
+      if (!hasEscapes) {
+        const value = source.slice(strStart, pos);
+        if (pos < len) pos++; // closing "
+        emit(TT.STRING, value, sLine, sCol);
+        continue;
+      }
+      // Slow path: string contains escape sequences
+      let value = source.slice(strStart, pos);
+      while (pos < len && source[pos] !== '"') {
+        if (source[pos] === "\\") {
+          pos++;
+          if (pos < len) {
+            const esc = source[pos++];
+            if (esc === "\n") { line++; lineStart = pos; }
+            switch (esc) {
+              case "n": value += "\n"; break;
+              case "t": value += "\t"; break;
+              case "r": value += "\r"; break;
+              case '"': value += '"'; break;
+              case "\\": value += "\\"; break;
+              default: value += esc;
+            }
           }
         } else {
-          value += advance();
+          if (source[pos] === "\n") { line++; lineStart = pos + 1; }
+          value += source[pos++];
         }
       }
-      if (pos < len) advance(); // closing "
+      if (pos < len) pos++; // closing "
       emit(TT.STRING, value, sLine, sCol);
       continue;
     }
@@ -288,12 +306,12 @@ function tokenize(source: string): Token[] {
       continue;
     }
 
-    // Annotation (@Identifier)
+    // Annotation (@Identifier) — use slice to avoid O(n²) concatenation
     if (c0 === "@") {
       advance();
-      let name = "@";
-      while (pos < len && isIdentPart(ch())) name += advance();
-      emit(TT.ANNOTATION, name, sLine, sCol);
+      const annoStart = pos;
+      while (pos < len && isIdentPart(source[pos])) pos++;
+      emit(TT.ANNOTATION, "@" + source.slice(annoStart, pos), sLine, sCol);
       continue;
     }
 
