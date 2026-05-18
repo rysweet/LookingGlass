@@ -128,8 +128,9 @@ export class SModel extends SMovableTurnable {
   }
 }
 
-/** Adds joint hierarchy (not yet populated) to SModel. */
+/** Adds joint hierarchy to SModel. */
 export class SJointedModel extends SModel {
+  // Joint resolution requires 3D model data not available in this sprint
   getJoint(_name: string): JointId | undefined {
     return undefined;
   }

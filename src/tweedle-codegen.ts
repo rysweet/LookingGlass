@@ -33,20 +33,16 @@ export class TweedleCodegenError extends Error {
 
 // ── String Escaping ──────────────────────────────────────────────────────
 
+const ESCAPE_MAP: Record<string, string> = {
+  "\\": "\\\\",
+  '"': '\\"',
+  "\n": "\\n",
+  "\t": "\\t",
+  "\r": "\\r",
+};
+
 function escapeString(value: string): string {
-  let result = "";
-  for (let i = 0; i < value.length; i++) {
-    const ch = value[i];
-    switch (ch) {
-      case "\\": result += "\\\\"; break;
-      case '"': result += '\\"'; break;
-      case "\n": result += "\\n"; break;
-      case "\t": result += "\\t"; break;
-      case "\r": result += "\\r"; break;
-      default: result += ch;
-    }
-  }
-  return result;
+  return value.replace(/[\\"\n\t\r]/g, (ch) => ESCAPE_MAP[ch]);
 }
 
 // ── TypeRef Generation ───────────────────────────────────────────────────
@@ -156,6 +152,24 @@ function genExpr(expr: Expression, depth: number): string {
   );
 }
 
+// ── Body Block Generation ────────────────────────────────────────────────
+
+function genBody(
+  stmts: Statement[],
+  prefix: string,
+  indent: string,
+  innerDepth: number,
+): string {
+  const inner = indent + "  ";
+  const lines = stmts
+    .map((s) => inner + genStmt(s, inner, innerDepth))
+    .join("\n");
+  const header = prefix.length > 0 ? `${prefix} ` : "";
+  return lines.length > 0
+    ? `${header}{\n${lines}\n${indent}}`
+    : `${header}{}`;
+}
+
 // ── Statement Generation ─────────────────────────────────────────────────
 
 function genStmt(stmt: Statement, indent: string, depth: number): string {
@@ -166,61 +180,32 @@ function genStmt(stmt: Statement, indent: string, depth: number): string {
     );
   }
 
-  const inner = indent + "  ";
-
   switch (stmt.type) {
-    case "DoInOrder": {
-      const body = stmt.body
-        .map((s) => inner + genStmt(s, inner, depth + 1))
-        .join("\n");
-      return body.length > 0
-        ? `doInOrder {\n${body}\n${indent}}`
-        : `doInOrder {}`;
-    }
-    case "DoTogether": {
-      const body = stmt.body
-        .map((s) => inner + genStmt(s, inner, depth + 1))
-        .join("\n");
-      return body.length > 0
-        ? `doTogether {\n${body}\n${indent}}`
-        : `doTogether {}`;
-    }
+    case "DoInOrder":
+      return genBody(stmt.body, "doInOrder", indent, depth + 1);
+    case "DoTogether":
+      return genBody(stmt.body, "doTogether", indent, depth + 1);
     case "IfElse": {
       const cond = genExpr(stmt.condition, depth + 1);
-      const ifBody = stmt.ifBody
-        .map((s) => inner + genStmt(s, inner, depth + 1))
-        .join("\n");
-      let result = ifBody.length > 0
-        ? `if (${cond}) {\n${ifBody}\n${indent}}`
-        : `if (${cond}) {}`;
+      let result = genBody(stmt.ifBody, `if (${cond})`, indent, depth + 1);
       if (stmt.elseBody !== null) {
-        const elseBody = stmt.elseBody
-          .map((s) => inner + genStmt(s, inner, depth + 1))
-          .join("\n");
-        result += elseBody.length > 0
-          ? ` else {\n${elseBody}\n${indent}}`
-          : ` else {}`;
+        result += " " + genBody(stmt.elseBody, "else", indent, depth + 1);
       }
       return result;
     }
     case "ForEach": {
       const itemType = genTypeRef(stmt.itemType);
       const collection = genExpr(stmt.collection, depth + 1);
-      const body = stmt.body
-        .map((s) => inner + genStmt(s, inner, depth + 1))
-        .join("\n");
-      return body.length > 0
-        ? `forEach (${itemType} ${stmt.itemName} in ${collection}) {\n${body}\n${indent}}`
-        : `forEach (${itemType} ${stmt.itemName} in ${collection}) {}`;
+      return genBody(
+        stmt.body,
+        `forEach (${itemType} ${stmt.itemName} in ${collection})`,
+        indent,
+        depth + 1,
+      );
     }
     case "CountUpTo": {
       const count = genExpr(stmt.count, depth + 1);
-      const body = stmt.body
-        .map((s) => inner + genStmt(s, inner, depth + 1))
-        .join("\n");
-      return body.length > 0
-        ? `countUpTo (${count}) {\n${body}\n${indent}}`
-        : `countUpTo (${count}) {}`;
+      return genBody(stmt.body, `countUpTo (${count})`, indent, depth + 1);
     }
     case "Return":
       return stmt.expression !== null
@@ -234,14 +219,8 @@ function genStmt(stmt: Statement, indent: string, depth: number): string {
       const prefix = stmt.isConstant ? "constant " : "";
       return `${prefix}${typeStr} ${stmt.name} <- ${init};`;
     }
-    case "Block": {
-      const body = stmt.body
-        .map((s) => inner + genStmt(s, inner, depth + 1))
-        .join("\n");
-      return body.length > 0
-        ? `{\n${body}\n${indent}}`
-        : `{}`;
-    }
+    case "Block":
+      return genBody(stmt.body, "", indent, depth + 1);
     case "DisabledBlock":
       return `*<${stmt.raw}>*`;
   }
@@ -270,31 +249,18 @@ function genField(field: FieldDecl, indent: string): string {
 // ── Constructor Generation ───────────────────────────────────────────────
 
 function genConstructor(ctor: ConstructorDecl, indent: string): string {
-  const inner = indent + "  ";
   const params = ctor.parameters.map(genParameter).join(", ");
-  const body = ctor.body
-    .map((s) => inner + genStmt(s, inner, 0))
-    .join("\n");
-  return body.length > 0
-    ? `${indent}${ctor.name}(${params}) {\n${body}\n${indent}}`
-    : `${indent}${ctor.name}(${params}) {}`;
+  return indent + genBody(ctor.body, `${ctor.name}(${params})`, indent, 0);
 }
 
 // ── Method Generation ────────────────────────────────────────────────────
 
 function genMethod(method: MethodDecl, indent: string): string {
-  const inner = indent + "  ";
   const parts: string[] = [];
   if (method.isStatic) parts.push("static");
   parts.push(genTypeRef(method.returnType));
   parts.push(`${method.name}(${method.parameters.map(genParameter).join(", ")})`);
-  const signature = parts.join(" ");
-  const body = method.body
-    .map((s) => inner + genStmt(s, inner, 0))
-    .join("\n");
-  return body.length > 0
-    ? `${indent}${signature} {\n${body}\n${indent}}`
-    : `${indent}${signature} {}`;
+  return indent + genBody(method.body, parts.join(" "), indent, 0);
 }
 
 // ── Public API ───────────────────────────────────────────────────────────

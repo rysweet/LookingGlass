@@ -115,11 +115,12 @@ export function createTypeEnvironment(classes: ClassDecl[]): TypeEnvironment {
     });
   }
 
-  // Detect inheritance cycles
+  // Detect inheritance cycles — skip already-verified prefixes
+  const verified = new Set<string>();
   for (const cls of classes) {
     const visited = new Set<string>();
     let current: string | null = cls.name;
-    while (current !== null) {
+    while (current !== null && !verified.has(current)) {
       if (visited.has(current)) {
         throw new TweedleTypeError(
           `Inheritance cycle detected involving '${current}'`,
@@ -131,6 +132,48 @@ export function createTypeEnvironment(classes: ClassDecl[]): TypeEnvironment {
       const resolved = registry.get(current);
       current = resolved?.superClass ?? null;
     }
+    for (const name of visited) verified.add(name);
+  }
+
+  // Pre-build inherited method maps: O(1) method lookup at call time
+  const methodIndex = new Map<string, Map<string, MethodDecl>>();
+  for (const [name] of registry) {
+    const methods = new Map<string, MethodDecl>();
+    const chain: string[] = [];
+    let cur: string | null = name;
+    while (cur !== null) {
+      chain.push(cur);
+      cur = registry.get(cur)?.superClass ?? null;
+    }
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const r = registry.get(chain[i]);
+      if (r) {
+        for (const m of r.methods) methods.set(m.name, m);
+      }
+    }
+    methodIndex.set(name, methods);
+  }
+
+  const assignableCache = new Map<string, boolean>();
+
+  function computeAssignable(source: string, target: string): boolean {
+    if (source === "null") {
+      const targetType = registry.get(target);
+      if (!targetType) return false;
+      return !targetType.isPrimitive;
+    }
+    if (source === "WholeNumber" && target === "DecimalNumber") return true;
+
+    const sourceType = registry.get(source);
+    if (!sourceType || sourceType.isPrimitive) return false;
+    if (!registry.has(target)) return false;
+
+    let current: string | null = sourceType.superClass;
+    while (current !== null) {
+      if (current === target) return true;
+      current = registry.get(current)?.superClass ?? null;
+    }
+    return false;
   }
 
   return {
@@ -140,36 +183,12 @@ export function createTypeEnvironment(classes: ClassDecl[]): TypeEnvironment {
 
     isAssignableTo(source: string, target: string): boolean {
       if (source === target) return true;
-
-      // null is assignable to any class type but not primitives
-      if (source === "null") {
-        const targetType = registry.get(target);
-        if (!targetType) return false;
-        return !targetType.isPrimitive;
-      }
-
-      // WholeNumber → DecimalNumber widening
-      if (source === "WholeNumber" && target === "DecimalNumber") return true;
-
-      // Walk the inheritance chain
-      const sourceType = registry.get(source);
-      if (!sourceType) return false;
-      if (sourceType.isPrimitive) return false;
-
-      const targetType = registry.get(target);
-      if (!targetType) return false;
-
-      let current: string | null = sourceType.superClass;
-      const visited = new Set<string>([source]);
-      while (current !== null) {
-        if (current === target) return true;
-        if (visited.has(current)) return false;
-        visited.add(current);
-        const resolved = registry.get(current);
-        current = resolved?.superClass ?? null;
-      }
-
-      return false;
+      const key = `${source}\0${target}`;
+      const cached = assignableCache.get(key);
+      if (cached !== undefined) return cached;
+      const result = computeAssignable(source, target);
+      assignableCache.set(key, result);
+      return result;
     },
 
     checkMethodCall(
@@ -186,25 +205,7 @@ export function createTypeEnvironment(classes: ClassDecl[]): TypeEnvironment {
         };
       }
 
-      // Search for method in class and its ancestors
-      let method: MethodDecl | null = null;
-      let current: string | null = className;
-      const visited = new Set<string>();
-
-      while (current !== null && !method) {
-        if (visited.has(current)) break;
-        visited.add(current);
-
-        const resolved = registry.get(current);
-        if (!resolved) break;
-
-        const found = resolved.methods.find((m) => m.name === methodName);
-        if (found) {
-          method = found;
-          break;
-        }
-        current = resolved.superClass;
-      }
+      const method = methodIndex.get(className)?.get(methodName) ?? null;
 
       if (!method) {
         return {
