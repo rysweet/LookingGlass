@@ -99,9 +99,7 @@ function hasLogKind(log: readonly ExecutionLogEntry[], kind: string): boolean {
 /** True if the log contains a MethodCall whose detail includes move or turn. */
 function hasMovementStatement(log: readonly ExecutionLogEntry[]): boolean {
   return log.some(
-    (e) =>
-      e.kind === "MethodCall" &&
-      (/\bmove\b/.test(e.detail) || /\bturn\b/.test(e.detail)),
+    (e) => e.kind === "MethodCall" && /\b(?:move|turn)\b/.test(e.detail),
   );
 }
 

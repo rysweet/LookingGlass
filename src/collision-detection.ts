@@ -70,18 +70,11 @@ export function aabbContainsPoint(box: BoundingBox, point: Vec3): boolean {
 }
 
 /** Alice3 Y-up direction constants. */
-export const Direction: Readonly<{
-  readonly FORWARD: Readonly<Vec3>;
-  readonly BACKWARD: Readonly<Vec3>;
-  readonly LEFT: Readonly<Vec3>;
-  readonly RIGHT: Readonly<Vec3>;
-  readonly UP: Readonly<Vec3>;
-  readonly DOWN: Readonly<Vec3>;
-}> = Object.freeze({
-  FORWARD: Object.freeze({ x: 0, y: 0, z: -1 }),
-  BACKWARD: Object.freeze({ x: 0, y: 0, z: 1 }),
-  LEFT: Object.freeze({ x: -1, y: 0, z: 0 }),
-  RIGHT: Object.freeze({ x: 1, y: 0, z: 0 }),
-  UP: Object.freeze({ x: 0, y: 1, z: 0 }),
-  DOWN: Object.freeze({ x: 0, y: -1, z: 0 }),
+export const Direction = Object.freeze({
+  FORWARD: Object.freeze<Vec3>({ x: 0, y: 0, z: -1 }),
+  BACKWARD: Object.freeze<Vec3>({ x: 0, y: 0, z: 1 }),
+  LEFT: Object.freeze<Vec3>({ x: -1, y: 0, z: 0 }),
+  RIGHT: Object.freeze<Vec3>({ x: 1, y: 0, z: 0 }),
+  UP: Object.freeze<Vec3>({ x: 0, y: 1, z: 0 }),
+  DOWN: Object.freeze<Vec3>({ x: 0, y: -1, z: 0 }),
 });

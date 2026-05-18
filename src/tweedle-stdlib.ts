@@ -18,27 +18,13 @@ const delayLog: number[] = [];
 // Validation helpers
 // ---------------------------------------------------------------------------
 
-function assertSThing(entity: unknown, label: string): asserts entity is SThing {
-  if (!(entity instanceof SThing)) {
-    throw new TypeError(`${label} must be an instance of SThing`);
-  }
-}
-
-function assertSTurnable(entity: unknown, label: string): asserts entity is STurnable {
-  if (!(entity instanceof STurnable)) {
-    throw new TypeError(`${label} must be an instance of STurnable`);
-  }
-}
-
-function assertSMovableTurnable(entity: unknown, label: string): asserts entity is SMovableTurnable {
-  if (!(entity instanceof SMovableTurnable)) {
-    throw new TypeError(`${label} must be an instance of SMovableTurnable`);
-  }
-}
-
-function assertSModel(entity: unknown, label: string): asserts entity is SModel {
-  if (!(entity instanceof SModel)) {
-    throw new TypeError(`${label} must be an instance of SModel`);
+function assertInstance<T>(
+  entity: unknown,
+  ctor: abstract new (...args: any[]) => T,
+  label: string,
+): asserts entity is T {
+  if (!(entity instanceof ctor)) {
+    throw new TypeError(`${label} must be an instance of ${ctor.name}`);
   }
 }
 
@@ -60,7 +46,7 @@ function assertFiniteVec3(v: Vec3, label: string): void {
 
 /** Record speech text for an entity. */
 export function say(entity: SThing, text: string): void {
-  assertSThing(entity, "entity");
+  assertInstance(entity, SThing, "entity");
   if (typeof text !== "string") {
     throw new TypeError("text must be a string");
   }
@@ -69,7 +55,7 @@ export function say(entity: SThing, text: string): void {
 
 /** Record thought text for an entity. */
 export function think(entity: SThing, text: string): void {
-  assertSThing(entity, "entity");
+  assertInstance(entity, SThing, "entity");
   if (typeof text !== "string") {
     throw new TypeError("text must be a string");
   }
@@ -92,7 +78,7 @@ export function getLastThought(entity: SThing): string | undefined {
 
 /** Translate an entity by direction × amount (world-space). */
 export function move(entity: SMovableTurnable, direction: Vec3, amount: number): void {
-  assertSMovableTurnable(entity, "entity");
+  assertInstance(entity, SMovableTurnable, "entity");
   assertFiniteVec3(direction, "direction");
   assertFinite(amount, "amount");
 
@@ -130,24 +116,34 @@ function quaternionFromAxisAngle(
 }
 
 // ---------------------------------------------------------------------------
-// turn / roll
+// turn / roll — shared rotation logic
 // ---------------------------------------------------------------------------
 
-/**
- * Rotate entity around Y axis (yaw).
- * LEFT direction → positive angle, RIGHT → negative (right-hand rule).
- * Direction.x sign determines rotation direction; FORWARD (x=0) → no rotation.
- */
-export function turn(entity: STurnable, direction: Vec3, amount: number): void {
-  assertSTurnable(entity, "entity");
+function applyAxisRotation(
+  entity: STurnable,
+  direction: Vec3,
+  amount: number,
+  axisX: number,
+  axisY: number,
+  axisZ: number,
+): void {
+  assertInstance(entity, STurnable, "entity");
   assertFiniteVec3(direction, "direction");
   assertFinite(amount, "amount");
 
   const angle = -direction.x * amount;
   if (angle === 0) return;
 
-  const delta = quaternionFromAxisAngle(0, 1, 0, angle);
+  const delta = quaternionFromAxisAngle(axisX, axisY, axisZ, angle);
   entity.orientation = multiplyQuaternions(delta, entity.orientation);
+}
+
+/**
+ * Rotate entity around Y axis (yaw).
+ * LEFT direction → positive angle, RIGHT → negative (right-hand rule).
+ */
+export function turn(entity: STurnable, direction: Vec3, amount: number): void {
+  applyAxisRotation(entity, direction, amount, 0, 1, 0);
 }
 
 /**
@@ -155,15 +151,7 @@ export function turn(entity: STurnable, direction: Vec3, amount: number): void {
  * LEFT direction → positive angle, RIGHT → negative (right-hand rule).
  */
 export function roll(entity: STurnable, direction: Vec3, amount: number): void {
-  assertSTurnable(entity, "entity");
-  assertFiniteVec3(direction, "direction");
-  assertFinite(amount, "amount");
-
-  const angle = -direction.x * amount;
-  if (angle === 0) return;
-
-  const delta = quaternionFromAxisAngle(0, 0, 1, angle);
-  entity.orientation = multiplyQuaternions(delta, entity.orientation);
+  applyAxisRotation(entity, direction, amount, 0, 0, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +160,7 @@ export function roll(entity: STurnable, direction: Vec3, amount: number): void {
 
 /** Multiply all dimensions of an SModel's size by a uniform factor. */
 export function resize(entity: SModel, factor: number): void {
-  assertSModel(entity, "entity");
+  assertInstance(entity, SModel, "entity");
   if (!Number.isFinite(factor) || factor <= 0) {
     throw new TypeError("factor must be a positive finite number");
   }
@@ -187,14 +175,14 @@ export function resize(entity: SModel, factor: number): void {
 
 /** Set the opacity of an SModel. Accepts any finite number (no clamping). */
 export function setOpacity(entity: SModel, value: number): void {
-  assertSModel(entity, "entity");
+  assertInstance(entity, SModel, "entity");
   assertFinite(value, "opacity");
   entity.opacity = value;
 }
 
 /** Set the color of an SModel. */
 export function setColor(entity: SModel, color: string): void {
-  assertSModel(entity, "entity");
+  assertInstance(entity, SModel, "entity");
   if (typeof color !== "string") {
     throw new TypeError("color must be a string");
   }
