@@ -239,7 +239,7 @@ Composite lesson that checks four criteria simultaneously:
 
 | Criterion | Condition | Pass Message | Fail Message |
 |---|---|---|---|
-| `entities-3plus` | `scene.entities.size >= 3` | "Scene contains N entities" | "Only N entity(ies); need ≥3" |
+| `entities-3plus` | Filtered `scene.entities.size >= 3` (same filter as L1: excludes `SGround`, `SScene`, `SCamera` via `instanceof`) | "Scene contains N entities" | "Only N entity(ies); need ≥3" |
 | `has-loop` | Any `CountLoop` in execution log | "Contains loop" | "No loops found" |
 | `has-conditional` | Any `IfElse` in execution log | "Contains conditional" | "No conditionals found" |
 | `has-custom-method` | Any custom (non-built-in) `MethodCall` | "Contains custom method" | "No custom methods found" |

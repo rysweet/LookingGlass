@@ -367,7 +367,7 @@ verify timing behaviors.
 | `SMovableTurnable.move(MoveDirection, Double)` | `move(entity, direction, amount)` |
 | `STurnable.turn(TurnDirection, Double)` | `turn(entity, direction, amount)` |
 | `STurnable.roll(RollDirection, Double)` | `roll(entity, direction, amount)` |
-| `SModel.setSize(SetDimensionPolicy, Double)` | `resize(entity, factor)` |
+| `SModel.setSize(SetDimensionPolicy, Double)` | `resize(entity, factor)` — uniform scale only (Java supports per-axis via `SetDimensionPolicy`) |
 | `SModel.setOpacity(Double)` | `setOpacity(entity, opacity)` |
 | `SModel.setColor(Color)` | `setColor(entity, color)` |
 | `Duration.delay(Double)` | `delay(duration)` |
