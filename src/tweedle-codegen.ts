@@ -95,7 +95,6 @@ function genExpr(expr: Expression, depth: number): string {
         case "boolean": return String(expr.value);
         case "null": return "null";
       }
-      break;
     }
     case "This":
       return "this";
