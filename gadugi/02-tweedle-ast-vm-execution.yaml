@@ -62,6 +62,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"project": "${A3P_FILE}"}'
+      timeout: 5s
       description: "Launch project via API"
 
     - action: verify_response
@@ -77,6 +78,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{}'
+      timeout: 10s
       description: "Execute project methods via Tweedle VM"
 
     - action: verify_response

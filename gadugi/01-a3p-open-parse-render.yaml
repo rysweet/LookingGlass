@@ -69,6 +69,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"project": "${A3P_FILE}"}'
+      timeout: 5s
       description: "Launch project via API with .a3p file path"
 
     - action: verify_response
@@ -91,6 +92,7 @@ scenario:
     - action: http_request
       method: GET
       url: "http://127.0.0.1:${PORT}/api/screenshot"
+      timeout: 10s
       description: "Capture rendered scene screenshot"
 
     - action: verify_response

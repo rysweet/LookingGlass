@@ -61,6 +61,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{}'
+      timeout: 5s
       description: "Launch without project"
 
     - action: verify_response
@@ -80,6 +81,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"eventType": "sceneActivated", "handlerName": "onSceneStart"}'
+      timeout: 5s
       description: "Register sceneActivated handler"
 
     - action: verify_response
@@ -110,6 +112,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"eventType": "keyPress", "handlerName": "onSpacePressed", "key": "Space"}'
+      timeout: 5s
       description: "Register keyPress handler for Space key"
 
     - action: verify_response
@@ -130,6 +133,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"className": "org.lgna.story.SBiped", "name": "bunny"}'
+      timeout: 5s
       description: "Add bunny for proximity test"
 
     - action: verify_response
@@ -144,6 +148,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"className": "org.lgna.story.SBiped", "name": "cat"}'
+      timeout: 5s
       description: "Add cat for proximity test"
 
     - action: verify_response
@@ -159,6 +164,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"eventType": "proximity", "handlerName": "onBunnyCatClose", "targetObjects": ["bunny", "cat"], "threshold": 3.0}'
+      timeout: 5s
       description: "Register proximity handler for bunny/cat pair"
 
     - action: verify_response
@@ -262,6 +268,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"eventType": "sceneActivated"}'
+      timeout: 5s
       description: "Fire sceneActivated event"
 
     - action: verify_response
@@ -297,6 +304,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"eventType": "keyPress", "payload": {"key": "Space"}}'
+      timeout: 5s
       description: "Fire keyPress with key=Space (should match)"
 
     - action: verify_response
@@ -317,6 +325,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"eventType": "keyPress", "payload": {"key": "ArrowUp"}}'
+      timeout: 5s
       description: "Fire keyPress with key=ArrowUp (should NOT match)"
 
     - action: verify_response
@@ -332,6 +341,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"eventType": "proximity", "payload": {"sourceObject": "bunny"}}'
+      timeout: 5s
       description: "Fire proximity — bunny and cat both at origin (dist=0)"
 
     - action: verify_response

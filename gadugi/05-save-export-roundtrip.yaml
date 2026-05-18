@@ -64,6 +64,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{}'
+      timeout: 5s
       description: "Launch without project"
 
     - action: verify_response
@@ -79,6 +80,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"procedureSelector": "scene.myFirstMethod", "editSpec": "append-comment:gadugi-round-trip-proof"}'
+      timeout: 5s
       description: "Edit myFirstMethod — append a comment marker"
 
     - action: verify_response
@@ -119,6 +121,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"saveSelector": "scene.myFirstMethod"}'
+      timeout: 5s
       description: "Save the project to evidence directory"
 
     - action: verify_response
@@ -202,6 +205,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"project": "${EVIDENCE_DIR}/project-save/saved-project.a3p"}'
+      timeout: 5s
       description: "Launch with saved project to verify round-trip"
 
     - action: verify_response

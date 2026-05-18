@@ -60,6 +60,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{}'
+      timeout: 5s
       description: "Launch without project — seeds ground + camera"
 
     - action: verify_response
@@ -80,6 +81,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"className": "org.lgna.story.SBiped", "name": "bunny"}'
+      timeout: 5s
       description: "Add a Biped named bunny to the scene"
 
     - action: verify_response
@@ -115,6 +117,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"className": "org.lgna.story.SProp", "name": "tree"}'
+      timeout: 5s
       description: "Add a Prop named tree to the scene"
 
     - action: verify_response
@@ -140,6 +143,7 @@ scenario:
       headers:
         Content-Type: "application/json"
       body: '{"className": "org.lgna.story.SFlyer"}'
+      timeout: 5s
       description: "Add object without name — should derive from className"
 
     - action: verify_response
@@ -172,6 +176,7 @@ scenario:
     - action: http_request
       method: GET
       url: "http://127.0.0.1:${PORT}/api/screenshot"
+      timeout: 10s
       description: "Capture screenshot of scene with all objects"
 
     - action: verify_response
