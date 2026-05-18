@@ -28,7 +28,7 @@ const TYPE_MAP: Array<[substring: string, factory: () => SThing]> = [
   ["SModel", () => new SModel()],
 ];
 
-function createEntityForType(typeName: string): SThing {
+export function createEntityForType(typeName: string): SThing {
   for (const [substring, factory] of TYPE_MAP) {
     if (typeName.includes(substring)) return factory();
   }
