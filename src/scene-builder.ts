@@ -165,8 +165,10 @@ export function buildScene(project: AliceProject, opts?: SceneBuildOptions): Sce
     trackedLights.push(directional);
   }
 
-  // Camera
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+  // Camera — safe fallback for non-browser environments (SSR / Node tests)
+  const w = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const h = typeof window !== "undefined" ? window.innerHeight : 720;
+  const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 1000);
   camera.position.set(0, 5, 20);
   camera.lookAt(0, 0, 0);
 
