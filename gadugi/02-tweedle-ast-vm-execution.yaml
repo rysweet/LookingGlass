@@ -94,8 +94,8 @@ scenario:
 
     - action: verify_response
       json_path: "$.statements_executed"
-      greater_than_or_equal: 0
-      description: "Statement count is a non-negative integer"
+      greater_than_or_equal: 1
+      description: "At least one statement was executed"
 
     - action: verify_response
       json_path: "$.execution_log"
