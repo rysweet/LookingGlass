@@ -15,21 +15,8 @@ import {
   SProp,
 } from "./entities";
 
-/** O(1) lookup by exact suffix (e.g. "org.lgna.story.SBiped" → "SBiped"). */
-const SUFFIX_TYPE_MAP = new Map<string, () => SThing>([
-  ["SBiped", () => new SBiped()],
-  ["SFlyer", () => new SFlyer()],
-  ["SQuadruped", () => new SQuadruped()],
-  ["SProp", () => new SProp()],
-  ["SGround", () => new SGround()],
-  ["SCamera", () => new SCamera()],
-  ["SScene", () => new SScene()],
-  ["SJointedModel", () => new SJointedModel()],
-  ["SModel", () => new SModel()],
-]);
-
-/** Fallback: substring scan for non-standard type names. */
-const TYPE_MAP_FALLBACK: Array<[substring: string, factory: () => SThing]> = [
+/** Single source of truth for type-name → entity factory mappings. */
+const TYPE_FACTORIES: Array<[suffix: string, factory: () => SThing]> = [
   ["SBiped", () => new SBiped()],
   ["SFlyer", () => new SFlyer()],
   ["SQuadruped", () => new SQuadruped()],
@@ -41,6 +28,9 @@ const TYPE_MAP_FALLBACK: Array<[substring: string, factory: () => SThing]> = [
   ["SModel", () => new SModel()],
 ];
 
+/** O(1) lookup by exact suffix (e.g. "org.lgna.story.SBiped" → "SBiped"). */
+const SUFFIX_TYPE_MAP = new Map<string, () => SThing>(TYPE_FACTORIES);
+
 export function createEntityForType(typeName: string): SThing {
   // Fast path: extract suffix after last dot for O(1) Map lookup
   const dotIdx = typeName.lastIndexOf(".");
@@ -49,7 +39,7 @@ export function createEntityForType(typeName: string): SThing {
   if (fast) return fast();
 
   // Slow path: substring scan for unconventional type names
-  for (const [substring, factory] of TYPE_MAP_FALLBACK) {
+  for (const [substring, factory] of TYPE_FACTORIES) {
     if (typeName.includes(substring)) return factory();
   }
   return new SProp();
