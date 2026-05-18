@@ -75,11 +75,7 @@ export class Scene {
         `entity "${name}" (${entity.constructor.name}) does not support position`,
       );
     }
-    if (
-      !Number.isFinite(position.x) ||
-      !Number.isFinite(position.y) ||
-      !Number.isFinite(position.z)
-    ) {
+    if (!isFinitePosition(position)) {
       throw new TypeError("position coordinates must be finite numbers");
     }
     entity.position = position;
@@ -95,12 +91,7 @@ export class Scene {
         `entity "${name}" (${entity.constructor.name}) does not support orientation`,
       );
     }
-    if (
-      !Number.isFinite(orientation.x) ||
-      !Number.isFinite(orientation.y) ||
-      !Number.isFinite(orientation.z) ||
-      !Number.isFinite(orientation.w)
-    ) {
+    if (!isFiniteOrientation(orientation)) {
       throw new TypeError("orientation components must be finite numbers");
     }
     entity.orientation = orientation;

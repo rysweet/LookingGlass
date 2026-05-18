@@ -22,7 +22,6 @@ type ChangeListener = (
   newValue: unknown,
 ) => void;
 
-const VALID_THEMES = new Set<string>(["dark", "light"]);
 const KNOWN_KEYS = new Set<string>(Object.keys(DEFAULT_PREFERENCES));
 
 function clamp(value: number, min: number, max: number): number {
@@ -53,7 +52,7 @@ export class Preferences {
   }
 
   getAll(): UserPreferences {
-    return { ...this._data };
+    return this.toJSON();
   }
 
   toJSON(): UserPreferences {
@@ -86,14 +85,7 @@ export class Preferences {
       }
     } else {
       for (const k of Object.keys(DEFAULT_PREFERENCES) as Array<keyof UserPreferences>) {
-        const old = this._data[k];
-        const def = DEFAULT_PREFERENCES[k];
-        if (old !== def) {
-          (this._data as Record<string, unknown>)[k] = def;
-          for (const listener of this._listeners) {
-            listener(k, old, def);
-          }
-        }
+        this.reset(k);
       }
     }
   }
@@ -108,7 +100,7 @@ export class Preferences {
   ): void {
     switch (key) {
       case "theme":
-        if (!VALID_THEMES.has(value as string)) {
+        if (value !== "dark" && value !== "light") {
           throw new Error(
             `Invalid theme: "${value}". Must be "dark" or "light".`,
           );

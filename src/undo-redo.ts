@@ -41,10 +41,7 @@ export class UndoRedoManager {
 
   execute(cmd: Command): void {
     cmd.execute();
-    this._undoStack.push(cmd);
-    if (this._undoStack.length > MAX_UNDO_STACK) {
-      this._undoStack.shift();
-    }
+    this._pushUndo(cmd);
     this._redoStack.length = 0;
   }
 
@@ -59,6 +56,10 @@ export class UndoRedoManager {
     const cmd = this._redoStack.pop();
     if (!cmd) return;
     cmd.execute();
+    this._pushUndo(cmd);
+  }
+
+  private _pushUndo(cmd: Command): void {
     this._undoStack.push(cmd);
     if (this._undoStack.length > MAX_UNDO_STACK) {
       this._undoStack.shift();
