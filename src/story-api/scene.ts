@@ -48,6 +48,7 @@ export function createEntityForType(typeName: string): SThing {
 /** Runtime container for scene entities (analogous to Java's SceneImp). */
 export class Scene {
   private readonly _entities = new Map<string, SThing>();
+  private _isActive = false;
 
   atmosphereColor: string | undefined;
   fogDensity: number | undefined;
@@ -55,6 +56,31 @@ export class Scene {
 
   get entities(): ReadonlyMap<string, SThing> {
     return this._entities;
+  }
+
+  get isActive(): boolean {
+    return this._isActive;
+  }
+
+  activate(): void {
+    if (this._isActive) {
+      return;
+    }
+    this._isActive = true;
+    for (const entity of this._entities.values()) {
+      entity.imp.attachToScene(this);
+      entity.imp.activate();
+    }
+  }
+
+  deactivate(): void {
+    if (!this._isActive) {
+      return;
+    }
+    for (const entity of this._entities.values()) {
+      entity.imp.deactivate();
+    }
+    this._isActive = false;
   }
 
   addEntity(name: string, entity: SThing): void {
@@ -65,9 +91,18 @@ export class Scene {
       throw new TypeError(`entity "${name}" already exists in scene`);
     }
     this._entities.set(name, entity);
+    entity.imp.attachToScene(this);
+    if (this._isActive) {
+      entity.imp.activate();
+    }
   }
 
   removeEntity(name: string): boolean {
+    const entity = this._entities.get(name);
+    if (!entity) {
+      return false;
+    }
+    entity.imp.detachFromScene();
     return this._entities.delete(name);
   }
 

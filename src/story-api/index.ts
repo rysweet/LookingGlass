@@ -1,4 +1,5 @@
 export type { Position, Orientation, Size, JointId, Vec3, BoundingBox, JointNode } from "./types";
+export type { EntityMarker, PropertyChange, PropertyListener } from "./implementation";
 
 export {
   SThing,
@@ -15,4 +16,5 @@ export {
   SProp,
 } from "./entities";
 
+export { Property, EntityImp, JointedModelImp } from "./implementation";
 export { Scene, createEntityForType } from "./scene";

@@ -276,28 +276,37 @@ describe("Entity property mutation", () => {
 });
 
 // ===========================================================================
-// 5. JOINTS (NOT YET POPULATED)
+// 5. JOINTS
 // ===========================================================================
 
-describe("Joints (not yet populated)", () => {
-  it("SBiped.getJoint returns undefined for any joint name", () => {
+describe("Joints", () => {
+  it("SBiped.getJoint returns actual joint data", () => {
     const b = new SBiped();
-    expect(b.getJoint("LEFT_SHOULDER")).toBeUndefined();
+    expect(b.getJoint("LEFT_SHOULDER")).toEqual({
+      name: "LEFT_SHOULDER",
+      parent: "CHEST",
+    });
   });
 
-  it("SFlyer.getJoint returns undefined", () => {
+  it("SFlyer.getJoint resolves wing joints", () => {
     const f = new SFlyer();
-    expect(f.getJoint("LEFT_WING")).toBeUndefined();
+    expect(f.getJoint("LEFT_WING")).toEqual({
+      name: "LEFT_WING",
+      parent: "BODY",
+    });
   });
 
-  it("SProp.getJoint returns undefined", () => {
+  it("SProp.getJoint resolves root joint", () => {
     const p = new SProp();
-    expect(p.getJoint("ROOT")).toBeUndefined();
+    expect(p.getJoint("ROOT")).toEqual({ name: "ROOT" });
   });
 
-  it("SQuadruped.getJoint returns undefined", () => {
+  it("SQuadruped.getJoint resolves leg joints", () => {
     const q = new SQuadruped();
-    expect(q.getJoint("FRONT_LEFT_HIP")).toBeUndefined();
+    expect(q.getJoint("FRONT_LEFT_HIP")).toEqual({
+      name: "FRONT_LEFT_HIP",
+      parent: "SPINE",
+    });
   });
 });
 
