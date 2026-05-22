@@ -2,13 +2,11 @@
 // tweedle-type-system.ts — Full type hierarchy with assignability checks
 //
 // Provides: TypeHierarchy with discriminated-union type nodes (AbstractType),
-// matching Java AbstractType/JavaType/UserType patterns.
+// assignability, and overload-aware method resolution.
 // Pure computation, no I/O, no external dependencies beyond tweedle-parser.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import type { ClassDecl, MethodDecl, FieldDecl } from "./tweedle-parser.js";
-
-// ── Error Class ──────────────────────────────────────────────────────────
+import type { ClassDecl, FieldDecl, MethodDecl, Parameter, TypeRef } from "./tweedle-parser.js";
 
 export class TweedleTypeError extends Error {
   constructor(
@@ -20,8 +18,6 @@ export class TweedleTypeError extends Error {
     this.name = "TweedleTypeError";
   }
 }
-
-// ── Public Types ─────────────────────────────────────────────────────────
 
 export type TypeKind = "primitive" | "java" | "user";
 
@@ -50,14 +46,21 @@ export interface UserType {
 
 export type AbstractType = PrimitiveType | JavaType | UserType;
 
+export interface ResolvedMethod {
+  readonly method: MethodDecl;
+  readonly ownerType: UserType;
+  readonly score: number;
+  readonly usesVarArgs: boolean;
+  readonly usesDefaultValues: boolean;
+}
+
 export interface TypeHierarchy {
   resolve(name: string): AbstractType | null;
   allTypes(): AbstractType[];
   isAssignableTo(source: AbstractType, target: AbstractType): boolean;
   supertypesOf(type: AbstractType): AbstractType[];
+  resolveMethod(receiver: AbstractType, methodName: string, argTypes: AbstractType[]): ResolvedMethod | null;
 }
-
-// ── Built-in Type Registry ───────────────────────────────────────────────
 
 const PRIMITIVE_NAMES = new Set([
   "DecimalNumber",
@@ -86,46 +89,36 @@ const BUILTIN_HIERARCHY: BuiltinEntry[] = [
   { name: "SProp", superClass: "SJointedModel" },
 ];
 
-// ── Factory ──────────────────────────────────────────────────────────────
-
 export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
   const typeMap = new Map<string, AbstractType>();
   const publicTypes: AbstractType[] = [];
 
-  // ── 1. Register primitives ─────────────────────────────────────────
   for (const name of PRIMITIVE_NAMES) {
-    const prim: PrimitiveType = {
+    const primitive: PrimitiveType = {
       kind: "primitive",
       name,
       isAssignableTo: null!,
     };
-    typeMap.set(name, prim);
-    publicTypes.push(prim);
+    typeMap.set(name, primitive);
+    publicTypes.push(primitive);
   }
 
-  // ── 2. Register built-in entity types ──────────────────────────────
   for (const entry of BUILTIN_HIERARCHY) {
-    const jt: JavaType = {
+    const javaType: JavaType = {
       kind: "java",
       name: entry.name,
       superType: null!,
       isAssignableTo: null!,
     };
-    typeMap.set(entry.name, jt);
-    publicTypes.push(jt);
+    typeMap.set(entry.name, javaType);
+    publicTypes.push(javaType);
   }
 
-  // Link java type superType pointers
   for (const entry of BUILTIN_HIERARCHY) {
-    if (entry.superClass) {
-      (typeMap.get(entry.name) as any).superType =
-        typeMap.get(entry.superClass) as JavaType;
-    } else {
-      (typeMap.get(entry.name) as any).superType = null;
-    }
+    (typeMap.get(entry.name) as JavaType & { superType: JavaType | null }).superType =
+      entry.superClass ? (typeMap.get(entry.superClass) as JavaType) : null;
   }
 
-  // ── 3. Register null type (resolvable but not in allTypes) ─────────
   const nullType: JavaType = {
     kind: "java",
     name: "null",
@@ -134,16 +127,11 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
   };
   typeMap.set("null", nullType);
 
-  // ── 4. Register user classes ───────────────────────────────────────
   for (const cls of classes) {
     if (typeMap.has(cls.name)) {
-      throw new TweedleTypeError(
-        `Type '${cls.name}' is already defined`,
-        cls.name,
-        "duplicate class",
-      );
+      throw new TweedleTypeError(`Type '${cls.name}' is already defined`, cls.name, "duplicate class");
     }
-    const ut: UserType = {
+    const userType: UserType = {
       kind: "user",
       name: cls.name,
       superType: null!,
@@ -152,100 +140,231 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
       fields: cls.fields,
       isAssignableTo: null!,
     };
-    typeMap.set(cls.name, ut);
-    publicTypes.push(ut);
+    typeMap.set(cls.name, userType);
+    publicTypes.push(userType);
   }
 
-  // ── 5. Detect inheritance cycles ───────────────────────────────────
   const verified = new Set<string>();
   for (const cls of classes) {
     const visited = new Set<string>();
     let current: string | null = cls.name;
     while (current !== null && !verified.has(current)) {
       if (visited.has(current)) {
-        throw new TweedleTypeError(
-          `Inheritance cycle detected involving '${current}'`,
-          current,
-          "cycle",
-        );
+        throw new TweedleTypeError(`Inheritance cycle detected involving '${current}'`, current, "cycle");
       }
       visited.add(current);
-      const type = typeMap.get(current);
-      if (!type) break;
-      if (type.kind === "user") {
-        current = type.classDecl.superClass;
-      } else {
-        // Reached a built-in or primitive — no cycle possible
+      const currentType = typeMap.get(current);
+      if (!currentType) {
         break;
       }
+      current = currentType.kind === "user" ? currentType.classDecl.superClass : null;
     }
-    for (const name of visited) verified.add(name);
+    for (const name of visited) {
+      verified.add(name);
+    }
   }
 
-  // ── 6. Link user type superType pointers ───────────────────────────
   for (const cls of classes) {
-    if (cls.superClass) {
-      const parent = typeMap.get(cls.superClass) ?? null;
-      (typeMap.get(cls.name) as any).superType = parent;
-    } else {
-      (typeMap.get(cls.name) as any).superType = null;
+    if (!cls.superClass) {
+      (typeMap.get(cls.name) as UserType & { superType: JavaType | UserType | null }).superType = null;
+      continue;
     }
+    const parent = typeMap.get(cls.superClass);
+    if (!parent || parent.kind === "primitive") {
+      throw new TweedleTypeError(
+        `Unknown superclass '${cls.superClass}' for '${cls.name}'`,
+        cls.name,
+        "unknown superclass",
+      );
+    }
+    (typeMap.get(cls.name) as UserType & { superType: JavaType | UserType | null }).superType = parent;
   }
 
-  // ── 7. Assignability logic ─────────────────────────────────────────
-  function hierarchyIsAssignableTo(
-    source: AbstractType,
-    target: AbstractType,
-  ): boolean {
-    if (source === target) return true;
-
-    // null → non-primitive
+  function hierarchyIsAssignableTo(source: AbstractType, target: AbstractType): boolean {
+    if (source === target) {
+      return true;
+    }
     if (source.name === "null") {
       return target.kind !== "primitive";
     }
-
-    // Numeric widening: WholeNumber → DecimalNumber
     if (source.name === "WholeNumber" && target.name === "DecimalNumber") {
       return true;
     }
-
-    // Primitives: only identity (already checked above)
-    if (source.kind === "primitive") return false;
-
-    // Walk supertype chain for java/user types
-    let cur: JavaType | UserType | null = source.superType;
-    while (cur !== null) {
-      if (cur === target) return true;
-      cur = cur.superType;
+    if (source.kind === "primitive") {
+      return false;
+    }
+    let current: JavaType | UserType | null = source.superType;
+    while (current) {
+      if (current === target) {
+        return true;
+      }
+      current = current.superType;
     }
     return false;
   }
 
-  // ── 8. Attach isAssignableTo method to every type node ─────────────
   for (const type of typeMap.values()) {
-    (type as any).isAssignableTo = (target: AbstractType): boolean =>
-      hierarchyIsAssignableTo(type, target);
+    (type as AbstractType & { isAssignableTo: (target: AbstractType) => boolean }).isAssignableTo =
+      (target: AbstractType) => hierarchyIsAssignableTo(type, target);
   }
 
-  // ── 9. supertypesOf ────────────────────────────────────────────────
   function supertypesOf(type: AbstractType): AbstractType[] {
     if (type.kind === "primitive") {
-      if (type.name === "WholeNumber") {
-        return [type, typeMap.get("DecimalNumber")!];
-      }
-      return [type];
+      return type.name === "WholeNumber" ? [type, typeMap.get("DecimalNumber")!] : [type];
     }
 
     const chain: AbstractType[] = [];
-    let cur: JavaType | UserType | null = type;
-    while (cur !== null) {
-      chain.push(cur);
-      cur = cur.superType;
+    let current: JavaType | UserType | null = type;
+    while (current) {
+      chain.push(current);
+      current = current.superType;
     }
     return chain;
   }
 
-  // ── Return TypeHierarchy ───────────────────────────────────────────
+  function resolveTypeRef(typeRef: TypeRef): AbstractType | null {
+    return typeRef.type === "SimpleTypeRef" ? typeMap.get(typeRef.name) ?? null : null;
+  }
+
+  function parameterBounds(parameters: Parameter[]): { minimum: number; maximum: number } {
+    let minimum = 0;
+    let maximum = parameters.length;
+    let hasVarArgs = false;
+
+    for (const parameter of parameters) {
+      if (parameter.isVarArgs) {
+        hasVarArgs = true;
+      } else if (!parameter.defaultValue) {
+        minimum += 1;
+      }
+    }
+
+    if (hasVarArgs) {
+      maximum = Number.POSITIVE_INFINITY;
+    }
+
+    return { minimum, maximum };
+  }
+
+  function inheritanceDistance(source: AbstractType, target: AbstractType): number {
+    if (source === target) {
+      return 0;
+    }
+    if (source.name === "WholeNumber" && target.name === "DecimalNumber") {
+      return 1;
+    }
+    if (source.name === "null") {
+      return target.kind === "primitive" ? Number.POSITIVE_INFINITY : 2;
+    }
+    if (!hierarchyIsAssignableTo(source, target)) {
+      return Number.POSITIVE_INFINITY;
+    }
+    if (source.kind === "primitive") {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    let distance = 1;
+    let current: JavaType | UserType | null = source.superType;
+    while (current) {
+      if (current === target) {
+        return distance;
+      }
+      distance += 1;
+      current = current.superType;
+    }
+    return Number.POSITIVE_INFINITY;
+  }
+
+  function resolveMethod(receiver: AbstractType, methodName: string, argTypes: AbstractType[]): ResolvedMethod | null {
+    const owners = supertypesOf(receiver).filter((type): type is UserType => type.kind === "user");
+    const candidates: ResolvedMethod[] = [];
+
+    owners.forEach((ownerType, ownerDepth) => {
+      for (const method of ownerType.methods) {
+        if (method.name !== methodName) {
+          continue;
+        }
+
+        const bounds = parameterBounds(method.parameters);
+        if (argTypes.length < bounds.minimum || argTypes.length > bounds.maximum) {
+          continue;
+        }
+
+        let score = ownerDepth * 100;
+        let valid = true;
+        let usesVarArgs = false;
+        let usesDefaultValues = false;
+
+        for (let index = 0; index < argTypes.length; index++) {
+          const directParameter = method.parameters[index];
+          const parameter = directParameter ?? method.parameters[method.parameters.length - 1];
+          if (!parameter) {
+            valid = false;
+            break;
+          }
+
+          if (parameter.isVarArgs && index >= method.parameters.length - 1) {
+            usesVarArgs = true;
+          }
+
+          const parameterType = resolveTypeRef(parameter.paramType);
+          if (!parameterType) {
+            valid = false;
+            break;
+          }
+
+          const distance = inheritanceDistance(argTypes[index], parameterType);
+          if (!Number.isFinite(distance)) {
+            valid = false;
+            break;
+          }
+          score += distance;
+        }
+
+        if (!valid) {
+          continue;
+        }
+
+        if (argTypes.length < method.parameters.length) {
+          for (let index = argTypes.length; index < method.parameters.length; index++) {
+            const parameter = method.parameters[index];
+            if (parameter.isVarArgs) {
+              usesVarArgs = true;
+              continue;
+            }
+            if (!parameter.defaultValue) {
+              valid = false;
+              break;
+            }
+            usesDefaultValues = true;
+            score += 2;
+          }
+        }
+
+        if (!valid) {
+          continue;
+        }
+
+        if (usesVarArgs) {
+          score += 4;
+        }
+
+        candidates.push({ method, ownerType, score, usesVarArgs, usesDefaultValues });
+      }
+    });
+
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    candidates.sort((left, right) => left.score - right.score);
+    const [best, second] = candidates;
+    if (second && second.score === best.score) {
+      return null;
+    }
+    return best;
+  }
+
   return {
     resolve(name: string): AbstractType | null {
       return typeMap.get(name) ?? null;
@@ -255,5 +374,6 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
     },
     isAssignableTo: hierarchyIsAssignableTo,
     supertypesOf,
+    resolveMethod,
   };
 }

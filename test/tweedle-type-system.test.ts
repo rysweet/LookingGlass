@@ -574,3 +574,103 @@ describe("AbstractType.isAssignableTo() method", () => {
     expect(dn.isAssignableTo(wn)).toBe(false);
   });
 });
+
+describe("resolveMethod()", () => {
+  it("prefers exact overloads over widened matches", () => {
+    const cls = makeClass(`
+      class Calculator extends SThing {
+        Calculator() {}
+        WholeNumber pick(WholeNumber value) { return 1; }
+        DecimalNumber pick(DecimalNumber value) { return 1.0; }
+      }
+    `);
+    const h = createTypeHierarchy([cls]);
+    const calculator = h.resolve("Calculator")!;
+    const whole = h.resolve("WholeNumber")!;
+    const decimal = h.resolve("DecimalNumber")!;
+
+    expect(h.resolveMethod(calculator, "pick", [whole])?.method.returnType).toEqual({
+      type: "SimpleTypeRef",
+      name: "WholeNumber",
+      isArray: false,
+    });
+    expect(h.resolveMethod(calculator, "pick", [decimal])?.method.returnType).toEqual({
+      type: "SimpleTypeRef",
+      name: "DecimalNumber",
+      isArray: false,
+    });
+  });
+
+  it("uses default-valued parameters when arguments are omitted", () => {
+    const cls = makeClass(`
+      class Greeter extends SThing {
+        Greeter() {}
+        TextString greet(TextString who, TextString punctuation <- "!") { return who; }
+      }
+    `);
+    const h = createTypeHierarchy([cls]);
+    const greeter = h.resolve("Greeter")!;
+    const text = h.resolve("TextString")!;
+
+    const resolved = h.resolveMethod(greeter, "greet", [text]);
+    expect(resolved?.usesDefaultValues).toBe(true);
+    expect(resolved?.method.parameters.length).toBe(2);
+  });
+
+  it("matches varargs methods", () => {
+    const cls = makeClass(`
+      class Collector extends SThing {
+        Collector() {}
+        void collect(WholeNumber... values) {}
+      }
+    `);
+    const h = createTypeHierarchy([cls]);
+    const collector = h.resolve("Collector")!;
+    const whole = h.resolve("WholeNumber")!;
+
+    const resolved = h.resolveMethod(collector, "collect", [whole, whole, whole]);
+    expect(resolved?.usesVarArgs).toBe(true);
+    expect(resolved?.method.name).toBe("collect");
+  });
+
+  it("prefers methods declared on the most specific receiver type", () => {
+    const animal = makeClass(`
+      class Animal extends SThing {
+        Animal() {}
+        TextString speak(SThing target) { return "animal"; }
+      }
+    `);
+    const dog = makeClass(`
+      class Dog extends Animal {
+        Dog() {}
+        DecimalNumber speak(SBiped target) { return 1.0; }
+      }
+    `);
+    const h = createTypeHierarchy([animal, dog]);
+    const receiver = h.resolve("Dog")!;
+    const biped = h.resolve("SBiped")!;
+
+    const resolved = h.resolveMethod(receiver, "speak", [biped]);
+    expect(resolved?.ownerType.name).toBe("Dog");
+    expect(resolved?.method.returnType).toEqual({
+      type: "SimpleTypeRef",
+      name: "DecimalNumber",
+      isArray: false,
+    });
+  });
+
+  it("returns null for ambiguous overloads", () => {
+    const cls = makeClass(`
+      class Choice extends SThing {
+        Choice() {}
+        TextString pick(SBiped value) { return "biped"; }
+        TextString pick(SFlyer value) { return "flyer"; }
+      }
+    `);
+    const h = createTypeHierarchy([cls]);
+    const choice = h.resolve("Choice")!;
+    const nullType = h.resolve("null")!;
+
+    expect(h.resolveMethod(choice, "pick", [nullType])).toBeNull();
+  });
+});

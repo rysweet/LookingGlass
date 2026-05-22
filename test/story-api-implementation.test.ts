@@ -109,4 +109,59 @@ describe("story-api implementation layer", () => {
       parent: "LEFT_ELBOW",
     });
   });
+
+  it("binds properties bidirectionally and propagates changes both ways", () => {
+    const left = new SProp();
+    const right = new SProp();
+    const leftSize = left.imp.getProperty<Size>("size")!;
+    const rightSize = right.imp.getProperty<Size>("size")!;
+
+    leftSize.bindBidirectional(rightSize);
+    left.size = { width: 2, height: 3, depth: 4 };
+    expect(right.size).toEqual({ width: 2, height: 3, depth: 4 });
+
+    right.size = { width: 5, height: 6, depth: 7 };
+    expect(left.size).toEqual({ width: 5, height: 6, depth: 7 });
+  });
+
+  it("supports entity-level property binding helpers", () => {
+    const leader = new SBiped();
+    const follower = new SBiped();
+
+    expect(leader.imp.bindProperty("position", follower.imp, "position")).toBe(true);
+    leader.position = { x: 1, y: 2, z: 3 };
+
+    expect(follower.position).toEqual({ x: 1, y: 2, z: 3 });
+  });
+
+  it("propagates through binding chains without looping", () => {
+    const first = new SProp();
+    const second = new SProp();
+    const third = new SProp();
+
+    const firstSize = first.imp.getProperty<Size>("size")!;
+    const secondSize = second.imp.getProperty<Size>("size")!;
+    const thirdSize = third.imp.getProperty<Size>("size")!;
+
+    firstSize.bindBidirectional(secondSize);
+    secondSize.bindBidirectional(thirdSize);
+
+    first.size = { width: 9, height: 8, depth: 7 };
+
+    expect(second.size).toEqual({ width: 9, height: 8, depth: 7 });
+    expect(third.size).toEqual({ width: 9, height: 8, depth: 7 });
+  });
+
+  it("unbinds properties and stops further propagation", () => {
+    const left = new SProp();
+    const right = new SProp();
+    const leftSize = left.imp.getProperty<Size>("size")!;
+    const rightSize = right.imp.getProperty<Size>("size")!;
+
+    leftSize.bindBidirectional(rightSize);
+    left.imp.unbindProperty("size", right.imp, "size");
+    left.size = { width: 4, height: 4, depth: 4 };
+
+    expect(right.size).toEqual({ width: 1, height: 1, depth: 1 });
+  });
 });

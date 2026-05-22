@@ -415,3 +415,91 @@ describe("default options", () => {
     expect(mgr.stats().size).toBe(100);
   });
 });
+
+describe("resource catalog metadata and reference counting", () => {
+  it("stores manifest-style metadata in the catalog", () => {
+    const mgr = createResourceManager(fakeLoader());
+    mgr.register("textures/bunny.png", "texture", {
+      name: "bunny-texture",
+      fileName: "bunny.png",
+      format: "image/png",
+      uuid: "uuid-1",
+      width: 256,
+      height: 128,
+      provenance: "gallery",
+    });
+
+    expect(mgr.getEntry("textures/bunny.png")).toMatchObject({
+      key: "textures/bunny.png",
+      type: "texture",
+      name: "bunny-texture",
+      fileName: "bunny.png",
+      format: "image/png",
+      uuid: "uuid-1",
+      width: 256,
+      height: 128,
+      metadata: {
+        provenance: "gallery",
+      },
+    });
+  });
+
+  it("registerEntry accepts model and audio catalog entries", () => {
+    const mgr = createResourceManager(fakeLoader());
+    mgr.registerEntry({
+      key: "models/Bunny.a3r",
+      type: "model",
+      name: "Bunny",
+      fileName: "Bunny.a3r",
+      format: "model",
+      provenance: "library",
+    });
+    mgr.registerEntry({
+      key: "audio/bounce.wav",
+      type: "audio",
+      name: "bounce",
+      fileName: "bounce.wav",
+      format: "audio/wav",
+      duration: 1.25,
+    });
+
+    expect(mgr.entriesByType("model")[0].metadata.provenance).toBe("library");
+    expect(mgr.entriesByType("audio")[0].duration).toBe(1.25);
+  });
+
+  it("acquire and release maintain reference counts and pin cached entries", async () => {
+    const loader = vi.fn(async (key: string) => new Uint8Array([key.length]));
+    const mgr = createResourceManager(loader, { maxCacheSize: 1 });
+    mgr.register("a", "texture");
+    mgr.register("b", "texture");
+
+    await mgr.acquire("a");
+    expect(mgr.referenceCount("a")).toBe(1);
+
+    await mgr.get("b");
+    expect(mgr.getIfLoaded("a")).not.toBeNull();
+    expect(mgr.getIfLoaded("b")).not.toBeNull();
+    expect(mgr.stats().pinned).toBe(1);
+
+    expect(mgr.release("a")).toBe(0);
+    expect(mgr.getIfLoaded("a")).toBeNull();
+    expect(mgr.stats().size).toBe(1);
+  });
+
+  it("passes catalog metadata snapshots to the loader", async () => {
+    let seenEntryKey: string | null = null;
+    let seenWidth: number | null = null;
+    const loader = vi.fn(async (_key: string, entry) => {
+      seenEntryKey = entry?.key ?? null;
+      seenWidth = entry?.width ?? null;
+      return new Uint8Array([7, 8, 9]);
+    });
+    const mgr = createResourceManager(loader);
+    mgr.register("textures/cat.png", "texture", { width: 64, height: 32 });
+
+    await mgr.get("textures/cat.png");
+
+    expect(seenEntryKey).toBe("textures/cat.png");
+    expect(seenWidth).toBe(64);
+  });
+});

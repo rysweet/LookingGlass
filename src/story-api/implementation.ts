@@ -12,6 +12,7 @@ export interface PropertyChange<T> {
 
 export type PropertyListener<T> = (change: PropertyChange<T>) => void;
 export type ActivationListener = (imp: EntityImp, isActive: boolean) => void;
+export type BindingSyncDirection = "self" | "other" | "none";
 
 export interface PropertyOptions<T> {
   validate?: (value: T) => boolean;
@@ -33,6 +34,7 @@ const identityClone = <T>(value: T): T => value;
 
 export class Property<T> {
   private readonly _listeners = new Set<PropertyListener<T>>();
+  private readonly _bindings = new Set<Property<T>>();
   private _value: T;
   private readonly _validate: (value: T) => boolean;
   private readonly _clone: (value: T) => T;
@@ -74,39 +76,71 @@ export class Property<T> {
     this._listeners.delete(listener);
   }
 
+  bindBidirectional(other: Property<T>, initialSync: BindingSyncDirection = "self"): void {
+    if (other === this || this._bindings.has(other)) {
+      return;
+    }
+    this._bindings.add(other);
+    other._bindings.add(this);
+
+    if (initialSync === "self") {
+      other._commit(this._clone(this._value), true, new Set([this]));
+    } else if (initialSync === "other") {
+      this._commit(other.value, true, new Set([other]));
+    }
+  }
+
+  unbindBidirectional(other: Property<T>): void {
+    this._bindings.delete(other);
+    other._bindings.delete(this);
+  }
+
+  isBoundTo(other: Property<T>): boolean {
+    return this._bindings.has(other);
+  }
+
   setValue(nextValue: T): boolean {
-    return this._commit(nextValue, true);
+    return this._commit(nextValue, true, new Set());
   }
 
   setValueSilently(nextValue: T): boolean {
-    return this._commit(nextValue, false);
+    return this._commit(nextValue, false, new Set());
   }
 
-  private _commit(nextValue: T, notify: boolean): boolean {
+  private _commit(nextValue: T, notify: boolean, visited: Set<Property<unknown>>): boolean {
+    if (visited.has(this)) {
+      return false;
+    }
+    visited.add(this);
+
     if (!this._validate(nextValue)) {
       return false;
     }
 
     const normalizedNextValue = this._clone(nextValue);
-    if (this._equals(this._value, normalizedNextValue)) {
-      return false;
-    }
-
     const previousValue = this._clone(this._value);
-    this._value = normalizedNextValue;
+    const changed = !this._equals(this._value, normalizedNextValue);
 
-    if (notify) {
-      const change: PropertyChange<T> = {
-        property: this,
-        previousValue,
-        value: this._clone(normalizedNextValue),
-      };
-      for (const listener of this._listeners) {
-        listener(change);
+    if (changed) {
+      this._value = normalizedNextValue;
+      if (notify) {
+        const change: PropertyChange<T> = {
+          property: this,
+          previousValue,
+          value: this._clone(normalizedNextValue),
+        };
+        for (const listener of this._listeners) {
+          listener(change);
+        }
       }
     }
 
-    return true;
+    let propagated = false;
+    for (const binding of this._bindings) {
+      propagated = binding._commit(this._clone(normalizedNextValue), notify, visited) || propagated;
+    }
+
+    return changed || propagated;
   }
 }
 
@@ -140,11 +174,7 @@ export class EntityImp {
     return this._properties;
   }
 
-  createProperty<T>(
-    name: string,
-    initialValue: T,
-    options: PropertyOptions<T> = {},
-  ): Property<T> {
+  createProperty<T>(name: string, initialValue: T, options: PropertyOptions<T> = {}): Property<T> {
     if (this._properties.has(name)) {
       throw new TypeError(`property "${name}" already exists`);
     }
@@ -156,6 +186,26 @@ export class EntityImp {
 
   getProperty<T>(name: string): Property<T> | undefined {
     return this._properties.get(name) as Property<T> | undefined;
+  }
+
+  bindProperty<T>(name: string, other: EntityImp, otherName: string, initialSync: BindingSyncDirection = "self"): boolean {
+    const property = this.getProperty<T>(name);
+    const otherProperty = other.getProperty<T>(otherName);
+    if (!property || !otherProperty) {
+      return false;
+    }
+    property.bindBidirectional(otherProperty, initialSync);
+    return true;
+  }
+
+  unbindProperty<T>(name: string, other: EntityImp, otherName: string): boolean {
+    const property = this.getProperty<T>(name);
+    const otherProperty = other.getProperty<T>(otherName);
+    if (!property || !otherProperty) {
+      return false;
+    }
+    property.unbindBidirectional(otherProperty);
+    return true;
   }
 
   addActivationListener(listener: ActivationListener): void {
