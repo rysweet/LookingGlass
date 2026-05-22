@@ -5,6 +5,8 @@
 // Pure function, no I/O, no external dependencies.
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { hydrateClassDecl, type RawClassDecl } from "./ast-nodes";
+
 const MAX_SOURCE_LENGTH = 1_048_576; // 1 MB
 const MAX_PARSE_DEPTH = 100;
 
@@ -1064,5 +1066,5 @@ export function parseTweedle(source: string): ClassDecl {
   }
   const tokens = tokenize(source);
   const parser = new Parser(tokens);
-  return parser.parse();
+  return hydrateClassDecl(parser.parse() as RawClassDecl) as unknown as ClassDecl;
 }

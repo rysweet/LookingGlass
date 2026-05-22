@@ -12,10 +12,15 @@ ported to a pure TypeScript, framework-agnostic implementation.
 | **Preferences** | `src/preferences.ts` | Typed user settings with validation, defaults, and JSON serialization |
 | **UndoRedo** | `src/undo-redo.ts` | Command-pattern undo/redo for all scene and entity modifications |
 | **Clipboard** | `src/clipboard.ts` | Copy/paste of entities and code blocks with collision-safe naming |
-| **ProjectManager** | `src/project-manager.ts` | Async project lifecycle (create, open, save, close) with recent files and dirty tracking |
+| **ProjectManager** | `src/project-manager.ts` | Async project lifecycle (create, open, save, close) with recent files, save backups, corruption recovery, Java export, and dirty tracking |
 
 All modules are pure TypeScript with zero framework dependencies. They work
 identically in browser and Node.js environments.
+
+`ProjectManager` now keeps a capped backup history per file, can recover from a
+corrupted archive by reopening the latest known-good backup, and can export the
+current archive as a standalone Java project skeleton (`pom.xml`, Java entry
+point, and resource files).
 
 ---
 

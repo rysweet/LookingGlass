@@ -37,6 +37,7 @@ const result = buildScene(project, {
 // result.camera      — THREE.PerspectiveCamera positioned per defaults
 // result.cameraConfig — plain object for configuring OrbitControls in main.ts
 // result.lights      — SceneLights handle for post-build light management
+// result.sceneGraph  — scenegraph.Transformable root with Model/Visual/Geometry nodes
 ```
 
 ## Backward Compatibility
@@ -107,6 +108,7 @@ interface SceneBuildResult {
   camera: THREE.PerspectiveCamera;
   cameraConfig: CameraConfig;
   lights: SceneLights;
+  sceneGraph: Transformable;
 }
 ```
 

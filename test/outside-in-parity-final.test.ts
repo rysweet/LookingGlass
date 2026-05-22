@@ -35,7 +35,16 @@ function makeClass(
   methods: any[] = [],
   fields: any[] = [],
 ): ClassDecl {
-  return { name, superClass, methods, fields };
+  return {
+    type: "ClassDeclaration",
+    name,
+    superClass,
+    modelType: null,
+    visibility: null,
+    constructors: [],
+    methods,
+    fields,
+  };
 }
 
 function makeProject(overrides: Partial<AliceProject> = {}): AliceProject {

@@ -1,5 +1,13 @@
 import * as THREE from "three";
 import type { AliceProject, AliceObject } from "./a3p-parser";
+import {
+  BoxGeometry as SceneBoxGeometry,
+  Model as SceneGraphModel,
+  PlaneGeometry as ScenePlaneGeometry,
+  SphereGeometry as SceneSphereGeometry,
+  Transformable,
+  createModel,
+} from "./scenegraph";
 
 // ── Exported interfaces ───────────────────────────────────────────────
 
@@ -47,6 +55,7 @@ export interface SceneBuildResult {
   camera: THREE.PerspectiveCamera;
   cameraConfig: CameraConfig;
   lights: SceneLights;
+  sceneGraph: Transformable;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────
@@ -172,6 +181,8 @@ export function buildScene(project: AliceProject, opts?: SceneBuildOptions): Sce
   camera.position.set(0, 5, 20);
   camera.lookAt(0, 0, 0);
 
+  const sceneGraph = buildSceneGraph(project);
+
   // Scene objects with optional debug visualizations
   for (const obj of project.sceneObjects) {
     const mesh = createMeshForObject(obj);
@@ -207,7 +218,7 @@ export function buildScene(project: AliceProject, opts?: SceneBuildOptions): Sce
   const cameraConfig = buildCameraConfig(opts);
   const lights = createSceneLightsAPI(scene, trackedLights);
 
-  return { scene, camera, cameraConfig, lights };
+  return { scene, camera, cameraConfig, lights, sceneGraph };
 }
 
 // ── Light helpers ─────────────────────────────────────────────────────
@@ -316,6 +327,64 @@ function createSkeletonVis(obj: AliceObject, template: number[][]): THREE.LineSe
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   return new THREE.LineSegments(geometry, skeletonMat());
+}
+
+// ── Scenegraph backing model ──────────────────────────────────────────
+
+function buildSceneGraph(project: AliceProject): Transformable {
+  const root = new Transformable(`${project.projectName || "scene"}.root`);
+  for (const obj of project.sceneObjects) {
+    const model = createSceneGraphModel(obj);
+    if (model) {
+      root.add(model);
+    }
+  }
+  return root;
+}
+
+function createSceneGraphModel(obj: AliceObject): SceneGraphModel | null {
+  if (obj.typeName.includes("SCamera")) {
+    return null;
+  }
+
+  if (obj.typeName.includes("SGround")) {
+    return createModel({
+      name: obj.name,
+      geometry: new ScenePlaneGeometry(200, 200),
+      color: GROUND_COLOR,
+      position: obj.position,
+      orientation: obj.orientation,
+    });
+  }
+
+  if (
+    obj.typeName.includes("SProp") ||
+    obj.typeName.includes("SModel") ||
+    obj.typeName.includes("SJointedModel") ||
+    obj.typeName.includes("SBiped") ||
+    obj.typeName.includes("SFlyer") ||
+    obj.typeName.includes("SQuadruped")
+  ) {
+    return createModel({
+      name: obj.name,
+      geometry: new SceneBoxGeometry(
+        obj.size?.width ?? 1,
+        obj.size?.height ?? 1,
+        obj.size?.depth ?? 1,
+      ),
+      color: obj.typeName.includes("SProp") ? PROP_COLOR : MODEL_COLOR,
+      position: obj.position,
+      orientation: obj.orientation,
+    });
+  }
+
+  return createModel({
+    name: obj.name,
+    geometry: new SceneSphereGeometry(0.5),
+    color: DEFAULT_COLOR,
+    position: obj.position,
+    orientation: obj.orientation,
+  });
 }
 
 // ── Mesh creation (existing logic, extended) ──────────────────────────

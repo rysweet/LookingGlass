@@ -6,6 +6,12 @@ files — each `.twe` file inside the archive contains one class declaration. Th
 parser handles all constructs needed for grading student work in Lessons 1–4 and
 all library code in the SceneGraphLibrary.
 
+The parser now hydrates its output through `src/ast-nodes.ts`, which provides a
+Java-style node hierarchy (`AbstractNode`, `AbstractDeclaration`,
+`AbstractMethod`, `AbstractField`) plus concrete expression and statement node
+classes. The legacy `type` discriminators are preserved, so existing consumers
+can keep switching on `type` while newer code can use `instanceof`.
+
 ## Overview
 
 The parser takes a raw Tweedle source string and returns a `TweedleTypeDeclaration`
