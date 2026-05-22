@@ -257,6 +257,10 @@ function genStmt(stmt: Statement, indent: string, depth: number): string {
       return genBody(stmt.body, "", indent, depth + 1);
     case "DisabledBlock":
       return `*<${stmt.raw}>*`;
+    case "Comment":
+      return stmt.text.includes("\n")
+        ? `/* ${stmt.text.replace(/\n/g, "\\n") } */`
+        : `// ${stmt.text}`;
   }
 
   throw new TweedleCodegenError(

@@ -11,6 +11,7 @@ import {
 import { parseA3P, type AliceProject } from "./a3p-parser.js";
 import { renderSceneToPng } from "./scene-renderer.js";
 import { executeProject, type LogEntry } from "./tweedle-vm.js";
+import { EventSystem, EventSystemError } from "./events.js";
 
 export interface ServerOptions {
   port: number;
@@ -30,20 +31,6 @@ interface SceneObject {
   position: Position;
 }
 
-const VALID_EVENT_TYPES = ["sceneActivated", "keyPress", "proximity"] as const;
-type EventType = (typeof VALID_EVENT_TYPES)[number];
-
-interface EventRegistration {
-  id: string;
-  eventType: EventType;
-  handlerName: string;
-  key?: string;
-  targetObjects?: [string, string];
-  threshold?: number;
-}
-
-const MAX_REGISTRATIONS = 1000;
-const DEFAULT_THRESHOLD = 2.0;
 const DEFAULT_POSITION: Position = { x: 0, y: 0, z: 0 };
 
 interface ServerState {
@@ -53,9 +40,7 @@ interface ServerState {
   sceneObjects: Map<string, SceneObject>;
   procedures: Map<string, string[]>; // methodName -> statements
   parsedProject: AliceProject | null;
-  registrationsByType: Map<EventType, EventRegistration[]>;
-  registrationCount: number;
-  nextEventId: number;
+  eventSystem: EventSystem;
 }
 
 export function createServer(options: ServerOptions): express.Express {
@@ -69,9 +54,10 @@ export function createServer(options: ServerOptions): express.Express {
     sceneObjects: new Map(),
     procedures: new Map([["myFirstMethod", []]]),
     parsedProject: null,
-    registrationsByType: new Map(),
-    registrationCount: 0,
-    nextEventId: 1,
+    eventSystem: new EventSystem({
+      hasObject: (name) => state.sceneObjects.has(name),
+      getObjectPosition: (name) => state.sceneObjects.get(name)?.position ?? null,
+    }),
   };
 
   // Ensure evidence dir exists
@@ -110,9 +96,7 @@ export function createServer(options: ServerOptions): express.Express {
     }
 
     // Reset event state on re-launch
-    state.registrationsByType = new Map();
-    state.registrationCount = 0;
-    state.nextEventId = 1;
+    state.eventSystem.reset();
 
     res.json({
       status: "launched",
@@ -376,92 +360,28 @@ export function createServer(options: ServerOptions): express.Express {
       return;
     }
 
-    const { eventType, handlerName: rawHandler, key, targetObjects, threshold } = req.body ?? {};
+    try {
+      const registration = state.eventSystem.register(req.body ?? {});
+      const evidenceArtifact = writeEventRegister(options.evidenceDir, {
+        registrationId: registration.id,
+        eventType: registration.eventType,
+        handlerName: registration.handlerName,
+        totalRegistrations: state.eventSystem.totalRegistrations,
+      });
 
-    if (!eventType) {
-      res.status(400).json({ error: "eventType is required" });
-      return;
-    }
-    if (!VALID_EVENT_TYPES.includes(eventType)) {
-      res.status(400).json({ error: `unknown eventType: ${eventType}` });
-      return;
-    }
-
-    const handlerName: string = rawHandler ?? "handler";
-
-    // keyPress-specific validation
-    if (eventType === "keyPress") {
-      if (!key) {
-        res.status(400).json({ error: "key is required for keyPress events" });
+      res.json({
+        registrationId: registration.id,
+        eventType: registration.eventType,
+        handlerName: registration.handlerName,
+        evidenceArtifact,
+      });
+    } catch (error) {
+      if (error instanceof EventSystemError) {
+        res.status(400).json({ error: error.message });
         return;
       }
+      throw error;
     }
-
-    // proximity-specific validation
-    let resolvedThreshold = DEFAULT_THRESHOLD;
-    if (eventType === "proximity") {
-      if (!Array.isArray(targetObjects) || targetObjects.length !== 2) {
-        res.status(400).json({ error: "proximity requires targetObjects with exactly 2 entries" });
-        return;
-      }
-      // Validate objects exist in scene
-      for (const objName of targetObjects) {
-        if (!state.sceneObjects.has(objName)) {
-          res.status(400).json({ error: `unknown object: ${objName}` });
-          return;
-        }
-      }
-      if (threshold !== undefined) {
-        if (threshold <= 0 || threshold > 1000) {
-          res.status(400).json({ error: "threshold must be > 0 and <= 1000" });
-          return;
-        }
-        resolvedThreshold = threshold;
-      }
-    }
-
-    if (state.registrationCount >= MAX_REGISTRATIONS) {
-      res.status(400).json({ error: `registration limit reached (${MAX_REGISTRATIONS})` });
-      return;
-    }
-
-    const registrationId = `evt-${state.nextEventId++}`;
-    const registration: EventRegistration = {
-      id: registrationId,
-      eventType: eventType as EventType,
-      handlerName,
-    };
-    if (eventType === "keyPress") {
-      registration.key = key;
-    }
-    if (eventType === "proximity") {
-      registration.targetObjects = targetObjects as [string, string];
-      registration.threshold = resolvedThreshold;
-    }
-
-    // Index by type for O(1) fire lookups
-    const typedEvent = eventType as EventType;
-    const typeList = state.registrationsByType.get(typedEvent);
-    if (typeList) {
-      typeList.push(registration);
-    } else {
-      state.registrationsByType.set(typedEvent, [registration]);
-    }
-    state.registrationCount++;
-
-    const evidenceArtifact = writeEventRegister(options.evidenceDir, {
-      registrationId,
-      eventType,
-      handlerName,
-      totalRegistrations: state.registrationCount,
-    });
-
-    res.json({
-      registrationId,
-      eventType,
-      handlerName,
-      evidenceArtifact,
-    });
   });
 
   // ── POST /api/events/fire ──────────────────────────────────────────
@@ -471,61 +391,30 @@ export function createServer(options: ServerOptions): express.Express {
       return;
     }
 
-    const { eventType, payload } = req.body ?? {};
+    try {
+      const { eventType, payload } = req.body ?? {};
+      const result = state.eventSystem.fire(eventType, payload);
+      const evidenceArtifact = writeEventFire(options.evidenceDir, {
+        eventType,
+        registrationsEvaluated: result.registrationsEvaluated,
+        triggeredCount: result.triggered.length,
+        triggered: result.triggered.map((triggered) => triggered.id),
+      });
 
-    if (!eventType) {
-      res.status(400).json({ error: "eventType is required" });
-      return;
+      res.json({
+        triggered: result.triggered,
+        evidenceArtifact,
+      });
+    } catch (error) {
+      if (error instanceof EventSystemError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      throw error;
     }
-    if (!VALID_EVENT_TYPES.includes(eventType)) {
-      res.status(400).json({ error: `unknown eventType: ${eventType}` });
-      return;
-    }
-
-    const candidates = state.registrationsByType.get(eventType as EventType) ?? [];
-    const toEntry = (r: EventRegistration) => ({
-      id: r.id, eventType: r.eventType, handlerName: r.handlerName,
-    });
-
-    let triggered: { id: string; eventType: string; handlerName: string }[];
-
-    if (eventType === "sceneActivated") {
-      triggered = candidates.map(toEntry);
-    } else if (eventType === "keyPress") {
-      const firedKey = payload?.key;
-      triggered = firedKey
-        ? candidates.filter((r) => r.key === firedKey).map(toEntry)
-        : [];
-    } else {
-      const sourceObject: string | undefined = payload?.sourceObject;
-      triggered = candidates
-        .filter((reg) => {
-          if (sourceObject && !reg.targetObjects!.includes(sourceObject)) return false;
-          const posA = state.sceneObjects.get(reg.targetObjects![0])?.position;
-          const posB = state.sceneObjects.get(reg.targetObjects![1])?.position;
-          return posA && posB && euclideanDistance(posA, posB) <= reg.threshold!;
-        })
-        .map(toEntry);
-    }
-
-    const evidenceArtifact = writeEventFire(options.evidenceDir, {
-      eventType,
-      registrationsEvaluated: candidates.length,
-      triggeredCount: triggered.length,
-      triggered: triggered.map((t) => t.id),
-    });
-
-    res.json({
-      triggered,
-      evidenceArtifact,
-    });
   });
 
   return app;
-}
-
-function euclideanDistance(a: Position, b: Position): number {
-  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
 }
 
 /** Create a minimal valid buffer that can stand in as a .a3p file. */

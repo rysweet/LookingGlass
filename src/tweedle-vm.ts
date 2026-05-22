@@ -28,7 +28,7 @@ interface VMState {
   log: LogEntry[];
   returned: boolean;
   returnValue: unknown;
-  scopes: Map<string, string>[];
+  scopes: Map<string, unknown>[];
   methodMap: Map<string, AliceMethod>;
   returnValues: Map<string, unknown>;
 }
@@ -46,17 +46,17 @@ function popScope(state: VMState): void {
 }
 
 /** Walk scopes innermost→outermost, return first match or undefined. */
-function scopeLookup(state: VMState, name: string): string | undefined {
+function scopeLookup(state: VMState, name: string): unknown {
   for (let i = state.scopes.length - 1; i >= 0; i--) {
     if (state.scopes[i].has(name)) {
-      return state.scopes[i].get(name)!;
+      return state.scopes[i].get(name);
     }
   }
   return undefined;
 }
 
 /** Write to the innermost (current) scope frame, respecting per-frame cap. */
-function scopeSet(state: VMState, name: string, value: string): void {
+function scopeSet(state: VMState, name: string, value: unknown): void {
   const current = state.scopes[state.scopes.length - 1];
   if (current.has(name) || current.size < MAX_VARIABLES_PER_SCOPE) {
     current.set(name, value);
@@ -64,7 +64,18 @@ function scopeSet(state: VMState, name: string, value: string): void {
 }
 
 /** Update the nearest scope containing `name`. Returns false if undeclared. */
-function scopeAssign(state: VMState, name: string, value: string): boolean {
+function scopeAssign(state: VMState, name: string, value: unknown): boolean {
+  const arrayAccess = parseArrayAccessExpression(name);
+  if (arrayAccess) {
+    const target = scopeLookup(state, arrayAccess.target);
+    const index = toArrayIndex(evaluateValue(state, arrayAccess.index));
+    if (Array.isArray(target) && index !== null) {
+      target[index] = value;
+      return true;
+    }
+    return false;
+  }
+
   for (let i = state.scopes.length - 1; i >= 0; i--) {
     if (state.scopes[i].has(name)) {
       state.scopes[i].set(name, value);
@@ -74,10 +85,167 @@ function scopeAssign(state: VMState, name: string, value: string): boolean {
   return false;
 }
 
-/** If `expr` matches a variable name, return its value; otherwise return expr as-is. */
-function resolveValue(state: VMState, expr: string): string {
-  const val = scopeLookup(state, expr);
-  return val !== undefined ? val : expr;
+function evaluateValue(state: VMState, expr: unknown): unknown {
+  if (typeof expr !== "string") {
+    return expr;
+  }
+
+  const trimmed = expr.trim();
+  if (trimmed.length === 0) {
+    return "";
+  }
+
+  const arrayAccess = parseArrayAccessExpression(trimmed);
+  if (arrayAccess) {
+    const target = evaluateValue(state, arrayAccess.target);
+    const index = toArrayIndex(evaluateValue(state, arrayAccess.index));
+    if (Array.isArray(target) && index !== null) {
+      return target[index];
+    }
+    return trimmed;
+  }
+
+  const scopedValue = scopeLookup(state, trimmed);
+  if (scopedValue !== undefined) {
+    return scopedValue;
+  }
+
+  const newArraySizeExpr = parseNewArraySizeExpression(trimmed);
+  if (newArraySizeExpr !== null) {
+    const size = toArrayIndex(evaluateValue(state, newArraySizeExpr));
+    if (size !== null) {
+      return Array.from({ length: size }, () => null);
+    }
+  }
+
+  const arrayLiteral = parseArrayLiteralExpression(trimmed);
+  if (arrayLiteral) {
+    return arrayLiteral.map((element) => evaluateArrayElement(state, element));
+  }
+
+  return trimmed;
+}
+
+function evaluateArrayElement(state: VMState, expr: string): unknown {
+  const trimmed = expr.trim();
+  if (
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")))
+  ) {
+    return unescapeQuotedString(trimmed.slice(1, -1));
+  }
+  return evaluateValue(state, trimmed);
+}
+
+function unescapeQuotedString(value: string): string {
+  return value
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\r/g, "\r")
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, "\\");
+}
+
+function parseArrayAccessExpression(expr: string): { target: string; index: string } | null {
+  const match = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)\[(.+)\]$/);
+  if (!match) {
+    return null;
+  }
+  return { target: match[1], index: match[2].trim() };
+}
+
+function parseNewArraySizeExpression(expr: string): string | null {
+  const match = expr.match(/^new\s+[A-Za-z_][A-Za-z0-9_.]*\[(.+)\]$/);
+  return match ? match[1].trim() : null;
+}
+
+function parseArrayLiteralExpression(expr: string): string[] | null {
+  if (
+    !((expr.startsWith("[") && expr.endsWith("]")) ||
+      (expr.startsWith("{") && expr.endsWith("}")))
+  ) {
+    return null;
+  }
+  const inner = expr.slice(1, -1).trim();
+  if (!inner) {
+    return [];
+  }
+  return splitTopLevel(inner);
+}
+
+function splitTopLevel(source: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  let quote: string | null = null;
+
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    const prev = i > 0 ? source[i - 1] : "";
+
+    if (quote) {
+      current += ch;
+      if (ch === quote && prev !== "\\") {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+
+    if (ch === "[" || ch === "{" || ch === "(") {
+      depth++;
+      current += ch;
+      continue;
+    }
+
+    if (ch === "]" || ch === "}" || ch === ")") {
+      depth = Math.max(0, depth - 1);
+      current += ch;
+      continue;
+    }
+
+    if (ch === "," && depth === 0) {
+      parts.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (current.trim().length > 0) {
+    parts.push(current.trim());
+  }
+
+  return parts;
+}
+
+function toArrayIndex(value: unknown): number | null {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0) {
+    return null;
+  }
+  return numeric;
+}
+
+function valueToString(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => valueToString(entry)).join(", ")}]`;
+  }
+  if (value === null) {
+    return "null";
+  }
+  if (value === undefined) {
+    return "undefined";
+  }
+  return String(value);
 }
 
 // ── Public API ─────────────────────────────────────────────────────────
@@ -126,6 +294,17 @@ function runStatements(stmts: AliceStatement[], state: VMState): void {
   }
 }
 
+function runScopedStatements(stmts: AliceStatement[], state: VMState): void {
+  if (stmts.length === 0) {
+    return;
+  }
+  pushScope(state);
+  state.depth++;
+  runStatements(stmts, state);
+  state.depth--;
+  popScope(state);
+}
+
 function executeOne(stmt: AliceStatement, state: VMState): void {
   if (state.returned) return;
   if (state.stepCounter >= MAX_TOTAL_STEPS) return;
@@ -143,6 +322,12 @@ function executeOne(stmt: AliceStatement, state: VMState): void {
   switch (stmt.kind) {
     case "MethodCall":
       execMethodCall(stmt, state);
+      break;
+    case "DoInOrder":
+      execDoInOrder(stmt, state);
+      break;
+    case "DoTogether":
+      execDoTogether(stmt, state);
       break;
     case "CountLoop":
       execCountLoop(stmt, state);
@@ -206,9 +391,9 @@ function dispatchMethod(
   state: VMState,
 ): void {
   // Resolve args in caller's scope before creating callee scope
-  const resolvedArgs: string[] = [];
+  const resolvedArgs: unknown[] = [];
   for (let i = 0; i < target.parameters.length && i < args.length; i++) {
-    resolvedArgs.push(resolveValue(state, args[i]));
+    resolvedArgs.push(evaluateValue(state, args[i]));
   }
 
   // Save and reset return state for callee
@@ -236,6 +421,32 @@ function dispatchMethod(
   // Restore caller return state
   state.returned = callerReturned;
   state.returnValue = callerReturnValue;
+}
+
+function execDoInOrder(stmt: AliceStatement, state: VMState): void {
+  const body = stmt.body ?? [];
+
+  state.stepCounter++;
+  state.log.push({
+    step: state.stepCounter,
+    kind: "DoInOrder",
+    detail: `run ${body.length} statements in order`,
+  });
+
+  runScopedStatements(body, state);
+}
+
+function execDoTogether(stmt: AliceStatement, state: VMState): void {
+  const body = stmt.body ?? [];
+
+  state.stepCounter++;
+  state.log.push({
+    step: state.stepCounter,
+    kind: "DoTogether",
+    detail: `run ${body.length} statements together`,
+  });
+
+  runScopedStatements(body, state);
 }
 
 function execCountLoop(stmt: AliceStatement, state: VMState): void {
@@ -290,12 +501,9 @@ function evaluateCondition(condition: string, state: VMState): boolean {
   if (condition === "true") return true;
   if (condition === "false") return false;
 
-  // Variable lookup via scoped resolution
-  const val = scopeLookup(state, condition);
-  if (val !== undefined) {
-    if (val === "true") return true;
-    if (val === "false") return false;
-  }
+  const value = evaluateValue(state, condition);
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
 
   // Unknown conditions default to true (per spec)
   return true;
@@ -304,27 +512,28 @@ function evaluateCondition(condition: string, state: VMState): boolean {
 function execReturn(stmt: AliceStatement, state: VMState): void {
   state.stepCounter++;
   const expr = stmt.expression ?? "undefined";
+  const value = evaluateValue(state, expr);
 
   state.log.push({
     step: state.stepCounter,
     kind: "ReturnStatement",
-    detail: `return ${expr}`,
+    detail: `return ${valueToString(value)}`,
   });
 
   state.returned = true;
-  state.returnValue = resolveValue(state, expr);
+  state.returnValue = value;
 }
 
 function execVariableDeclaration(stmt: AliceStatement, state: VMState): void {
   state.stepCounter++;
   const name = stmt.name ?? "unknown";
   const varType = stmt.varType ?? "Object";
-  const value = stmt.value ?? "";
+  const value = evaluateValue(state, stmt.value ?? "");
 
   state.log.push({
     step: state.stepCounter,
     kind: "VariableDeclaration",
-    detail: `${name}: ${varType} = ${value}`,
+    detail: `${name}: ${varType} = ${valueToString(value)}`,
   });
 
   scopeSet(state, name, value);
@@ -333,12 +542,12 @@ function execVariableDeclaration(stmt: AliceStatement, state: VMState): void {
 function execVariableAssignment(stmt: AliceStatement, state: VMState): void {
   state.stepCounter++;
   const name = stmt.name ?? "unknown";
-  const value = stmt.value ?? "";
+  const value = evaluateValue(state, stmt.value ?? "");
 
   state.log.push({
     step: state.stepCounter,
     kind: "VariableAssignment",
-    detail: `${name} = ${value}`,
+    detail: `${name} = ${valueToString(value)}`,
   });
 
   // Only update if variable exists in some scope; no-op if undeclared

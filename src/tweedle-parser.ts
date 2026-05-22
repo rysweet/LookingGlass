@@ -84,7 +84,8 @@ export type Statement =
   | { type: "ExpressionStatement"; expression: Expression }
   | { type: "LocalVariableDeclaration"; name: string; varType: TypeRef; initializer: Expression; isConstant: boolean }
   | { type: "Block"; body: Statement[] }
-  | { type: "DisabledBlock"; raw: string };
+  | { type: "DisabledBlock"; raw: string }
+  | { type: "Comment"; text: string };
 
 export type Expression =
   | { type: "Literal"; value: number | string | boolean | null; literalType: "number" | "string" | "boolean" | "null" }

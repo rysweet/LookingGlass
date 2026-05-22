@@ -422,6 +422,14 @@ export class DisabledBlockStatement extends AbstractStatement {
   }
 }
 
+export class CommentStatement extends AbstractStatement {
+  readonly type = "Comment" as const;
+
+  constructor(public text: string) {
+    super();
+  }
+}
+
 abstract class AbstractLiteral<TValue> extends AbstractExpression {
   readonly type = "Literal" as const;
 
@@ -713,7 +721,8 @@ export type Statement =
   | ExpressionStatement
   | LocalVariableDeclarationStatement
   | BlockStatement
-  | DisabledBlockStatement;
+  | DisabledBlockStatement
+  | CommentStatement;
 
 export type Expression =
   | IntegerLiteral
@@ -755,7 +764,8 @@ export type RawStatement =
   | { type: "ExpressionStatement"; expression: RawExpression }
   | { type: "LocalVariableDeclaration"; name: string; varType: TypeRef; initializer: RawExpression; isConstant: boolean }
   | { type: "Block"; body: RawStatement[] }
-  | { type: "DisabledBlock"; raw: string };
+  | { type: "DisabledBlock"; raw: string }
+  | { type: "Comment"; text: string };
 
 export type RawExpression =
   | { type: "Literal"; value: number | string | boolean | null; literalType: "number" | "string" | "boolean" | "null" }
@@ -975,6 +985,8 @@ export function hydrateStatement(statement: RawStatement): Statement {
       return new BlockStatement(statement.body.map(hydrateStatement));
     case "DisabledBlock":
       return new DisabledBlockStatement(statement.raw);
+    case "Comment":
+      return new CommentStatement(statement.text);
   }
   throw new Error(`Unsupported statement node: ${JSON.stringify(statement)}`);
 }
