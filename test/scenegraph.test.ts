@@ -5,6 +5,8 @@ import { buildScene } from "../src/scene-builder.js";
 import {
   AffineMatrix4x4,
   AmbientLight,
+  Angle,
+  AxisRotation,
   Background,
   Box,
   BoxGeometry,
@@ -15,8 +17,10 @@ import {
   IndexedTriangleArray,
   Mesh,
   Model,
+  OrthogonalMatrix3x3,
   OrthographicCamera,
   PlaneGeometry,
+  Point3,
   Scene,
   SingleAppearance,
   Sphere,
@@ -27,6 +31,7 @@ import {
   TexturedAppearance,
   Torus,
   Transformable,
+  Vector3,
   Visual,
   createModel,
 } from "../src/scenegraph.js";
@@ -37,6 +42,25 @@ function decomposeTranslation(matrix: THREE.Matrix4): THREE.Vector3 {
   const scale = new THREE.Vector3();
   matrix.decompose(position, quaternion, scale);
   return position;
+}
+
+function expectTupleClose(
+  actual: { x: number; y: number; z: number },
+  expected: readonly [number, number, number],
+  epsilon = 1e-10,
+): void {
+  expect(Math.abs(actual.x - expected[0])).toBeLessThanOrEqual(epsilon);
+  expect(Math.abs(actual.y - expected[1])).toBeLessThanOrEqual(epsilon);
+  expect(Math.abs(actual.z - expected[2])).toBeLessThanOrEqual(epsilon);
+}
+
+function expectMatrixClose(actual: AffineMatrix4x4, expected: AffineMatrix4x4, epsilon = 1e-10): void {
+  const actualValues = actual.toArray();
+  const expectedValues = expected.toArray();
+  expect(actualValues).toHaveLength(expectedValues.length);
+  for (let index = 0; index < actualValues.length; index += 1) {
+    expect(Math.abs(actualValues[index] - expectedValues[index])).toBeLessThanOrEqual(epsilon);
+  }
 }
 
 function makeObject(
@@ -87,6 +111,21 @@ describe("scenegraph hierarchy", () => {
     expect(translation.toArray()).toEqual([5, 2, 1]);
   });
 
+  it("walks the parent chain for world transforms", () => {
+    const root = new Transformable("root").setTranslation(1, 2, 3);
+    const pivot = new Transformable("pivot").applyRotation(
+      AxisRotation.createYAxisRotation(Math.PI / 2),
+    );
+    const child = new Transformable("child").setTranslation(2, 0, 0);
+    root.add(pivot);
+    pivot.add(child);
+
+    const world = child.getWorldTransform();
+
+    expectTupleClose(world.translation, [1, 2, 1]);
+    expectMatrixClose(world, child.absoluteAffineMatrix);
+  });
+
   it("prevents cycles when reparenting components", () => {
     const root = new Transformable("root");
     const child = new Transformable("child");
@@ -99,6 +138,36 @@ describe("scenegraph hierarchy", () => {
 });
 
 describe("scenegraph matrices and geometry", () => {
+  it("implements faithful angle point vector and rotation math", () => {
+    const start = new Point3(1, 2, 3);
+    const end = new Point3(4, 6, 3);
+    const delta = end.minus(start) as Vector3;
+    const normalized = new Vector3(3, 4, 0).normalize();
+    const axisRotation = AxisRotation.createYAxisRotation(Math.PI / 2).asMatrix3x3();
+    const eulerRotation = OrthogonalMatrix3x3.fromEulerAngles(0, Math.PI / 2, 0);
+
+    expect(delta.toArray()).toEqual([3, 4, 0]);
+    expect(start.plus(delta).toArray()).toEqual(end.toArray());
+    expect(new Vector3(1, 0, 0).dot(new Vector3(0, 1, 0))).toBe(0);
+    expect(new Vector3(1, 0, 0).cross(new Vector3(0, 1, 0)).toArray()).toEqual([0, 0, 1]);
+    expectTupleClose(normalized, [0.6, 0.8, 0]);
+    expect(start.distanceFrom(end)).toBeCloseTo(5);
+    expect(Angle.fromDegrees(450).wrappedPositive().getAsDegrees()).toBeCloseTo(90);
+    expect(Angle.fromDegrees(-450).wrapped().getAsDegrees()).toBeCloseTo(-90);
+    expectTupleClose(axisRotation.transformVector(new Vector3(1, 0, 0)), [0, 0, -1]);
+    expectTupleClose(eulerRotation.transformVector(new Vector3(1, 0, 0)), [0, 0, -1]);
+  });
+
+  it("keeps affine multiplication associative", () => {
+    const A = AffineMatrix4x4.fromTranslation(1, 0, 0);
+    const B = AffineMatrix4x4.fromRotationY(Math.PI / 4);
+    const C = AffineMatrix4x4.fromScale(2);
+    const ab_c = A.multiply(B).multiply(C);
+    const a_bc = A.multiply(B.multiply(C));
+
+    expectMatrixClose(ab_c, a_bc, 1e-10);
+  });
+
   it("supports affine multiplication inversion and quaternion rotation", () => {
     const translation = AffineMatrix4x4.createTranslation(1, 2, 3);
     const rotation = AffineMatrix4x4.createOrientation({
@@ -116,6 +185,16 @@ describe("scenegraph matrices and geometry", () => {
     expect(restored.y).toBeCloseTo(0);
     expect(restored.z).toBeCloseTo(0);
     expect(combined.columnTranslation().toArray()).toEqual([1, 2, 3, 1]);
+  });
+
+  it("updates transformable local transforms directly", () => {
+    const node = new Transformable("node");
+
+    node.setTranslation(1, 2, 3);
+    node.applyRotation(AxisRotation.createZAxisRotation(Math.PI / 2));
+
+    expectTupleClose(node.localTransform.translation, [1, 2, 3]);
+    expectTupleClose(node.localTransform.transformVector(new Vector3(1, 0, 0)), [0, 1, 0]);
   });
 
   it("computes bounds and three geometries for shapes", () => {

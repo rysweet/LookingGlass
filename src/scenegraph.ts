@@ -67,133 +67,751 @@ function toQuaternion(value: QuaternionLike): THREE.Quaternion {
   return new THREE.Quaternion(value.x, value.y, value.z, value.w).normalize();
 }
 
-export class AffineMatrix4x4 {
-  static readonly IDENTITY = new AffineMatrix4x4();
+const REASONABLE_EPSILON = 1e-9;
 
-  private readonly matrix: THREE.Matrix4;
+function wrapPositive(value: number, period: number): number {
+  const wrapped = value % period;
+  return wrapped < 0 ? wrapped + period : wrapped;
+}
 
-  constructor(matrix?: THREE.Matrix4 | readonly number[]) {
-    if (matrix instanceof THREE.Matrix4) {
-      this.matrix = matrix.clone();
-    } else if (matrix) {
-      this.matrix = new THREE.Matrix4().fromArray([...matrix]);
-    } else {
-      this.matrix = new THREE.Matrix4().identity();
+function wrapSigned(value: number, period: number): number {
+  return wrapPositive(value + period * 0.5, period) - period * 0.5;
+}
+
+function toAngle(value: Angle | number): Angle {
+  return value instanceof Angle ? value : Angle.fromRadians(value);
+}
+
+function toMathVector3(value: Vector3Like): Vector3 {
+  return value instanceof Vector3 ? value : new Vector3(value.x, value.y, value.z);
+}
+
+function normalizeAxis(value: Vector3Like): Vector3 {
+  const axis = Vector3.createNormalized(value.x, value.y, value.z);
+  return axis.isNaN() ? Vector3.POSITIVE_X_AXIS : axis;
+}
+
+export class Angle {
+  static readonly NaN = new Angle(Number.NaN);
+  static readonly ZERO = new Angle(0);
+  static readonly PI = new Angle(Math.PI);
+  static readonly TAU = new Angle(Math.PI * 2);
+
+  constructor(public readonly radians: number) {}
+
+  static fromRadians(radians: number): Angle {
+    return new Angle(radians);
+  }
+
+  static fromDegrees(degrees: number): Angle {
+    return new Angle((degrees * Math.PI) / 180);
+  }
+
+  isNaN(): boolean {
+    return Number.isNaN(this.radians);
+  }
+
+  isZero(): boolean {
+    return this.radians === 0;
+  }
+
+  isCloseTo(other: Angle, epsilon = REASONABLE_EPSILON): boolean {
+    return this === other || (this.isNaN() && other.isNaN()) || Math.abs(this.radians - other.radians) <= epsilon;
+  }
+
+  getAsRadians(): number {
+    return this.radians;
+  }
+
+  getAsDegrees(): number {
+    return (this.radians * 180) / Math.PI;
+  }
+
+  wrapped(): Angle {
+    return new Angle(wrapSigned(this.radians, Angle.TAU.radians));
+  }
+
+  wrappedPositive(): Angle {
+    return new Angle(wrapPositive(this.radians, Angle.TAU.radians));
+  }
+
+  negated(): Angle {
+    return new Angle(-this.radians);
+  }
+
+  minus(other: Angle): Angle {
+    return other.isZero() ? this : new Angle(this.radians - other.radians);
+  }
+
+  times(factor: number): Angle {
+    return new Angle(this.radians * factor);
+  }
+
+  interpolateToward(other: Angle, portion: number): Angle {
+    return new Angle(this.radians + ((other.radians - this.radians) * portion));
+  }
+}
+
+export class Vector3 implements Vector3Like {
+  static readonly ZERO = new Vector3(0, 0, 0);
+  static readonly NaN = new Vector3(Number.NaN, Number.NaN, Number.NaN);
+  static readonly POSITIVE_X_AXIS = new Vector3(1, 0, 0);
+  static readonly POSITIVE_Y_AXIS = new Vector3(0, 1, 0);
+  static readonly POSITIVE_Z_AXIS = new Vector3(0, 0, 1);
+  static readonly NEGATIVE_X_AXIS = new Vector3(-1, 0, 0);
+  static readonly NEGATIVE_Y_AXIS = new Vector3(0, -1, 0);
+  static readonly NEGATIVE_Z_AXIS = new Vector3(0, 0, -1);
+
+  constructor(
+    public readonly x: number,
+    public readonly y: number,
+    public readonly z: number,
+  ) {}
+
+  static from(value: Vector3Like): Vector3 {
+    return value instanceof Vector3 ? value : new Vector3(value.x, value.y, value.z);
+  }
+
+  static magnitudeSquared(x: number, y: number, z: number): number {
+    return (x * x) + (y * y) + (z * z);
+  }
+
+  static magnitude(x: number, y: number, z: number): number {
+    const magnitudeSquared = Vector3.magnitudeSquared(x, y, z);
+    return magnitudeSquared === 1 ? 1 : Math.sqrt(magnitudeSquared);
+  }
+
+  static createNormalized(x: number, y: number, z: number): Vector3 {
+    const magnitudeSquared = Vector3.magnitudeSquared(x, y, z);
+    if (magnitudeSquared === 0 || !Number.isFinite(magnitudeSquared)) {
+      return Vector3.NaN;
     }
+    if (magnitudeSquared === 1) {
+      return new Vector3(x, y, z);
+    }
+    const magnitude = Math.sqrt(magnitudeSquared);
+    return new Vector3(x / magnitude, y / magnitude, z / magnitude);
   }
 
-  static createTranslation(x: number, y: number, z: number): AffineMatrix4x4 {
-    return new AffineMatrix4x4(new THREE.Matrix4().makeTranslation(x, y, z));
+  isNaN(): boolean {
+    return Number.isNaN(this.x) || Number.isNaN(this.y) || Number.isNaN(this.z);
   }
 
-  static createOrientation(quaternion: QuaternionLike): AffineMatrix4x4 {
-    return new AffineMatrix4x4(new THREE.Matrix4().makeRotationFromQuaternion(toQuaternion(quaternion)));
+  plus(other: Vector3Like): Vector3 {
+    const value = Vector3.from(other);
+    return new Vector3(this.x + value.x, this.y + value.y, this.z + value.z);
   }
 
-  static createWithDiagonal(diagonal: Vector3Like): AffineMatrix4x4 {
-    return new AffineMatrix4x4(new THREE.Matrix4().makeScale(diagonal.x, diagonal.y, diagonal.z));
+  minus(other: Vector3Like): Vector3 {
+    const value = Vector3.from(other);
+    return new Vector3(this.x - value.x, this.y - value.y, this.z - value.z);
   }
 
-  static compose(
-    translation: Vector3Like,
-    quaternion: QuaternionLike,
-    scale: Vector3Like = { x: 1, y: 1, z: 1 },
-  ): AffineMatrix4x4 {
-    return new AffineMatrix4x4(
-      new THREE.Matrix4().compose(
-        toVector3(translation),
-        toQuaternion(quaternion),
-        toVector3(scale),
-      ),
+  times(factor: number): Vector3 {
+    return new Vector3(this.x * factor, this.y * factor, this.z * factor);
+  }
+
+  dividedBy(divisor: number): Vector3 {
+    return new Vector3(this.x / divisor, this.y / divisor, this.z / divisor);
+  }
+
+  negate(): Vector3 {
+    return new Vector3(-this.x, -this.y, -this.z);
+  }
+
+  dotProduct(other: Vector3Like): number {
+    const value = Vector3.from(other);
+    return (this.x * value.x) + (this.y * value.y) + (this.z * value.z);
+  }
+
+  dot(other: Vector3Like): number {
+    return this.dotProduct(other);
+  }
+
+  crossProduct(other: Vector3Like): Vector3 {
+    const value = Vector3.from(other);
+    return new Vector3(
+      (this.y * value.z) - (this.z * value.y),
+      (value.x * this.z) - (value.z * this.x),
+      (this.x * value.y) - (this.y * value.x),
     );
   }
 
-  static fromThreeMatrix(matrix: THREE.Matrix4): AffineMatrix4x4 {
-    return new AffineMatrix4x4(matrix);
+  cross(other: Vector3Like): Vector3 {
+    return this.crossProduct(other);
   }
 
-  static fromColumnMajorArray12(values: readonly number[]): AffineMatrix4x4 {
-    if (values.length != 12) {
-      throw new TypeError(`expected 12 values, received ${values.length}`);
-    }
-    return new AffineMatrix4x4([
-      values[0], values[1], values[2], 0,
-      values[3], values[4], values[5], 0,
-      values[6], values[7], values[8], 0,
-      values[9], values[10], values[11], 1,
-    ]);
+  magnitudeSquared(): number {
+    return Vector3.magnitudeSquared(this.x, this.y, this.z);
   }
 
-  clone(): AffineMatrix4x4 {
-    return new AffineMatrix4x4(this.matrix);
+  magnitude(): number {
+    return Vector3.magnitude(this.x, this.y, this.z);
   }
 
-  isAffine(): boolean {
-    const elements = this.matrix.elements;
+  normalized(): Vector3 {
+    return Vector3.createNormalized(this.x, this.y, this.z);
+  }
+
+  normalize(): Vector3 {
+    return this.normalized();
+  }
+
+  distanceTo(other: Vector3Like): number {
+    return this.minus(other).magnitude();
+  }
+
+  isWithinEpsilonOf(other: Vector3Like, epsilon = REASONABLE_EPSILON): boolean {
+    const value = Vector3.from(other);
     return (
-      Math.abs(elements[3]) < 1e-9 &&
-      Math.abs(elements[7]) < 1e-9 &&
-      Math.abs(elements[11]) < 1e-9 &&
-      Math.abs(elements[15] - 1) < 1e-9
+      Math.abs(this.x - value.x) <= epsilon &&
+      Math.abs(this.y - value.y) <= epsilon &&
+      Math.abs(this.z - value.z) <= epsilon
+    );
+  }
+
+  asPoint(): Point3 {
+    return new Point3(this.x, this.y, this.z);
+  }
+
+  asScaleMatrix(): OrthogonalMatrix3x3 {
+    return new OrthogonalMatrix3x3(
+      new Vector3(this.x, 0, 0),
+      new Vector3(0, this.y, 0),
+      new Vector3(0, 0, this.z),
+    );
+  }
+
+  projectedOnto(target: Vector3Like): Vector3 {
+    const unitTarget = Vector3.from(target).normalized();
+    return unitTarget.times(this.dotProduct(unitTarget));
+  }
+
+  toThreeVector3(): THREE.Vector3 {
+    return new THREE.Vector3(this.x, this.y, this.z);
+  }
+
+  toArray(): [number, number, number] {
+    return [this.x, this.y, this.z];
+  }
+}
+
+export class Point3 implements Vector3Like {
+  static readonly ORIGIN = new Point3(0, 0, 0);
+  static readonly NaN = new Point3(Number.NaN, Number.NaN, Number.NaN);
+
+  constructor(
+    public readonly x: number,
+    public readonly y: number,
+    public readonly z: number,
+  ) {}
+
+  static from(value: Vector3Like): Point3 {
+    return value instanceof Point3 ? value : new Point3(value.x, value.y, value.z);
+  }
+
+  isNaN(): boolean {
+    return Number.isNaN(this.x) || Number.isNaN(this.y) || Number.isNaN(this.z);
+  }
+
+  plus(vector: Vector3Like): Point3 {
+    const value = Vector3.from(vector);
+    return new Point3(this.x + value.x, this.y + value.y, this.z + value.z);
+  }
+
+  minus(value: Point3): Vector3;
+  minus(value: Vector3Like): Point3;
+  minus(value: Point3 | Vector3Like): Point3 | Vector3 {
+    if (value instanceof Point3) {
+      return new Vector3(this.x - value.x, this.y - value.y, this.z - value.z);
+    }
+    const vector = Vector3.from(value);
+    return new Point3(this.x - vector.x, this.y - vector.y, this.z - vector.z);
+  }
+
+  times(factor: number): Point3 {
+    return new Point3(this.x * factor, this.y * factor, this.z * factor);
+  }
+
+  distanceSquaredFrom(other: Point3): number {
+    const delta = other.minus(this) as Vector3;
+    return delta.magnitudeSquared();
+  }
+
+  distanceFrom(other: Point3): number {
+    return Math.sqrt(this.distanceSquaredFrom(other));
+  }
+
+  isWithinEpsilonOf(other: Vector3Like, epsilon = REASONABLE_EPSILON): boolean {
+    return this.asVector().isWithinEpsilonOf(other, epsilon);
+  }
+
+  asVector(): Vector3 {
+    return new Vector3(this.x, this.y, this.z);
+  }
+
+  toThreeVector3(): THREE.Vector3 {
+    return new THREE.Vector3(this.x, this.y, this.z);
+  }
+
+  toArray(): [number, number, number] {
+    return [this.x, this.y, this.z];
+  }
+}
+
+export class OrthogonalMatrix3x3 {
+  static readonly IDENTITY = new OrthogonalMatrix3x3(
+    Vector3.POSITIVE_X_AXIS,
+    Vector3.POSITIVE_Y_AXIS,
+    Vector3.POSITIVE_Z_AXIS,
+  );
+
+  static readonly NaN = new OrthogonalMatrix3x3(Vector3.NaN, Vector3.NaN, Vector3.NaN);
+
+  constructor(
+    public readonly right: Vector3 = Vector3.POSITIVE_X_AXIS,
+    public readonly up: Vector3 = Vector3.POSITIVE_Y_AXIS,
+    public readonly backward: Vector3 = Vector3.POSITIVE_Z_AXIS,
+  ) {}
+
+  static fromQuaternion(value: QuaternionLike): OrthogonalMatrix3x3 {
+    const quaternion = toQuaternion(value);
+    const { x, y, z, w } = quaternion;
+    return new OrthogonalMatrix3x3(
+      new Vector3(1 - (2 * ((y * y) + (z * z))), 2 * ((x * y) + (z * w)), 2 * ((x * z) - (y * w))),
+      new Vector3(2 * ((x * y) - (z * w)), 1 - (2 * ((x * x) + (z * z))), 2 * ((y * z) + (x * w))),
+      new Vector3(2 * ((x * z) + (y * w)), 2 * ((y * z) - (x * w)), 1 - (2 * ((x * x) + (y * y)))),
+    );
+  }
+
+  static fromAxisAngle(axis: Vector3Like, angle: Angle | number): OrthogonalMatrix3x3 {
+    return new AxisRotation(normalizeAxis(axis), toAngle(angle)).asMatrix3x3();
+  }
+
+  static fromEulerAngles(pitch: Angle | number, yaw: Angle | number, roll: Angle | number): OrthogonalMatrix3x3 {
+    const theta = toAngle(yaw).getAsRadians();
+    const phi = toAngle(pitch).getAsRadians();
+    const psi = toAngle(roll).getAsRadians();
+    const cosTheta = Math.cos(theta);
+    const sinTheta = Math.sin(theta);
+    const cosPhi = Math.cos(phi);
+    const sinPhi = Math.sin(phi);
+    const cosPsi = Math.cos(psi);
+    const sinPsi = Math.sin(psi);
+    const right = new Vector3(cosPsi * cosTheta, sinPsi * cosTheta, -sinTheta);
+    const up = new Vector3(
+      (cosPsi * sinTheta * sinPhi) - (sinPsi * cosPhi),
+      (sinPsi * sinTheta * sinPhi) + (cosPsi * cosPhi),
+      cosTheta * sinPhi,
+    );
+    const backward = new Vector3(
+      (cosPsi * sinTheta * cosPhi) + (sinPsi * sinPhi),
+      (sinPsi * sinTheta * cosPhi) - (cosPsi * sinPhi),
+      cosTheta * cosPhi,
+    );
+    return new OrthogonalMatrix3x3(right, up, backward);
+  }
+
+  static fromRowMajorElements(
+    e11: number, e12: number, e13: number,
+    e21: number, e22: number, e23: number,
+    e31: number, e32: number, e33: number,
+  ): OrthogonalMatrix3x3 {
+    return new OrthogonalMatrix3x3(
+      new Vector3(e11, e21, e31),
+      new Vector3(e12, e22, e32),
+      new Vector3(e13, e23, e33),
     );
   }
 
   isNaN(): boolean {
-    return this.matrix.elements.some((value) => Number.isNaN(value));
+    return this.right.isNaN() || this.up.isNaN() || this.backward.isNaN();
   }
 
-  isIdentity(epsilon = 1e-9): boolean {
+  isIdentity(epsilon = REASONABLE_EPSILON): boolean {
+    return this.isWithinEpsilonOf(OrthogonalMatrix3x3.IDENTITY, epsilon);
+  }
+
+  isWithinEpsilonOf(other: OrthogonalMatrix3x3, epsilon = REASONABLE_EPSILON): boolean {
+    return (
+      this.right.isWithinEpsilonOf(other.right, epsilon) &&
+      this.up.isWithinEpsilonOf(other.up, epsilon) &&
+      this.backward.isWithinEpsilonOf(other.backward, epsilon)
+    );
+  }
+
+  plus(other: OrthogonalMatrix3x3): OrthogonalMatrix3x3 {
+    return new OrthogonalMatrix3x3(
+      this.right.plus(other.right),
+      this.up.plus(other.up),
+      this.backward.plus(other.backward),
+    );
+  }
+
+  times(other: number): OrthogonalMatrix3x3;
+  times(other: OrthogonalMatrix3x3): OrthogonalMatrix3x3;
+  times(other: number | OrthogonalMatrix3x3): OrthogonalMatrix3x3 {
+    if (typeof other === "number") {
+      return new OrthogonalMatrix3x3(
+        this.right.times(other),
+        this.up.times(other),
+        this.backward.times(other),
+      );
+    }
+    return new OrthogonalMatrix3x3(
+      this.transformVector(other.right),
+      this.transformVector(other.up),
+      this.transformVector(other.backward),
+    );
+  }
+
+  multiply(other: OrthogonalMatrix3x3): OrthogonalMatrix3x3 {
+    return this.times(other);
+  }
+
+  transformVector(vector: Vector3Like): Vector3 {
+    const source = toMathVector3(vector);
+    return new Vector3(
+      (this.e11() * source.x) + (this.e12() * source.y) + (this.e13() * source.z),
+      (this.e21() * source.x) + (this.e22() * source.y) + (this.e23() * source.z),
+      (this.e31() * source.x) + (this.e32() * source.y) + (this.e33() * source.z),
+    );
+  }
+
+  determinant(): number {
+    return (
+      (this.e11() * ((this.e22() * this.e33()) - (this.e23() * this.e32()))) -
+      (this.e12() * ((this.e21() * this.e33()) - (this.e23() * this.e31()))) +
+      (this.e13() * ((this.e21() * this.e32()) - (this.e22() * this.e31())))
+    );
+  }
+
+  inverse(): OrthogonalMatrix3x3 {
+    const a = this.e11();
+    const b = this.e12();
+    const c = this.e13();
+    const d = this.e21();
+    const e = this.e22();
+    const f = this.e23();
+    const g = this.e31();
+    const h = this.e32();
+    const i = this.e33();
+    const determinant = this.determinant();
+    if (Math.abs(determinant) <= REASONABLE_EPSILON) {
+      throw new Error("Matrix is not invertible");
+    }
+    return OrthogonalMatrix3x3.fromRowMajorElements(
+      ((e * i) - (f * h)) / determinant,
+      ((c * h) - (b * i)) / determinant,
+      ((b * f) - (c * e)) / determinant,
+      ((f * g) - (d * i)) / determinant,
+      ((a * i) - (c * g)) / determinant,
+      ((c * d) - (a * f)) / determinant,
+      ((d * h) - (e * g)) / determinant,
+      ((b * g) - (a * h)) / determinant,
+      ((a * e) - (b * d)) / determinant,
+    );
+  }
+
+  normalized(): OrthogonalMatrix3x3 {
+    return new OrthogonalMatrix3x3(
+      this.right.normalized(),
+      this.up.normalized(),
+      this.backward.normalized(),
+    );
+  }
+
+  unitAxes(): OrthogonalMatrix3x3 {
+    const xScale = this.right.magnitude();
+    const yScale = this.up.magnitude();
+    const zScale = this.backward.magnitude();
+    return new OrthogonalMatrix3x3(
+      xScale === 0 ? Vector3.POSITIVE_X_AXIS : this.right.dividedBy(xScale),
+      yScale === 0 ? Vector3.POSITIVE_Y_AXIS : this.up.dividedBy(yScale),
+      zScale === 0 ? Vector3.POSITIVE_Z_AXIS : this.backward.dividedBy(zScale),
+    );
+  }
+
+  withScale(scale: number | Vector3Like): OrthogonalMatrix3x3 {
+    const factor = typeof scale === "number"
+      ? new Vector3(scale, scale, scale)
+      : Vector3.from(scale);
+    const basis = this.unitAxes();
+    return new OrthogonalMatrix3x3(
+      basis.right.times(factor.x),
+      basis.up.times(factor.y),
+      basis.backward.times(factor.z),
+    );
+  }
+
+  scaleFactors(): Vector3 {
+    return new Vector3(
+      this.right.magnitude(),
+      this.up.magnitude(),
+      this.backward.magnitude(),
+    );
+  }
+
+  toQuaternion(): THREE.Quaternion {
+    const basis = this.unitAxes();
+    return new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().fromArray([
+        basis.e11(), basis.e21(), basis.e31(), 0,
+        basis.e12(), basis.e22(), basis.e32(), 0,
+        basis.e13(), basis.e23(), basis.e33(), 0,
+        0, 0, 0, 1,
+      ]),
+    ).normalize();
+  }
+
+  e11(): number { return this.right.x; }
+  e21(): number { return this.right.y; }
+  e31(): number { return this.right.z; }
+  e12(): number { return this.up.x; }
+  e22(): number { return this.up.y; }
+  e32(): number { return this.up.z; }
+  e13(): number { return this.backward.x; }
+  e23(): number { return this.backward.y; }
+  e33(): number { return this.backward.z; }
+}
+
+export class AxisRotation {
+  static readonly NaN = new AxisRotation(Vector3.NaN, Angle.NaN);
+  static readonly IDENTITY = new AxisRotation(Vector3.POSITIVE_X_AXIS, Angle.ZERO);
+
+  constructor(
+    public readonly axis: Vector3 = Vector3.POSITIVE_X_AXIS,
+    public readonly angle: Angle = Angle.ZERO,
+  ) {}
+
+  static createXAxisRotation(angle: Angle | number): AxisRotation {
+    return new AxisRotation(Vector3.POSITIVE_X_AXIS, toAngle(angle));
+  }
+
+  static createYAxisRotation(angle: Angle | number): AxisRotation {
+    return new AxisRotation(Vector3.POSITIVE_Y_AXIS, toAngle(angle));
+  }
+
+  static createZAxisRotation(angle: Angle | number): AxisRotation {
+    return new AxisRotation(Vector3.POSITIVE_Z_AXIS, toAngle(angle));
+  }
+
+  isNaN(): boolean {
+    return this.axis.isNaN() || this.angle.isNaN();
+  }
+
+  isIdentity(): boolean {
+    return this.angle.isZero();
+  }
+
+  asMatrix3x3(): OrthogonalMatrix3x3 {
+    if (this.isNaN()) {
+      return OrthogonalMatrix3x3.NaN;
+    }
+    const axis = normalizeAxis(this.axis);
+    const theta = this.angle.getAsRadians();
+    const c = Math.cos(theta);
+    const s = Math.sin(theta);
+    const t = 1 - c;
+    const xyt = axis.x * axis.y * t;
+    const zs = axis.z * s;
+    const xzt = axis.x * axis.z * t;
+    const ys = axis.y * s;
+    const yzt = axis.y * axis.z * t;
+    const xs = axis.x * s;
+    const right = new Vector3(c + (axis.x * axis.x * t), xyt + zs, xzt - ys);
+    const up = new Vector3(xyt - zs, c + (axis.y * axis.y * t), yzt + xs);
+    const backward = new Vector3(xzt + ys, yzt - xs, c + (axis.z * axis.z * t));
+    return new OrthogonalMatrix3x3(right, up, backward);
+  }
+}
+
+export class AffineMatrix4x4 {
+  static readonly IDENTITY = new AffineMatrix4x4();
+
+  constructor(
+    public readonly orientation: OrthogonalMatrix3x3 = OrthogonalMatrix3x3.IDENTITY,
+    public readonly translation: Point3 = Point3.ORIGIN,
+  ) {}
+
+  static fromTranslation(x: number, y: number, z: number): AffineMatrix4x4 {
+    return new AffineMatrix4x4(OrthogonalMatrix3x3.IDENTITY, new Point3(x, y, z));
+  }
+
+  static createTranslation(x: number, y: number, z: number): AffineMatrix4x4 {
+    return AffineMatrix4x4.fromTranslation(x, y, z);
+  }
+
+  static createOrientation(orientation: QuaternionLike | AxisRotation | OrthogonalMatrix3x3): AffineMatrix4x4 {
+    const matrix = orientation instanceof OrthogonalMatrix3x3
+      ? orientation
+      : orientation instanceof AxisRotation
+        ? orientation.asMatrix3x3()
+        : OrthogonalMatrix3x3.fromQuaternion(orientation);
+    return new AffineMatrix4x4(matrix, Point3.ORIGIN);
+  }
+
+  static fromScale(scale: number | Vector3Like): AffineMatrix4x4 {
+    const diagonal = typeof scale === "number"
+      ? new Vector3(scale, scale, scale)
+      : Vector3.from(scale);
+    return new AffineMatrix4x4(diagonal.asScaleMatrix(), Point3.ORIGIN);
+  }
+
+  static createWithDiagonal(diagonal: Vector3Like): AffineMatrix4x4 {
+    return new AffineMatrix4x4(Vector3.from(diagonal).asScaleMatrix(), Point3.ORIGIN);
+  }
+
+  static fromAxisAngle(axis: Vector3Like, angle: Angle | number): AffineMatrix4x4 {
+    return AffineMatrix4x4.createOrientation(OrthogonalMatrix3x3.fromAxisAngle(axis, angle));
+  }
+
+  static fromEulerAngles(pitch: Angle | number, yaw: Angle | number, roll: Angle | number): AffineMatrix4x4 {
+    return AffineMatrix4x4.createOrientation(OrthogonalMatrix3x3.fromEulerAngles(pitch, yaw, roll));
+  }
+
+  static fromRotationX(radians: number): AffineMatrix4x4 {
+    return AffineMatrix4x4.createOrientation(AxisRotation.createXAxisRotation(radians));
+  }
+
+  static fromRotationY(radians: number): AffineMatrix4x4 {
+    return AffineMatrix4x4.createOrientation(AxisRotation.createYAxisRotation(radians));
+  }
+
+  static fromRotationZ(radians: number): AffineMatrix4x4 {
+    return AffineMatrix4x4.createOrientation(AxisRotation.createZAxisRotation(radians));
+  }
+
+  static compose(
+    translation: Vector3Like,
+    rotation: QuaternionLike | AxisRotation | OrthogonalMatrix3x3,
+    scale: number | Vector3Like = 1,
+  ): AffineMatrix4x4 {
+    const factor = typeof scale === "number"
+      ? new Vector3(scale, scale, scale)
+      : Vector3.from(scale);
+    const orientation = rotation instanceof OrthogonalMatrix3x3
+      ? rotation.withScale(factor)
+      : rotation instanceof AxisRotation
+        ? rotation.asMatrix3x3().withScale(factor)
+        : OrthogonalMatrix3x3.fromQuaternion(rotation).withScale(factor);
+    return new AffineMatrix4x4(orientation, Point3.from(translation));
+  }
+
+  static fromThreeMatrix(matrix: THREE.Matrix4): AffineMatrix4x4 {
+    const elements = matrix.elements;
+    return new AffineMatrix4x4(
+      new OrthogonalMatrix3x3(
+        new Vector3(elements[0], elements[1], elements[2]),
+        new Vector3(elements[4], elements[5], elements[6]),
+        new Vector3(elements[8], elements[9], elements[10]),
+      ),
+      new Point3(elements[12], elements[13], elements[14]),
+    );
+  }
+
+  static fromColumnMajorArray12(values: readonly number[]): AffineMatrix4x4 {
+    if (values.length !== 12) {
+      throw new TypeError(`expected 12 values, received ${values.length}`);
+    }
+    return new AffineMatrix4x4(
+      new OrthogonalMatrix3x3(
+        new Vector3(values[0], values[1], values[2]),
+        new Vector3(values[3], values[4], values[5]),
+        new Vector3(values[6], values[7], values[8]),
+      ),
+      new Point3(values[9], values[10], values[11]),
+    );
+  }
+
+  clone(): AffineMatrix4x4 {
+    return new AffineMatrix4x4(this.orientation, this.translation);
+  }
+
+  isAffine(): boolean {
+    return true;
+  }
+
+  isNaN(): boolean {
+    return this.orientation.isNaN() || this.translation.isNaN();
+  }
+
+  isIdentity(epsilon = REASONABLE_EPSILON): boolean {
     return this.isWithinEpsilonOf(AffineMatrix4x4.IDENTITY, epsilon);
   }
 
-  isWithinEpsilonOf(other: AffineMatrix4x4, epsilon = 1e-9): boolean {
-    return this.matrix.elements.every(
-      (value, index) => Math.abs(value - other.matrix.elements[index]) <= epsilon,
+  isWithinEpsilonOf(other: AffineMatrix4x4, epsilon = REASONABLE_EPSILON): boolean {
+    return (
+      this.orientation.isWithinEpsilonOf(other.orientation, epsilon) &&
+      this.translation.isWithinEpsilonOf(other.translation, epsilon)
     );
   }
 
   invert(): AffineMatrix4x4 {
-    return new AffineMatrix4x4(this.matrix.clone().invert());
+    const inverseOrientation = this.orientation.inverse();
+    const inverseTranslation = inverseOrientation.transformVector(this.translation.asVector()).negate().asPoint();
+    return new AffineMatrix4x4(inverseOrientation, inverseTranslation);
   }
 
   times(other: AffineMatrix4x4): AffineMatrix4x4 {
-    return new AffineMatrix4x4(this.matrix.clone().multiply(other.matrix));
+    return new AffineMatrix4x4(
+      this.orientation.times(other.orientation),
+      this.transformPoint(other.translation),
+    );
+  }
+
+  multiply(other: AffineMatrix4x4): AffineMatrix4x4 {
+    return this.times(other);
   }
 
   plusPreservingAffine(other: AffineMatrix4x4): AffineMatrix4x4 {
-    const elements = this.matrix.elements.map(
-      (value, index) => value + other.matrix.elements[index],
+    if (this.isNaN()) {
+      return other;
+    }
+    return new AffineMatrix4x4(
+      this.orientation.plus(other.orientation),
+      this.translation.plus(other.translation.asVector()),
     );
-    elements[15] = 1;
-    return new AffineMatrix4x4(elements);
   }
 
   scaleTranslation(scale: number | Vector3Like): AffineMatrix4x4 {
     const factor = typeof scale === "number"
-      ? new THREE.Vector3(scale, scale, scale)
-      : toVector3(scale);
-    const next = this.matrix.clone();
-    next.elements[12] *= factor.x;
-    next.elements[13] *= factor.y;
-    next.elements[14] *= factor.z;
-    return new AffineMatrix4x4(next);
+      ? new Vector3(scale, scale, scale)
+      : Vector3.from(scale);
+    return new AffineMatrix4x4(
+      this.orientation,
+      new Point3(
+        this.translation.x * factor.x,
+        this.translation.y * factor.y,
+        this.translation.z * factor.z,
+      ),
+    );
   }
 
-  transformPoint(point: Vector3Like): THREE.Vector3 {
-    return toVector3(point).applyMatrix4(this.matrix);
+  transformPoint(point: Vector3Like): Point3 {
+    const transformed = this.orientation.transformVector(point);
+    return new Point3(
+      transformed.x + this.translation.x,
+      transformed.y + this.translation.y,
+      transformed.z + this.translation.z,
+    );
   }
 
-  transformVector(vector: Vector3Like): THREE.Vector3 {
-    const matrix = new THREE.Matrix3().setFromMatrix4(this.matrix);
-    return toVector3(vector).applyMatrix3(matrix);
+  transformVector(vector: Vector3Like): Vector3 {
+    return this.orientation.transformVector(vector);
   }
 
   toThreeMatrix4(): THREE.Matrix4 {
-    return this.matrix.clone();
+    return new THREE.Matrix4().fromArray([
+      this.e11(), this.e21(), this.e31(), 0,
+      this.e12(), this.e22(), this.e32(), 0,
+      this.e13(), this.e23(), this.e33(), 0,
+      this.e14(), this.e24(), this.e34(), 1,
+    ]);
   }
 
   toArray(): number[] {
-    return [...this.matrix.elements];
+    return [...this.toThreeMatrix4().elements];
   }
 
   decompose(): {
@@ -201,15 +819,11 @@ export class AffineMatrix4x4 {
     quaternion: THREE.Quaternion;
     scale: THREE.Vector3;
   } {
-    const translation = new THREE.Vector3();
-    const quaternion = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-    this.matrix.decompose(translation, quaternion, scale);
-    return { translation, quaternion, scale };
-  }
-
-  get translation(): THREE.Vector3 {
-    return this.decompose().translation;
+    return {
+      translation: this.translation.toThreeVector3(),
+      quaternion: this.orientation.toQuaternion(),
+      scale: this.orientation.scaleFactors().toThreeVector3(),
+    };
   }
 
   get quaternion(): THREE.Quaternion {
@@ -233,41 +847,57 @@ export class AffineMatrix4x4 {
   }
 
   rowW(): THREE.Vector4 {
-    return new THREE.Vector4(this.e41(), this.e42(), this.e43(), this.e44());
+    return new THREE.Vector4(0, 0, 0, 1);
   }
 
   columnRight(): THREE.Vector4 {
-    return new THREE.Vector4(this.e11(), this.e21(), this.e31(), this.e41());
+    return new THREE.Vector4(this.e11(), this.e21(), this.e31(), 0);
   }
 
   columnUp(): THREE.Vector4 {
-    return new THREE.Vector4(this.e12(), this.e22(), this.e32(), this.e42());
+    return new THREE.Vector4(this.e12(), this.e22(), this.e32(), 0);
   }
 
   columnBackward(): THREE.Vector4 {
-    return new THREE.Vector4(this.e13(), this.e23(), this.e33(), this.e43());
+    return new THREE.Vector4(this.e13(), this.e23(), this.e33(), 0);
   }
 
   columnTranslation(): THREE.Vector4 {
-    return new THREE.Vector4(this.e14(), this.e24(), this.e34(), this.e44());
+    return new THREE.Vector4(this.e14(), this.e24(), this.e34(), 1);
   }
 
-  e11(): number { return this.matrix.elements[0]; }
-  e21(): number { return this.matrix.elements[1]; }
-  e31(): number { return this.matrix.elements[2]; }
-  e41(): number { return this.matrix.elements[3]; }
-  e12(): number { return this.matrix.elements[4]; }
-  e22(): number { return this.matrix.elements[5]; }
-  e32(): number { return this.matrix.elements[6]; }
-  e42(): number { return this.matrix.elements[7]; }
-  e13(): number { return this.matrix.elements[8]; }
-  e23(): number { return this.matrix.elements[9]; }
-  e33(): number { return this.matrix.elements[10]; }
-  e43(): number { return this.matrix.elements[11]; }
-  e14(): number { return this.matrix.elements[12]; }
-  e24(): number { return this.matrix.elements[13]; }
-  e34(): number { return this.matrix.elements[14]; }
-  e44(): number { return this.matrix.elements[15]; }
+  withTranslation(newTranslation: Vector3Like): AffineMatrix4x4 {
+    return new AffineMatrix4x4(this.orientation, Point3.from(newTranslation));
+  }
+
+  withOrientation(newOrientation: OrthogonalMatrix3x3): AffineMatrix4x4 {
+    return new AffineMatrix4x4(newOrientation, this.translation);
+  }
+
+  rotateAboutXAxis(angle: Angle | number): AffineMatrix4x4 {
+    return this.times(AffineMatrix4x4.createOrientation(AxisRotation.createXAxisRotation(angle)));
+  }
+
+  rotateAboutYAxis(angle: Angle | number): AffineMatrix4x4 {
+    return this.times(AffineMatrix4x4.createOrientation(AxisRotation.createYAxisRotation(angle)));
+  }
+
+  e11(): number { return this.orientation.right.x; }
+  e21(): number { return this.orientation.right.y; }
+  e31(): number { return this.orientation.right.z; }
+  e41(): number { return 0; }
+  e12(): number { return this.orientation.up.x; }
+  e22(): number { return this.orientation.up.y; }
+  e32(): number { return this.orientation.up.z; }
+  e42(): number { return 0; }
+  e13(): number { return this.orientation.backward.x; }
+  e23(): number { return this.orientation.backward.y; }
+  e33(): number { return this.orientation.backward.z; }
+  e43(): number { return 0; }
+  e14(): number { return this.translation.x; }
+  e24(): number { return this.translation.y; }
+  e34(): number { return this.translation.z; }
+  e44(): number { return 1; }
 }
 
 let nextComponentId = 0;
@@ -298,10 +928,22 @@ export class Component {
     return AffineMatrix4x4.IDENTITY;
   }
 
+  getWorldTransform(): AffineMatrix4x4 {
+    const chain: AffineMatrix4x4[] = [];
+    let current: Component | null = this;
+    while (current) {
+      chain.push(current.localAffineMatrix);
+      current = current.parent;
+    }
+    let world = AffineMatrix4x4.IDENTITY;
+    for (let index = chain.length - 1; index >= 0; index -= 1) {
+      world = world.multiply(chain[index]);
+    }
+    return world;
+  }
+
   get absoluteAffineMatrix(): AffineMatrix4x4 {
-    return this.parent
-      ? this.parent.absoluteAffineMatrix.times(this.localAffineMatrix)
-      : this.localAffineMatrix;
+    return this.getWorldTransform();
   }
 
   get absoluteMatrix(): THREE.Matrix4 {
@@ -324,7 +966,7 @@ export class Component {
     if (!asSeenBy) {
       return this.absoluteAffineMatrix;
     }
-    return asSeenBy.inverseAbsoluteAffineMatrix.times(this.absoluteAffineMatrix);
+    return asSeenBy.inverseAbsoluteAffineMatrix.multiply(this.absoluteAffineMatrix);
   }
 
   isDescendantOf(possibleAncestor: Composite | null): boolean {
@@ -407,54 +1049,74 @@ export class Composite extends Component {
 }
 
 export class Transformable extends Composite {
-  readonly position = new THREE.Vector3();
-  readonly quaternion = new THREE.Quaternion();
-  readonly scale = new THREE.Vector3(1, 1, 1);
+  localTransform = AffineMatrix4x4.IDENTITY;
+
+  get position(): THREE.Vector3 {
+    return this.localTransform.translation.toThreeVector3();
+  }
+
+  get quaternion(): THREE.Quaternion {
+    return this.localTransform.quaternion;
+  }
+
+  get scale(): THREE.Vector3 {
+    return this.localTransform.scale;
+  }
 
   setTranslation(x: number, y: number, z: number): this {
-    this.position.set(x, y, z);
+    this.localTransform = this.localTransform.withTranslation(new Point3(x, y, z));
     return this;
   }
 
   translateBy(x: number, y: number, z: number): this {
-    this.position.add(new THREE.Vector3(x, y, z));
+    this.localTransform = this.localTransform.withTranslation(
+      this.localTransform.translation.plus(new Vector3(x, y, z)),
+    );
     return this;
   }
 
   setQuaternion(x: number, y: number, z: number, w: number): this {
-    this.quaternion.set(x, y, z, w).normalize();
+    const scale = Vector3.from(this.localTransform.scale);
+    const orientation = OrthogonalMatrix3x3.fromQuaternion({ x, y, z, w }).withScale(scale);
+    this.localTransform = new AffineMatrix4x4(orientation, this.localTransform.translation);
     return this;
   }
 
   setScale(x: number, y: number, z: number): this {
-    this.scale.set(x, y, z);
+    const orientation = this.localTransform.orientation.withScale(new Vector3(x, y, z));
+    this.localTransform = new AffineMatrix4x4(orientation, this.localTransform.translation);
+    return this;
+  }
+
+  applyRotation(rotation: AxisRotation | QuaternionLike | OrthogonalMatrix3x3): this {
+    this.localTransform = this.localTransform.multiply(AffineMatrix4x4.createOrientation(rotation));
     return this;
   }
 
   rotateAroundAxis(axis: Vector3Like, radians: number): this {
-    const rotation = new THREE.Quaternion().setFromAxisAngle(toVector3(axis).normalize(), radians);
-    this.quaternion.multiply(rotation).normalize();
-    return this;
+    return this.applyRotation(new AxisRotation(normalizeAxis(axis), Angle.fromRadians(radians)));
   }
 
   lookAt(target: Vector3Like): this {
     const matrix = new THREE.Matrix4().lookAt(this.position, toVector3(target), new THREE.Vector3(0, 1, 0));
-    this.quaternion.setFromRotationMatrix(matrix);
+    const orientation = AffineMatrix4x4.fromThreeMatrix(matrix).orientation.withScale(Vector3.from(this.scale));
+    this.localTransform = new AffineMatrix4x4(orientation, this.localTransform.translation);
     return this;
   }
 
   get localMatrix(): THREE.Matrix4 {
-    return new THREE.Matrix4().compose(this.position, this.quaternion, this.scale);
+    return this.localTransform.toThreeMatrix4();
   }
 
   override get localAffineMatrix(): AffineMatrix4x4 {
-    return AffineMatrix4x4.fromThreeMatrix(this.localMatrix);
+    return this.localTransform;
   }
 
   protected applyTransform(object: THREE.Object3D): void {
-    object.position.copy(this.position);
-    object.quaternion.copy(this.quaternion);
-    object.scale.copy(this.scale);
+    const { translation, quaternion, scale } = this.localTransform.decompose();
+    object.position.copy(translation);
+    object.quaternion.copy(quaternion);
+    object.scale.copy(scale);
   }
 
   override toThreeObject(): THREE.Object3D {
