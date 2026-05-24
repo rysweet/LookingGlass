@@ -66,16 +66,27 @@ export interface TextBubbleEntity {
   readonly size: Size;
 }
 
-export type MoveDirection =
-  | "FORWARD"
-  | "BACKWARD"
-  | "LEFT"
-  | "RIGHT"
-  | "UP"
-  | "DOWN";
+export const MoveDirection = Object.freeze({
+  FORWARD: "FORWARD",
+  BACKWARD: "BACKWARD",
+  LEFT: "LEFT",
+  RIGHT: "RIGHT",
+  UP: "UP",
+  DOWN: "DOWN",
+} as const);
+export type MoveDirection = (typeof MoveDirection)[keyof typeof MoveDirection];
 
-export type TurnDirection = "LEFT" | "RIGHT";
-export type RollDirection = "LEFT" | "RIGHT";
+export const TurnDirection = Object.freeze({
+  LEFT: "LEFT",
+  RIGHT: "RIGHT",
+} as const);
+export type TurnDirection = (typeof TurnDirection)[keyof typeof TurnDirection];
+
+export const RollDirection = Object.freeze({
+  LEFT: "LEFT",
+  RIGHT: "RIGHT",
+} as const);
+export type RollDirection = (typeof RollDirection)[keyof typeof RollDirection];
 
 export type SpatialRelation =
   | "ABOVE"

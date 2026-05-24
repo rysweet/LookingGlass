@@ -49,6 +49,12 @@ import type {
 const nonEmptyString = (value: string): boolean => typeof value === "string" && value.trim().length > 0;
 
 type EntityImpFactory<T extends EntityImp = EntityImp> = (owner: ImplementableEntity) => T;
+type NamedEntityImpFactory<T extends EntityImp = EntityImp> = string | null | EntityImpFactory<T>;
+type JointAliases = Record<string, string>;
+
+function isEntityImpFactory<T extends EntityImp>(value: NamedEntityImpFactory<T> | undefined): value is EntityImpFactory<T> {
+  return typeof value === "function";
+}
 
 function joint(name: string, parentName: string | null, children: JointNode[] = []): JointNode {
   return {
@@ -63,23 +69,79 @@ function joint(name: string, parentName: string | null, children: JointNode[] = 
 }
 
 const GENERIC_JOINTS: JointNode[] = [joint("ROOT", null)];
+const GENERIC_JOINT_ALIASES: JointAliases = {};
 const BIPED_JOINTS: JointNode[] = [
   joint("ROOT", null, [
-    joint("PELVIS", "ROOT", [
-      joint("SPINE", "PELVIS", [
-        joint("CHEST", "SPINE", [
-          joint("NECK", "CHEST", [joint("HEAD", "NECK")]),
-          joint("LEFT_SHOULDER", "CHEST", [joint("LEFT_ELBOW", "LEFT_SHOULDER", [joint("LEFT_HAND", "LEFT_ELBOW")])]),
-          joint("RIGHT_SHOULDER", "CHEST", [joint("RIGHT_ELBOW", "RIGHT_SHOULDER", [joint("RIGHT_HAND", "RIGHT_ELBOW")])]),
+    joint("PELVIS_LOWER_BODY", "ROOT", [
+      joint("LEFT_HIP", "PELVIS_LOWER_BODY", [joint("LEFT_KNEE", "LEFT_HIP", [joint("LEFT_ANKLE", "LEFT_KNEE", [joint("LEFT_FOOT", "LEFT_ANKLE")])])]),
+      joint("RIGHT_HIP", "PELVIS_LOWER_BODY", [joint("RIGHT_KNEE", "RIGHT_HIP", [joint("RIGHT_ANKLE", "RIGHT_KNEE", [joint("RIGHT_FOOT", "RIGHT_ANKLE")])])]),
+    ]),
+    joint("SPINE_BASE", "ROOT", [
+      joint("SPINE_MIDDLE", "SPINE_BASE", [
+        joint("SPINE_UPPER", "SPINE_MIDDLE", [
+          joint("NECK", "SPINE_UPPER", [joint("HEAD", "NECK", [joint("MOUTH", "HEAD"), joint("LEFT_EYE", "HEAD"), joint("RIGHT_EYE", "HEAD"), joint("LEFT_EYELID", "HEAD"), joint("RIGHT_EYELID", "HEAD")])]),
+          joint("RIGHT_CLAVICLE", "SPINE_UPPER", [joint("RIGHT_SHOULDER", "RIGHT_CLAVICLE", [joint("RIGHT_ELBOW", "RIGHT_SHOULDER", [joint("RIGHT_WRIST", "RIGHT_ELBOW", [joint("RIGHT_HAND", "RIGHT_WRIST", [joint("RIGHT_THUMB", "RIGHT_HAND", [joint("RIGHT_THUMB_KNUCKLE", "RIGHT_THUMB")]), joint("RIGHT_INDEX_FINGER", "RIGHT_HAND", [joint("RIGHT_INDEX_FINGER_KNUCKLE", "RIGHT_INDEX_FINGER")]), joint("RIGHT_MIDDLE_FINGER", "RIGHT_HAND", [joint("RIGHT_MIDDLE_FINGER_KNUCKLE", "RIGHT_MIDDLE_FINGER")]), joint("RIGHT_PINKY_FINGER", "RIGHT_HAND", [joint("RIGHT_PINKY_FINGER_KNUCKLE", "RIGHT_PINKY_FINGER")])])])])])]),
+          joint("LEFT_CLAVICLE", "SPINE_UPPER", [joint("LEFT_SHOULDER", "LEFT_CLAVICLE", [joint("LEFT_ELBOW", "LEFT_SHOULDER", [joint("LEFT_WRIST", "LEFT_ELBOW", [joint("LEFT_HAND", "LEFT_WRIST", [joint("LEFT_THUMB", "LEFT_HAND", [joint("LEFT_THUMB_KNUCKLE", "LEFT_THUMB")]), joint("LEFT_INDEX_FINGER", "LEFT_HAND", [joint("LEFT_INDEX_FINGER_KNUCKLE", "LEFT_INDEX_FINGER")]), joint("LEFT_MIDDLE_FINGER", "LEFT_HAND", [joint("LEFT_MIDDLE_FINGER_KNUCKLE", "LEFT_MIDDLE_FINGER")]), joint("LEFT_PINKY_FINGER", "LEFT_HAND", [joint("LEFT_PINKY_FINGER_KNUCKLE", "LEFT_PINKY_FINGER")])])])])])]),
         ]),
       ]),
-      joint("LEFT_HIP", "PELVIS", [joint("LEFT_KNEE", "LEFT_HIP", [joint("LEFT_FOOT", "LEFT_KNEE")])]),
-      joint("RIGHT_HIP", "PELVIS", [joint("RIGHT_KNEE", "RIGHT_HIP", [joint("RIGHT_FOOT", "RIGHT_KNEE")])]),
     ]),
   ]),
 ];
-const FLYER_JOINTS: JointNode[] = [joint("ROOT", null, [joint("BODY", "ROOT", [joint("HEAD", "BODY"), joint("LEFT_WING", "BODY"), joint("RIGHT_WING", "BODY"), joint("TAIL", "BODY"), joint("LEFT_LEG", "BODY"), joint("RIGHT_LEG", "BODY")])])];
-const QUADRUPED_JOINTS: JointNode[] = [joint("ROOT", null, [joint("SPINE", "ROOT", [joint("NECK", "SPINE", [joint("HEAD", "NECK")]), joint("FRONT_LEFT_HIP", "SPINE", [joint("FRONT_LEFT_KNEE", "FRONT_LEFT_HIP")]), joint("FRONT_RIGHT_HIP", "SPINE", [joint("FRONT_RIGHT_KNEE", "FRONT_RIGHT_HIP")]), joint("BACK_LEFT_HIP", "SPINE", [joint("BACK_LEFT_KNEE", "BACK_LEFT_HIP")]), joint("BACK_RIGHT_HIP", "SPINE", [joint("BACK_RIGHT_KNEE", "BACK_RIGHT_HIP")]), joint("TAIL", "SPINE")])])];
+const BIPED_JOINT_ALIASES: JointAliases = {
+  PELVIS: "PELVIS_LOWER_BODY",
+  SPINE: "SPINE_BASE",
+  CHEST: "SPINE_UPPER",
+};
+const FLYER_JOINTS: JointNode[] = [
+  joint("ROOT", null, [
+    joint("SPINE_BASE", "ROOT", [
+      joint("SPINE_MIDDLE", "SPINE_BASE", [
+        joint("SPINE_UPPER", "SPINE_MIDDLE", [
+          joint("NECK_0", "SPINE_UPPER", [joint("NECK_1", "NECK_0", [joint("HEAD", "NECK_1", [joint("MOUTH", "HEAD", [joint("LOWER_LIP", "MOUTH")]), joint("LEFT_EYE", "HEAD"), joint("RIGHT_EYE", "HEAD"), joint("LEFT_EYELID", "HEAD"), joint("RIGHT_EYELID", "HEAD")])])]),
+          joint("LEFT_WING_SHOULDER", "SPINE_UPPER", [joint("LEFT_WING_ELBOW", "LEFT_WING_SHOULDER", [joint("LEFT_WING_WRIST", "LEFT_WING_ELBOW", [joint("LEFT_WING_TIP", "LEFT_WING_WRIST")])])]),
+          joint("RIGHT_WING_SHOULDER", "SPINE_UPPER", [joint("RIGHT_WING_ELBOW", "RIGHT_WING_SHOULDER", [joint("RIGHT_WING_WRIST", "RIGHT_WING_ELBOW", [joint("RIGHT_WING_TIP", "RIGHT_WING_WRIST")])])]),
+        ]),
+      ]),
+    ]),
+    joint("PELVIS_LOWER_BODY", "ROOT", [
+      joint("TAIL_0", "PELVIS_LOWER_BODY", [joint("TAIL_1", "TAIL_0", [joint("TAIL_2", "TAIL_1")])]),
+      joint("LEFT_HIP", "PELVIS_LOWER_BODY", [joint("LEFT_KNEE", "LEFT_HIP", [joint("LEFT_ANKLE", "LEFT_KNEE", [joint("LEFT_FOOT", "LEFT_ANKLE")])])]),
+      joint("RIGHT_HIP", "PELVIS_LOWER_BODY", [joint("RIGHT_KNEE", "RIGHT_HIP", [joint("RIGHT_ANKLE", "RIGHT_KNEE", [joint("RIGHT_FOOT", "RIGHT_ANKLE")])])]),
+    ]),
+  ]),
+];
+const FLYER_JOINT_ALIASES: JointAliases = {
+  BODY: "SPINE_UPPER",
+  LEFT_WING: "LEFT_WING_SHOULDER",
+  RIGHT_WING: "RIGHT_WING_SHOULDER",
+  TAIL: "TAIL_0",
+  LEFT_LEG: "LEFT_HIP",
+  RIGHT_LEG: "RIGHT_HIP",
+};
+const QUADRUPED_JOINTS: JointNode[] = [
+  joint("ROOT", null, [
+    joint("SPINE_BASE", "ROOT", [
+      joint("SPINE_MIDDLE", "SPINE_BASE", [
+        joint("SPINE_UPPER", "SPINE_MIDDLE", [
+          joint("NECK", "SPINE_UPPER", [joint("HEAD", "NECK", [joint("LEFT_EYE", "HEAD"), joint("LEFT_EYELID", "HEAD"), joint("LEFT_EAR", "HEAD"), joint("MOUTH", "HEAD"), joint("RIGHT_EAR", "HEAD"), joint("RIGHT_EYE", "HEAD"), joint("RIGHT_EYELID", "HEAD")])]),
+          joint("FRONT_LEFT_CLAVICLE", "SPINE_UPPER", [joint("FRONT_LEFT_SHOULDER", "FRONT_LEFT_CLAVICLE", [joint("FRONT_LEFT_KNEE", "FRONT_LEFT_SHOULDER", [joint("FRONT_LEFT_ANKLE", "FRONT_LEFT_KNEE", [joint("FRONT_LEFT_FOOT", "FRONT_LEFT_ANKLE", [joint("FRONT_LEFT_TOE", "FRONT_LEFT_FOOT")])])])])]),
+          joint("FRONT_RIGHT_CLAVICLE", "SPINE_UPPER", [joint("FRONT_RIGHT_SHOULDER", "FRONT_RIGHT_CLAVICLE", [joint("FRONT_RIGHT_KNEE", "FRONT_RIGHT_SHOULDER", [joint("FRONT_RIGHT_ANKLE", "FRONT_RIGHT_KNEE", [joint("FRONT_RIGHT_FOOT", "FRONT_RIGHT_ANKLE", [joint("FRONT_RIGHT_TOE", "FRONT_RIGHT_FOOT")])])])])]),
+        ]),
+      ]),
+    ]),
+    joint("PELVIS_LOWER_BODY", "ROOT", [
+      joint("TAIL_0", "PELVIS_LOWER_BODY", [joint("TAIL_1", "TAIL_0", [joint("TAIL_2", "TAIL_1", [joint("TAIL_3", "TAIL_2")])])]),
+      joint("BACK_LEFT_HIP", "PELVIS_LOWER_BODY", [joint("BACK_LEFT_KNEE", "BACK_LEFT_HIP", [joint("BACK_LEFT_HOCK", "BACK_LEFT_KNEE", [joint("BACK_LEFT_ANKLE", "BACK_LEFT_HOCK", [joint("BACK_LEFT_FOOT", "BACK_LEFT_ANKLE", [joint("BACK_LEFT_TOE", "BACK_LEFT_FOOT")])])])])]),
+      joint("BACK_RIGHT_HIP", "PELVIS_LOWER_BODY", [joint("BACK_RIGHT_KNEE", "BACK_RIGHT_HIP", [joint("BACK_RIGHT_HOCK", "BACK_RIGHT_KNEE", [joint("BACK_RIGHT_ANKLE", "BACK_RIGHT_HOCK", [joint("BACK_RIGHT_FOOT", "BACK_RIGHT_ANKLE", [joint("BACK_RIGHT_TOE", "BACK_RIGHT_FOOT")])])])])]),
+    ]),
+  ]),
+];
+const QUADRUPED_JOINT_ALIASES: JointAliases = {
+  SPINE: "SPINE_UPPER",
+  FRONT_LEFT_HIP: "FRONT_LEFT_CLAVICLE",
+  FRONT_RIGHT_HIP: "FRONT_RIGHT_CLAVICLE",
+  TAIL: "TAIL_0",
+};
 const PROP_JOINTS: JointNode[] = [joint("ROOT", null, [joint("BODY", "ROOT"), joint("HANDLE", "ROOT"), joint("MARKER", "ROOT")])];
 const SLITHERER_JOINTS: JointNode[] = [joint("ROOT", null, [joint("NECK", "ROOT", [joint("HEAD", "NECK", [joint("MOUTH", "HEAD"), joint("LEFT_EYE", "HEAD", [joint("LEFT_EYELID", "LEFT_EYE")]), joint("RIGHT_EYE", "HEAD", [joint("RIGHT_EYELID", "RIGHT_EYE")])])]), joint("SPINE_BASE", "ROOT", [joint("SPINE_MIDDLE", "SPINE_BASE", [joint("SPINE_UPPER", "SPINE_MIDDLE", [joint("TAIL", "SPINE_UPPER")])])])])];
 const SWIMMER_JOINTS: JointNode[] = [joint("ROOT", null, [joint("NECK", "ROOT", [joint("HEAD", "NECK", [joint("MOUTH", "HEAD"), joint("LEFT_EYE", "HEAD", [joint("LEFT_EYELID", "LEFT_EYE")]), joint("RIGHT_EYE", "HEAD", [joint("RIGHT_EYELID", "RIGHT_EYE")])])]), joint("FRONT_LEFT_FIN", "ROOT"), joint("FRONT_RIGHT_FIN", "ROOT"), joint("SPINE_BASE", "ROOT", [joint("SPINE_MIDDLE", "SPINE_BASE", [joint("TAIL", "SPINE_MIDDLE")])])])];
@@ -87,8 +149,17 @@ const SWIMMER_JOINTS: JointNode[] = [joint("ROOT", null, [joint("NECK", "ROOT", 
 export class SThing implements ImplementableEntity {
   #imp: EntityImp;
 
-  constructor(impFactory: EntityImpFactory = (owner) => new EntityImp(owner)) {
-    this.#imp = impFactory(this);
+  constructor(
+    nameOrImpFactory: NamedEntityImpFactory = (owner) => new EntityImp(owner),
+    impFactory?: EntityImpFactory,
+  ) {
+    const factory = isEntityImpFactory(nameOrImpFactory)
+      ? nameOrImpFactory
+      : impFactory ?? ((owner: ImplementableEntity) => new EntityImp(owner));
+    this.#imp = factory(this);
+    if (!isEntityImpFactory(nameOrImpFactory) && nameOrImpFactory !== undefined) {
+      this.setName(nameOrImpFactory);
+    }
   }
 
   get imp(): EntityImp {
@@ -101,6 +172,18 @@ export class SThing implements ImplementableEntity {
 
   set name(value: string | null) {
     this.imp.name = value;
+  }
+
+  getName(): string | null {
+    return this.name;
+  }
+
+  setName(value: string | null): void {
+    this.name = value;
+  }
+
+  getProperty<T>(name: string): T | undefined {
+    return this.imp.getProperty<T>(name)?.value;
   }
 
   get isShowing(): boolean {
@@ -163,8 +246,8 @@ export class SGround extends SThing {
 }
 
 export class SScene extends SThing {
-  constructor() {
-    super((owner) => new SceneImp(owner));
+  constructor(name?: string | null) {
+    super(name ?? null, (owner) => new SceneImp(owner));
   }
 
   protected get sceneImp(): SceneImp {
@@ -219,6 +302,46 @@ export class SScene extends SThing {
     this.sceneImp.fogDensity.value = value;
   }
 
+  getAtmosphereColor(): string | null {
+    return this.atmosphereColor;
+  }
+
+  setAtmosphereColor(value: string | null): void {
+    this.atmosphereColor = value;
+  }
+
+  getAmbientLightColor(): string | null {
+    return this.ambientLightColor;
+  }
+
+  setAmbientLightColor(value: string | null): void {
+    this.ambientLightColor = value;
+  }
+
+  getFromAboveLightColor(): string | null {
+    return this.fromAboveLightColor;
+  }
+
+  setFromAboveLightColor(value: string | null): void {
+    this.fromAboveLightColor = value;
+  }
+
+  getFromBelowLightColor(): string | null {
+    return this.fromBelowLightColor;
+  }
+
+  setFromBelowLightColor(value: string | null): void {
+    this.fromBelowLightColor = value;
+  }
+
+  getFogDensity(): number {
+    return this.fogDensity;
+  }
+
+  setFogDensity(value: number): void {
+    this.fogDensity = value;
+  }
+
   addSceneActivationListener(listener: (isActive: boolean, activationCount: number) => void): void {
     this.sceneImp.addSceneActivationListener(listener);
   }
@@ -229,8 +352,14 @@ export class SScene extends SThing {
 }
 
 export class STurnable extends SThing {
-  constructor(impFactory: EntityImpFactory<TransformableImp> = (owner) => new TransformableImp(owner)) {
-    super(impFactory);
+  constructor(
+    nameOrImpFactory: NamedEntityImpFactory<TransformableImp> = (owner) => new TransformableImp(owner),
+    impFactory?: EntityImpFactory<TransformableImp>,
+  ) {
+    super(
+      nameOrImpFactory as NamedEntityImpFactory,
+      impFactory ?? ((owner) => new TransformableImp(owner)),
+    );
   }
 
   protected get transformableImp(): TransformableImp {
@@ -243,6 +372,14 @@ export class STurnable extends SThing {
 
   set orientation(value: Orientation) {
     this.transformableImp.orientation.value = value;
+  }
+
+  getOrientation(): Orientation {
+    return this.orientation;
+  }
+
+  setOrientation(value: Orientation): void {
+    this.orientation = value;
   }
 
   turn(direction: TurnDirection, amount: number): void {
@@ -335,8 +472,14 @@ export class STurnable extends SThing {
 }
 
 export class SMovableTurnable extends STurnable {
-  constructor(impFactory: EntityImpFactory<TransformableImp> = (owner) => new TransformableImp(owner)) {
-    super(impFactory);
+  constructor(
+    nameOrImpFactory: NamedEntityImpFactory<TransformableImp> = (owner) => new TransformableImp(owner),
+    impFactory?: EntityImpFactory<TransformableImp>,
+  ) {
+    super(
+      nameOrImpFactory as NamedEntityImpFactory<TransformableImp>,
+      impFactory ?? ((owner) => new TransformableImp(owner)),
+    );
   }
 
   get paint(): string {
@@ -355,6 +498,14 @@ export class SMovableTurnable extends STurnable {
 
   set position(value: Position) {
     this.transformableImp.position.value = value;
+  }
+
+  getPosition(): Position {
+    return this.position;
+  }
+
+  setPosition(value: Position): void {
+    this.position = value;
   }
 
   move(direction: MoveDirection | Vec3, amount: number): void {
@@ -391,8 +542,8 @@ export class SMovableTurnable extends STurnable {
 }
 
 export class SCamera extends SMovableTurnable {
-  constructor() {
-    super((owner) => new CameraImp(owner));
+  constructor(name?: string | null) {
+    super(name ?? null, (owner) => new CameraImp(owner));
   }
 
   protected get cameraImp(): CameraImp {
@@ -401,6 +552,10 @@ export class SCamera extends SMovableTurnable {
 
   moveAndOrientToAGoodVantagePointOf(target: SThing, distance = 8): void {
     this.cameraImp.moveAndOrientToAGoodVantagePointOf(target.imp, distance);
+  }
+
+  moveToPointOfView(target: SThing): void {
+    this.moveAndOrientTo(target);
   }
 
   get nearClippingPlaneDistance(): number {
@@ -434,11 +589,58 @@ export class SCamera extends SMovableTurnable {
   set verticalViewingAngle(value: number) {
     this.cameraImp.verticalViewingAngle.value = value;
   }
+
+  getNearClippingPlaneDistance(): number {
+    return this.nearClippingPlaneDistance;
+  }
+
+  setNearClippingPlaneDistance(value: number): void {
+    this.nearClippingPlaneDistance = value;
+  }
+
+  getFarClippingPlaneDistance(): number {
+    return this.farClippingPlaneDistance;
+  }
+
+  setFarClippingPlaneDistance(value: number): void {
+    this.farClippingPlaneDistance = value;
+  }
+
+  getHorizontalViewingAngle(): number {
+    return this.horizontalViewingAngle;
+  }
+
+  setHorizontalViewingAngle(value: number): void {
+    this.horizontalViewingAngle = value;
+  }
+
+  getVerticalViewingAngle(): number {
+    return this.verticalViewingAngle;
+  }
+
+  setVerticalViewingAngle(value: number): void {
+    this.verticalViewingAngle = value;
+  }
+
+  getFieldOfView(): number {
+    return this.verticalViewingAngle;
+  }
+
+  setFieldOfView(value: number): void {
+    this.verticalViewingAngle = value;
+    this.horizontalViewingAngle = value;
+  }
 }
 
 export class SModel extends SMovableTurnable {
-  constructor(impFactory: EntityImpFactory<ModelImp> = (owner) => new ModelImp(owner)) {
-    super(impFactory);
+  constructor(
+    nameOrImpFactory: NamedEntityImpFactory<ModelImp> = (owner) => new ModelImp(owner),
+    impFactory?: EntityImpFactory<ModelImp>,
+  ) {
+    super(
+      nameOrImpFactory as NamedEntityImpFactory<TransformableImp>,
+      impFactory ?? ((owner) => new ModelImp(owner)),
+    );
   }
 
   protected get modelImp(): ModelImp {
@@ -578,8 +780,14 @@ export class SBillboard extends SModel { constructor() { super((owner) => new Bi
 export class STextModel extends SModel { constructor() { super((owner) => new TextModelImp(owner)); } protected get textModelImp(): TextModelImp { return this.imp as TextModelImp; } get value(): string { return this.textModelImp.value; } set value(text: string) { this.textModelImp.value = text; } append(value: unknown): void { this.textModelImp.append(value); } charAt(index: number): string { return this.textModelImp.charAt(index); } delete(start: number, end: number): void { this.textModelImp.delete(start, end); } deleteCharAt(index: number): void { this.textModelImp.deleteCharAt(index); } indexOf(value: string, fromIndex?: number): number { return this.textModelImp.indexOf(value, fromIndex); } lastIndexOf(value: string, fromIndex?: number): number { return this.textModelImp.lastIndexOf(value, fromIndex); } insert(offset: number, value: unknown): void { this.textModelImp.insert(offset, value); } get length(): number { return this.textModelImp.getLength(); } replace(start: number, end: number, value: string): void { this.textModelImp.replace(start, end, value); } setCharAt(index: number, value: string): void { this.textModelImp.setCharAt(index, value); } }
 
 export class SMarker extends SMovableTurnable {
-  constructor(impFactory: EntityImpFactory<MarkerImp> = (owner) => new MarkerImp(owner)) {
-    super(impFactory);
+  constructor(
+    nameOrImpFactory: NamedEntityImpFactory<MarkerImp> = (owner) => new MarkerImp(owner),
+    impFactory?: EntityImpFactory<MarkerImp>,
+  ) {
+    super(
+      nameOrImpFactory as NamedEntityImpFactory<TransformableImp>,
+      impFactory ?? ((owner) => new MarkerImp(owner)),
+    );
   }
 
   protected get markerImp(): MarkerImp {
@@ -619,13 +827,11 @@ export class STarget extends SMovableTurnable { constructor() { super((owner) =>
 export class SSun extends STurnable { constructor() { super((owner) => new SunImp(owner)); } }
 
 export class SJoint extends SMovableTurnable {
-  readonly name: string;
   readonly parent?: string;
 
   constructor(jointImp: JointImp) {
     super(() => jointImp);
     const jointId = jointImp.getJointId();
-    this.name = jointId.name;
     this.parent = jointId.parent;
   }
 
@@ -648,24 +854,50 @@ export class SJoint extends SMovableTurnable {
 
 export class SJointedModel extends SModel {
   readonly #jointCache = new Map<string, SJoint>();
+  readonly #jointAliases: JointAliases;
 
-  constructor(jointHierarchy: JointNode[] = GENERIC_JOINTS) {
-    super((owner) => new JointedModelImp(owner, jointHierarchy));
+  constructor(
+    nameOrJointHierarchy?: string | JointNode[] | null,
+    jointHierarchy: JointNode[] = GENERIC_JOINTS,
+    jointAliases: JointAliases = GENERIC_JOINT_ALIASES,
+  ) {
+    const initialName = typeof nameOrJointHierarchy === "string" || nameOrJointHierarchy === null
+      ? nameOrJointHierarchy
+      : undefined;
+    const hierarchy = Array.isArray(nameOrJointHierarchy) ? nameOrJointHierarchy : jointHierarchy;
+    super(initialName ?? null, (owner) => new JointedModelImp(owner, hierarchy));
+    this.#jointAliases = Object.fromEntries(
+      Object.entries(jointAliases).map(([alias, canonical]) => [alias.toUpperCase(), canonical]),
+    );
   }
 
   protected get jointedModelImp(): JointedModelImp {
     return this.imp as JointedModelImp;
   }
 
-  getJoint(name: string): JointId | undefined {
-    return this.jointedModelImp.getJoint(name);
+  protected joint(name: string): SJoint | undefined {
+    return this.getJoint(name);
   }
 
-  getJointEntity(name: string): SJoint | undefined {
-    const key = name.toUpperCase();
+  #resolveJointName(nameOrId: string | JointId): string {
+    const requestedName = typeof nameOrId === "string" ? nameOrId : nameOrId.name;
+    return this.#jointAliases[requestedName.toUpperCase()] ?? requestedName;
+  }
+
+  getJoint(nameOrId: string | JointId): SJoint | undefined {
+    return this.getJointEntity(nameOrId);
+  }
+
+  getJointId(nameOrId: string | JointId): JointId | undefined {
+    return this.jointedModelImp.getJoint(this.#resolveJointName(nameOrId));
+  }
+
+  getJointEntity(nameOrId: string | JointId): SJoint | undefined {
+    const resolvedName = this.#resolveJointName(nameOrId);
+    const key = resolvedName.toUpperCase();
     const cached = this.#jointCache.get(key);
     if (cached) return cached;
-    const jointImp = this.jointedModelImp.getJointImplementation(name);
+    const jointImp = this.jointedModelImp.getJointImplementation(resolvedName);
     if (!jointImp) return undefined;
     const jointEntity = new SJoint(jointImp);
     this.#jointCache.set(key, jointEntity);
@@ -689,12 +921,108 @@ export class SJointedModel extends SModel {
   }
 }
 
-export class SBiped extends SJointedModel { constructor() { super(BIPED_JOINTS); } }
-export class SFlyer extends SJointedModel { constructor() { super(FLYER_JOINTS); } }
-export class SQuadruped extends SJointedModel { constructor() { super(QUADRUPED_JOINTS); } }
-export class SProp extends SJointedModel { constructor() { super(PROP_JOINTS); } }
-export class SSlitherer extends SJointedModel { constructor() { super(SLITHERER_JOINTS); } get head(): SJoint | undefined { return this.getJointEntity("HEAD"); } get tail(): SJoint | undefined { return this.getJointEntity("TAIL"); } }
-export class SSwimmer extends SJointedModel { constructor() { super(SWIMMER_JOINTS); } swimTo(entity: SThing): void { this.moveAndOrientTo(entity); } get tail(): SJoint | undefined { return this.getJointEntity("TAIL"); } }
+export class SBiped extends SJointedModel {
+  constructor(name?: string | null) {
+    super(name, BIPED_JOINTS, BIPED_JOINT_ALIASES);
+  }
+
+  getRoot(): SJoint | undefined { return this.joint("ROOT"); }
+  getPelvis(): SJoint | undefined { return this.joint("PELVIS_LOWER_BODY"); }
+  getSpineBase(): SJoint | undefined { return this.joint("SPINE_BASE"); }
+  getSpineMiddle(): SJoint | undefined { return this.joint("SPINE_MIDDLE"); }
+  getSpineUpper(): SJoint | undefined { return this.joint("SPINE_UPPER"); }
+  getNeck(): SJoint | undefined { return this.joint("NECK"); }
+  getHead(): SJoint | undefined { return this.joint("HEAD"); }
+  getMouth(): SJoint | undefined { return this.joint("MOUTH"); }
+  getLeftEye(): SJoint | undefined { return this.joint("LEFT_EYE"); }
+  getRightEye(): SJoint | undefined { return this.joint("RIGHT_EYE"); }
+  getLeftEyelid(): SJoint | undefined { return this.joint("LEFT_EYELID"); }
+  getRightEyelid(): SJoint | undefined { return this.joint("RIGHT_EYELID"); }
+  getLeftHip(): SJoint | undefined { return this.joint("LEFT_HIP"); }
+  getRightHip(): SJoint | undefined { return this.joint("RIGHT_HIP"); }
+  getLeftKnee(): SJoint | undefined { return this.joint("LEFT_KNEE"); }
+  getRightKnee(): SJoint | undefined { return this.joint("RIGHT_KNEE"); }
+  getLeftAnkle(): SJoint | undefined { return this.joint("LEFT_ANKLE"); }
+  getRightAnkle(): SJoint | undefined { return this.joint("RIGHT_ANKLE"); }
+  getLeftFoot(): SJoint | undefined { return this.joint("LEFT_FOOT"); }
+  getRightFoot(): SJoint | undefined { return this.joint("RIGHT_FOOT"); }
+  getLeftClavicle(): SJoint | undefined { return this.joint("LEFT_CLAVICLE"); }
+  getRightClavicle(): SJoint | undefined { return this.joint("RIGHT_CLAVICLE"); }
+  getLeftShoulder(): SJoint | undefined { return this.joint("LEFT_SHOULDER"); }
+  getRightShoulder(): SJoint | undefined { return this.joint("RIGHT_SHOULDER"); }
+  getLeftElbow(): SJoint | undefined { return this.joint("LEFT_ELBOW"); }
+  getRightElbow(): SJoint | undefined { return this.joint("RIGHT_ELBOW"); }
+  getLeftWrist(): SJoint | undefined { return this.joint("LEFT_WRIST"); }
+  getRightWrist(): SJoint | undefined { return this.joint("RIGHT_WRIST"); }
+  getLeftHand(): SJoint | undefined { return this.joint("LEFT_HAND"); }
+  getRightHand(): SJoint | undefined { return this.joint("RIGHT_HAND"); }
+}
+
+export class SFlyer extends SJointedModel {
+  constructor(name?: string | null) {
+    super(name, FLYER_JOINTS, FLYER_JOINT_ALIASES);
+  }
+
+  getRoot(): SJoint | undefined { return this.joint("ROOT"); }
+  getSpineBase(): SJoint | undefined { return this.joint("SPINE_BASE"); }
+  getSpineMiddle(): SJoint | undefined { return this.joint("SPINE_MIDDLE"); }
+  getSpineUpper(): SJoint | undefined { return this.joint("SPINE_UPPER"); }
+  getNeck(): SJoint | undefined { return this.joint("NECK_0"); }
+  getHead(): SJoint | undefined { return this.joint("HEAD"); }
+  getMouth(): SJoint | undefined { return this.joint("MOUTH"); }
+  getLeftEye(): SJoint | undefined { return this.joint("LEFT_EYE"); }
+  getRightEye(): SJoint | undefined { return this.joint("RIGHT_EYE"); }
+  getLeftEyelid(): SJoint | undefined { return this.joint("LEFT_EYELID"); }
+  getRightEyelid(): SJoint | undefined { return this.joint("RIGHT_EYELID"); }
+  getLeftWingShoulder(): SJoint | undefined { return this.joint("LEFT_WING_SHOULDER"); }
+  getLeftWingElbow(): SJoint | undefined { return this.joint("LEFT_WING_ELBOW"); }
+  getLeftWingWrist(): SJoint | undefined { return this.joint("LEFT_WING_WRIST"); }
+  getLeftWingTip(): SJoint | undefined { return this.joint("LEFT_WING_TIP"); }
+  getRightWingShoulder(): SJoint | undefined { return this.joint("RIGHT_WING_SHOULDER"); }
+  getRightWingElbow(): SJoint | undefined { return this.joint("RIGHT_WING_ELBOW"); }
+  getRightWingWrist(): SJoint | undefined { return this.joint("RIGHT_WING_WRIST"); }
+  getRightWingTip(): SJoint | undefined { return this.joint("RIGHT_WING_TIP"); }
+  getTail(): SJoint | undefined { return this.joint("TAIL_0"); }
+  getLeftHip(): SJoint | undefined { return this.joint("LEFT_HIP"); }
+  getRightHip(): SJoint | undefined { return this.joint("RIGHT_HIP"); }
+}
+
+export class SQuadruped extends SJointedModel {
+  constructor(name?: string | null) {
+    super(name, QUADRUPED_JOINTS, QUADRUPED_JOINT_ALIASES);
+  }
+
+  getRoot(): SJoint | undefined { return this.joint("ROOT"); }
+  getSpineBase(): SJoint | undefined { return this.joint("SPINE_BASE"); }
+  getSpineMiddle(): SJoint | undefined { return this.joint("SPINE_MIDDLE"); }
+  getSpineUpper(): SJoint | undefined { return this.joint("SPINE_UPPER"); }
+  getNeck(): SJoint | undefined { return this.joint("NECK"); }
+  getHead(): SJoint | undefined { return this.joint("HEAD"); }
+  getMouth(): SJoint | undefined { return this.joint("MOUTH"); }
+  getLeftEye(): SJoint | undefined { return this.joint("LEFT_EYE"); }
+  getRightEye(): SJoint | undefined { return this.joint("RIGHT_EYE"); }
+  getLeftEar(): SJoint | undefined { return this.joint("LEFT_EAR"); }
+  getRightEar(): SJoint | undefined { return this.joint("RIGHT_EAR"); }
+  getFrontLeftClavicle(): SJoint | undefined { return this.joint("FRONT_LEFT_CLAVICLE"); }
+  getFrontLeftShoulder(): SJoint | undefined { return this.joint("FRONT_LEFT_SHOULDER"); }
+  getFrontLeftKnee(): SJoint | undefined { return this.joint("FRONT_LEFT_KNEE"); }
+  getFrontLeftAnkle(): SJoint | undefined { return this.joint("FRONT_LEFT_ANKLE"); }
+  getFrontLeftFoot(): SJoint | undefined { return this.joint("FRONT_LEFT_FOOT"); }
+  getFrontLeftToe(): SJoint | undefined { return this.joint("FRONT_LEFT_TOE"); }
+  getFrontRightClavicle(): SJoint | undefined { return this.joint("FRONT_RIGHT_CLAVICLE"); }
+  getFrontRightShoulder(): SJoint | undefined { return this.joint("FRONT_RIGHT_SHOULDER"); }
+  getFrontRightKnee(): SJoint | undefined { return this.joint("FRONT_RIGHT_KNEE"); }
+  getFrontRightAnkle(): SJoint | undefined { return this.joint("FRONT_RIGHT_ANKLE"); }
+  getFrontRightFoot(): SJoint | undefined { return this.joint("FRONT_RIGHT_FOOT"); }
+  getFrontRightToe(): SJoint | undefined { return this.joint("FRONT_RIGHT_TOE"); }
+  getTail(): SJoint | undefined { return this.joint("TAIL_0"); }
+  getBackLeftHip(): SJoint | undefined { return this.joint("BACK_LEFT_HIP"); }
+  getBackRightHip(): SJoint | undefined { return this.joint("BACK_RIGHT_HIP"); }
+}
+
+export class SProp extends SJointedModel { constructor(name?: string | null) { super(name, PROP_JOINTS); } }
+export class SSlitherer extends SJointedModel { constructor(name?: string | null) { super(name, SLITHERER_JOINTS); } get head(): SJoint | undefined { return this.getJointEntity("HEAD"); } get tail(): SJoint | undefined { return this.getJointEntity("TAIL"); } }
+export class SSwimmer extends SJointedModel { constructor(name?: string | null) { super(name, SWIMMER_JOINTS); } swimTo(entity: SThing): void { this.moveAndOrientTo(entity); } get tail(): SJoint | undefined { return this.getJointEntity("TAIL"); } }
 
 export class SProgram {
   #imp = new ProgramImp();

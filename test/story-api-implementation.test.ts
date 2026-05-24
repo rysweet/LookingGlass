@@ -103,10 +103,10 @@ describe("story-api implementation layer", () => {
     const hierarchy = bunny.getJointHierarchy();
 
     expect(hierarchy[0].name).toBe("ROOT");
-    expect(hierarchy[0].children[0].name).toBe("PELVIS");
-    expect(bunny.getJoint("LEFT_HAND")).toEqual({
+    expect(hierarchy[0].children[0].name).toBe("PELVIS_LOWER_BODY");
+    expect(bunny.getJoint("LEFT_HAND")).toMatchObject({
       name: "LEFT_HAND",
-      parent: "LEFT_ELBOW",
+      parent: "LEFT_WRIST",
     });
   });
 

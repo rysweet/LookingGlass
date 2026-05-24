@@ -22,6 +22,7 @@ import {
   quaternionFromAxisAngle,
   quaternionMultiply,
   relationOffset,
+  revolutionsToRadians,
   rotateVector,
   sameOrientation,
   samePosition,
@@ -711,7 +712,9 @@ export class TransformableImp extends EntityImp {
       throw new TypeError("amount must be a finite number");
     }
     const delta = subtractVec3(target.getAbsolutePosition(), this.getAbsolutePosition());
-    const movement = scaleVec3(normalizeVec3(delta), amount);
+    const movement = magnitudeVec3(delta) > 0
+      ? scaleVec3(normalizeVec3(delta), amount)
+      : { x: 0, y: 0, z: amount };
     this.setAbsolutePosition(addVec3(this.getAbsolutePosition(), movement));
   }
 
@@ -753,7 +756,7 @@ export class TransformableImp extends EntityImp {
       throw new TypeError("amount must be a finite number");
     }
     const signed = direction === "LEFT" ? amount : -amount;
-    const delta = quaternionFromAxisAngle(0, 1, 0, signed);
+    const delta = quaternionFromAxisAngle(0, 1, 0, revolutionsToRadians(signed));
     this.orientation.setValue(quaternionMultiply(delta, this.orientation.value));
   }
 
@@ -762,7 +765,7 @@ export class TransformableImp extends EntityImp {
       throw new TypeError("amount must be a finite number");
     }
     const signed = direction === "LEFT" ? amount : -amount;
-    const delta = quaternionFromAxisAngle(0, 0, 1, signed);
+    const delta = quaternionFromAxisAngle(0, 0, 1, revolutionsToRadians(signed));
     this.orientation.setValue(quaternionMultiply(delta, this.orientation.value));
   }
 
@@ -778,11 +781,19 @@ export class TransformableImp extends EntityImp {
 
   pointAt(target: EntityImp): void {
     const direction = subtractVec3(target.getAbsolutePosition(), this.getAbsolutePosition());
+    if (magnitudeVec3(direction) === 0) {
+      return;
+    }
     this.setAbsoluteOrientation(orientationFromLookDirection(direction));
   }
 
   turnToFace(target: EntityImp): void {
-    this.pointAt(target);
+    const direction = subtractVec3(target.getAbsolutePosition(), this.getAbsolutePosition());
+    const planarDirection = { x: direction.x, y: 0, z: direction.z };
+    if (magnitudeVec3(planarDirection) === 0) {
+      return;
+    }
+    this.setAbsoluteOrientation(orientationFromLookDirection(planarDirection));
   }
 
   isFacing(target: EntityImp): boolean {
@@ -1073,6 +1084,7 @@ export class JointImp extends TransformableImp {
       position: clonePosition(localTransform.position),
       orientation: cloneOrientation(localTransform.orientation),
     };
+    this.name = jointId.name;
     this.position.setValue(localTransform.position);
     this.orientation.setValue(localTransform.orientation);
   }

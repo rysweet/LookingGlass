@@ -74,9 +74,9 @@ describe("expanded story-api entity coverage", () => {
     target.position = { x: 5, y: 2, z: -3 };
 
     flyer.move("FORWARD", 2);
-    flyer.turn("LEFT", Math.PI / 2);
+    flyer.turn("LEFT", 0.25);
     flyer.move("FORWARD", 2);
-    flyer.roll("RIGHT", Math.PI / 4);
+    flyer.roll("RIGHT", 0.125);
     flyer.moveToward(target, 3);
     flyer.place("ABOVE", target, 1);
 
@@ -104,7 +104,7 @@ describe("expanded story-api entity coverage", () => {
 
     expect(neck).toBeInstanceOf(SJoint);
     expect(head).toBeInstanceOf(SJoint);
-    expect(snake.getJoint("TAIL")).toEqual({ name: "TAIL", parent: "SPINE_UPPER" });
+    expect(snake.getJoint("TAIL")).toMatchObject({ name: "TAIL", parent: "SPINE_UPPER" });
 
     neck!.orientation = { x: 0, y: 0.5, z: 0, w: 0.5 };
     snake.straightenOutJoints();
@@ -121,6 +121,15 @@ describe("expanded story-api entity coverage", () => {
 
     expect(swimmer.position).toEqual(target.position);
     expect(swimmer.tail?.name).toBe("TAIL");
+  });
+
+  it("supports scene container facade methods", () => {
+    const scene = new Scene();
+    scene.setAtmosphereColor("SKY_BLUE");
+    scene.setFogDensity(0.5);
+
+    expect(scene.getAtmosphereColor()).toBe("SKY_BLUE");
+    expect(scene.getFogDensity()).toBe(0.5);
   });
 
   it("supports scene entity properties and activation listeners", () => {

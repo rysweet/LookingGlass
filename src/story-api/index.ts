@@ -1,3 +1,8 @@
+export {
+  MoveDirection,
+  RollDirection,
+  TurnDirection,
+} from "./expanded-types";
 export type {
   BoundingBox,
   JointId,

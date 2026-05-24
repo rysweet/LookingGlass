@@ -87,6 +87,8 @@ export class Scene implements SceneActivationController {
   atmosphereColor: string | undefined;
   fogDensity: number | undefined;
   ambientLightColor: string | undefined;
+  fromAboveLightColor: string | undefined;
+  fromBelowLightColor: string | undefined;
 
   get entities(): ReadonlyMap<string, SThing> {
     return this.#entities;
@@ -102,6 +104,61 @@ export class Scene implements SceneActivationController {
 
   bindProgram(program: ProgramImp | null): void {
     this.#program = program;
+  }
+
+  getAtmosphereColor(): string | undefined {
+    return this.atmosphereColor;
+  }
+
+  setAtmosphereColor(color: string): void {
+    if (typeof color !== "string" || !color.trim()) {
+      throw new TypeError("atmosphere color must be a non-empty string");
+    }
+    this.atmosphereColor = color;
+  }
+
+  getAmbientLightColor(): string | undefined {
+    return this.ambientLightColor;
+  }
+
+  setAmbientLightColor(color: string): void {
+    if (typeof color !== "string" || !color.trim()) {
+      throw new TypeError("ambient light color must be a non-empty string");
+    }
+    this.ambientLightColor = color;
+  }
+
+  getFromAboveLightColor(): string | undefined {
+    return this.fromAboveLightColor;
+  }
+
+  setFromAboveLightColor(color: string): void {
+    if (typeof color !== "string" || !color.trim()) {
+      throw new TypeError("fromAboveLightColor must be a non-empty string");
+    }
+    this.fromAboveLightColor = color;
+  }
+
+  getFromBelowLightColor(): string | undefined {
+    return this.fromBelowLightColor;
+  }
+
+  setFromBelowLightColor(color: string): void {
+    if (typeof color !== "string" || !color.trim()) {
+      throw new TypeError("fromBelowLightColor must be a non-empty string");
+    }
+    this.fromBelowLightColor = color;
+  }
+
+  getFogDensity(): number {
+    return this.fogDensity ?? 0;
+  }
+
+  setFogDensity(density: number): void {
+    if (!Number.isFinite(density) || density < 0) {
+      throw new TypeError("fog density must be a non-negative finite number");
+    }
+    this.fogDensity = density;
   }
 
   activate(): void {

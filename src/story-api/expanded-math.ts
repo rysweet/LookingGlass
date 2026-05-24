@@ -151,6 +151,10 @@ export function quaternionFromAxisAngle(x: number, y: number, z: number, radians
   });
 }
 
+export function revolutionsToRadians(revolutions: number): number {
+  return revolutions * Math.PI * 2;
+}
+
 export function rotateVector(orientation: Orientation, vector: Vec3): Vec3 {
   const q = normalizeQuaternion(orientation);
   const point: Orientation = { x: vector.x, y: vector.y, z: vector.z, w: 0 };

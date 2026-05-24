@@ -280,33 +280,36 @@ describe("Entity property mutation", () => {
 // ===========================================================================
 
 describe("Joints", () => {
-  it("SBiped.getJoint returns actual joint data", () => {
+  it("SBiped.getJoint returns actual joint entities", () => {
     const b = new SBiped();
-    expect(b.getJoint("LEFT_SHOULDER")).toEqual({
+    expect(b.getJoint("LEFT_SHOULDER")).toMatchObject({
       name: "LEFT_SHOULDER",
-      parent: "CHEST",
+      parent: "LEFT_CLAVICLE",
     });
+    expect(b.getLeftShoulder()).toBe(b.getJoint("LEFT_SHOULDER"));
   });
 
-  it("SFlyer.getJoint resolves wing joints", () => {
+  it("SFlyer.getJoint resolves Java wing joints", () => {
     const f = new SFlyer();
-    expect(f.getJoint("LEFT_WING")).toEqual({
-      name: "LEFT_WING",
-      parent: "BODY",
+    expect(f.getJoint("LEFT_WING_SHOULDER")).toMatchObject({
+      name: "LEFT_WING_SHOULDER",
+      parent: "SPINE_UPPER",
     });
+    expect(f.getLeftWingShoulder()).toBe(f.getJoint("LEFT_WING_SHOULDER"));
   });
 
   it("SProp.getJoint resolves root joint", () => {
     const p = new SProp();
-    expect(p.getJoint("ROOT")).toEqual({ name: "ROOT" });
+    expect(p.getJoint("ROOT")).toMatchObject({ name: "ROOT" });
   });
 
-  it("SQuadruped.getJoint resolves leg joints", () => {
+  it("SQuadruped.getJoint resolves Java leg joints", () => {
     const q = new SQuadruped();
-    expect(q.getJoint("FRONT_LEFT_HIP")).toEqual({
-      name: "FRONT_LEFT_HIP",
-      parent: "SPINE",
+    expect(q.getJoint("FRONT_LEFT_CLAVICLE")).toMatchObject({
+      name: "FRONT_LEFT_CLAVICLE",
+      parent: "SPINE_UPPER",
     });
+    expect(q.getFrontLeftClavicle()).toBe(q.getJoint("FRONT_LEFT_CLAVICLE"));
   });
 });
 
