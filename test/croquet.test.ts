@@ -15,6 +15,7 @@ import {
   LazyOperation,
   ListData,
   ListSelectionState,
+  MutableListData,
   MutableDataSingleSelectListState,
   SimulatedActionTrigger,
   SimpleComposite,
@@ -168,6 +169,30 @@ describe("croquet state framework", () => {
     expect(enabled.value).toBe(false);
   });
 
+  it("fires indexed list events and supports sorting and filtering", () => {
+    const list = new MutableListData<string>();
+    const events: Array<{ type: string; index?: number; fromIndex?: number; toIndex?: number }> = [];
+    list.addListener((event) => {
+      events.push({
+        type: event.type,
+        index: event.index,
+        fromIndex: event.fromIndex,
+        toIndex: event.toIndex,
+      });
+    });
+
+    list.add("first");
+    list.addAt(0, "zeroth");
+    list.add("second");
+    list.sort((left, right) => left.localeCompare(right));
+
+    expect(events[0]).toEqual({ type: "add", index: 0, fromIndex: undefined, toIndex: undefined });
+    expect(events[1]).toEqual({ type: "add", index: 0, fromIndex: undefined, toIndex: undefined });
+    expect(events.some((event) => event.type === "move")).toBe(true);
+    expect(list.filter((item) => item.startsWith("s"))).toEqual(["second"]);
+    expect(list.toArray()).toEqual(["first", "second", "zeroth"]);
+  });
+
   it("manages list and tree data events", () => {
     const listData = new ListData(new StringCodec(), ["root"]);
     const listEvents: string[] = [];
@@ -194,7 +219,108 @@ describe("croquet state framework", () => {
     expect(treeEvents).toEqual(["add", "add", "update", "move", "remove"]);
   });
 
-  it("creates composite views and dialog wizard lifecycle", () => {
+  it("sorts and filters tree nodes with indexed move events", () => {
+    const tree = new TreeData<string>();
+    const moves: Array<{ value: string; previousIndex?: number; index?: number }> = [];
+    const root = tree.addRoot("scene");
+    tree.addChild(root, "charlie");
+    tree.addChild(root, "alpha");
+    tree.addChild(root, "bravo");
+    tree.addListener((event) => {
+      if (event.type === "move" && event.node) {
+        moves.push({
+          value: event.node.value,
+          previousIndex: event.previousIndex,
+          index: event.index,
+        });
+      }
+    });
+
+    tree.sortChildren(root, (left, right) => left.value.localeCompare(right.value));
+
+    expect(root.children.map((node) => node.value)).toEqual(["alpha", "bravo", "charlie"]);
+    expect(tree.filter((node) => node.value.startsWith("b")).map((node) => node.value)).toEqual([
+      "bravo",
+    ]);
+    expect(moves.length).toBeGreaterThan(0);
+    expect(moves[0]).toEqual(expect.objectContaining({ previousIndex: 1, index: 0 }));
+  });
+
+  it("tracks item selection changes and persists through codecs", () => {
+    const codec = new StringCodec();
+    const state = new ItemSelectionState<string>("beta", {
+      name: "selection",
+      itemCodec: codec,
+      items: ["alpha", "beta", "gamma"],
+    });
+    const changes: Array<{ previousValue: string | null; value: string | null }> = [];
+    state.addListener(({ previousValue, value }) => {
+      changes.push({ previousValue, value });
+    });
+
+    state.selectIndex(2);
+    const serialized = state.serializeSelection();
+    const restored = new ItemSelectionState<string>(null, {
+      name: "selection.restored",
+      itemCodec: codec,
+      items: ["alpha", "beta", "gamma"],
+    });
+    restored.restoreSelection(serialized);
+
+    expect(changes).toEqual([{ previousValue: "beta", value: "gamma" }]);
+    expect(state.selectedIndex).toBe(2);
+    expect(restored.value).toBe("gamma");
+  });
+
+  it("orders composite lifecycle with nested composites", () => {
+    const lifecycle: string[] = [];
+
+    class LoggingComposite extends SimpleComposite<{ kind: string }> {
+      addChild(child: Composite<{ kind: string }>): void {
+        this.registerSubComposite(child);
+      }
+
+      protected override handlePreActivation(): void {
+        lifecycle.push(`${this.name}:pre`);
+      }
+
+      protected override handleActivated(): void {
+        lifecycle.push(`${this.name}:activated`);
+      }
+
+      protected override handlePostDeactivation(): void {
+        lifecycle.push(`${this.name}:post`);
+      }
+
+      protected override handleDeactivated(): void {
+        lifecycle.push(`${this.name}:deactivated`);
+      }
+    }
+
+    const parent = new LoggingComposite("parent", {
+      createView: () => ({ kind: "parent-view" }),
+    });
+    const child = new LoggingComposite("child", {
+      createView: () => ({ kind: "child-view" }),
+    });
+    parent.addChild(child);
+
+    parent.activate();
+    parent.deactivate();
+
+    expect(lifecycle).toEqual([
+      "parent:pre",
+      "child:pre",
+      "child:activated",
+      "parent:activated",
+      "child:post",
+      "child:deactivated",
+      "parent:post",
+      "parent:deactivated",
+    ]);
+  });
+
+  it("creates composite views, tab state, operation chains, and dialog wizard lifecycle", () => {
     const activation: string[] = [];
     const base = new Composite("scene-editor", {
       createView: () => ({ kind: "base-view" }),
@@ -218,14 +344,47 @@ describe("croquet state framework", () => {
     simple.activate();
     simple.deactivate();
 
+    const tabViewCreation = vi.fn((name: string) => ({ kind: `${name}-view` }));
+    const alphaTab = new TabComposite("alpha", {
+      createView: () => tabViewCreation("alpha"),
+    });
+    const betaTab = new TabComposite("beta", {
+      createView: () => tabViewCreation("beta"),
+    });
     const tab = new TabComposite("tab", {
       createView: () => ({ kind: "tab-view" }),
       closeable: true,
+      tabs: [alphaTab, betaTab],
+      selectedTabIndex: 1,
     });
     tab.customizeTitleComponentAppearance((appearance) => {
       appearance.tooltip = "Editor";
       appearance.classes.push("active");
     });
+    expect(tab.tabs.map((childTab) => childTab.name)).toEqual(["alpha", "beta"]);
+    expect(tab.selectedTab?.name).toBe("beta");
+    expect(tabViewCreation).not.toHaveBeenCalled();
+    tab.activate();
+    expect(tabViewCreation).toHaveBeenCalledTimes(1);
+    expect(tabViewCreation).toHaveBeenLastCalledWith("beta");
+    tab.moveTab(1, 0);
+    expect(tab.tabs.map((childTab) => childTab.name)).toEqual(["beta", "alpha"]);
+    tab.selectTab(alphaTab);
+    expect(tab.selectedTabState.selectedIndex).toBe(1);
+    expect(tabViewCreation).toHaveBeenCalledTimes(2);
+    expect(tab.ensureSelectedTabInitialized()).toEqual({ kind: "alpha-view" });
+
+    const chainLog: string[] = [];
+    const firstOperation = new ActionOperation(() => {
+      chainLog.push("first");
+      return undefined;
+    }, { name: "first" });
+    const secondOperation = new ActionOperation(() => {
+      chainLog.push("second");
+      return undefined;
+    }, { name: "second" });
+    firstOperation.thenTrigger(secondOperation);
+    firstOperation.fire();
 
     const dialog = new DialogComposite<{ kind: string }, string>("dialog", {
       createView: () => ({ kind: "dialog-view" }),
@@ -247,6 +406,7 @@ describe("croquet state framework", () => {
     expect(tab.titleAppearance.tooltip).toBe("Editor");
     expect(dialog.lastResult).toBe("saved");
     expect(dialog.wasAccepted).toBe(true);
+    expect(chainLog).toEqual(["first", "second"]);
     expect(wizard.lastResult).toBe("finish");
     expect(wizard.visitedSteps).toEqual(new Set([0, 1, 2]));
     expect(activation).toContain("simple:activated");

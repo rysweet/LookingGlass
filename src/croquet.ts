@@ -20,7 +20,7 @@ export interface ActionTrigger {
 }
 
 export class SimulatedActionTrigger implements ActionTrigger {
-  readonly type = "simulated";
+  readonly type: string = "simulated";
   readonly timestamp: number;
 
   constructor(
@@ -248,6 +248,49 @@ class ArrayCodec<T> implements Codec<readonly T[]> {
   appendRepresentation(value: readonly T[]): string {
     return `[${value.map((item) => this.itemCodec.appendRepresentation(item)).join(", ")}]`;
   }
+}
+
+class JsonCodec<T> implements Codec<T> {
+  readonly name: string;
+
+  constructor(name = "json") {
+    this.name = name;
+  }
+
+  encode(value: T): string {
+    return JSON.stringify(value);
+  }
+
+  decode(serialized: string): T {
+    return JSON.parse(serialized) as T;
+  }
+
+  appendRepresentation(value: T): string {
+    return typeof value === "string" ? value : JSON.stringify(value);
+  }
+}
+
+function createDefaultCodec<T>(): Codec<T> {
+  return new JsonCodec<T>();
+}
+
+function createLookupCodec<T>(
+  name: string,
+  lookup: () => readonly T[],
+  keyOf: (value: T) => string,
+): Codec<T> {
+  return {
+    name,
+    encode: (value) => keyOf(value),
+    decode: (serialized) => {
+      const match = lookup().find((candidate) => keyOf(candidate) === serialized);
+      if (match === undefined) {
+        throw new TypeError(`invalid ${name} encoding: ${serialized}`);
+      }
+      return match;
+    },
+    appendRepresentation: (value) => keyOf(value),
+  };
 }
 
 const booleanCodec: Codec<boolean> = {
@@ -547,6 +590,10 @@ export class DoubleState extends State<number> {
 export class Operation {
   readonly enabledState: BooleanState;
   private readonly listeners = new Set<OperationListener>();
+  private readonly chainedOperations: Array<{
+    readonly operation: Operation;
+    readonly createTrigger?: (event: OperationFireEvent) => ActionTrigger;
+  }> = [];
 
   constructor(
     private readonly action: OperationHandler = () => undefined,
@@ -577,6 +624,14 @@ export class Operation {
     this.listeners.delete(listener);
   }
 
+  thenTrigger(
+    operation: Operation,
+    createTrigger?: (event: OperationFireEvent) => ActionTrigger,
+  ): this {
+    this.chainedOperations.push({ operation, createTrigger });
+    return this;
+  }
+
   protected perform(trigger: ActionTrigger): OperationResult {
     return this.action(trigger);
   }
@@ -590,6 +645,9 @@ export class Operation {
     const event: OperationFireEvent = { operation: this, trigger, result };
     for (const listener of this.listeners) {
       listener(event);
+    }
+    for (const chainedOperation of this.chainedOperations) {
+      chainedOperation.operation.fire(chainedOperation.createTrigger?.(event) ?? trigger);
     }
     return result;
   }
@@ -707,7 +765,7 @@ export class ListData<T> implements Iterable<T> {
   private readonly listeners = new Set<ListDataListener<T>>();
 
   constructor(
-    readonly itemCodec: Codec<T>,
+    readonly itemCodec: Codec<T> = createDefaultCodec<T>(),
     initialItems: readonly T[] = [],
     readonly preferenceKey = itemCodec.name,
   ) {
@@ -724,6 +782,11 @@ export class ListData<T> implements Iterable<T> {
 
   contains(item: T): boolean {
     return this.indexOf(item) !== -1;
+  }
+
+  filter(predicate: (item: T, index: number, items: readonly T[]) => boolean): T[] {
+    const snapshot = this.toArray();
+    return snapshot.filter((item, index) => predicate(item, index, snapshot));
   }
 
   getItemAt(index: number): T {
@@ -744,7 +807,7 @@ export class ListData<T> implements Iterable<T> {
   }
 
   internalAddItem(index: number, item: T): void {
-    const normalizedIndex = normalizeIndex(index, this.items.length);
+    const normalizedIndex = normalizeIndex(index, this.items.length, true);
     this.items.splice(normalizedIndex, 0, item);
     this.emit({
       source: this,
@@ -758,18 +821,25 @@ export class ListData<T> implements Iterable<T> {
     this.internalAddItem(this.items.length, item);
   }
 
+  addAt(index: number, item: T): void {
+    this.internalAddItem(index, item);
+  }
+
   internalRemoveItem(item: T): void {
     const index = this.indexOf(item);
     if (index === -1) {
       return;
     }
-    const [removed] = this.items.splice(index, 1);
-    this.emit({
-      source: this,
-      type: "remove",
-      items: removed === undefined ? [] : [removed],
-      index,
-    });
+    this.removeAt(index);
+  }
+
+  remove(item: T): boolean {
+    const index = this.indexOf(item);
+    if (index === -1) {
+      return false;
+    }
+    this.removeAt(index);
+    return true;
   }
 
   removeAt(index: number): T | undefined {
@@ -786,6 +856,25 @@ export class ListData<T> implements Iterable<T> {
     return removed;
   }
 
+  setAt(index: number, item: T): void {
+    if (index < 0 || index >= this.items.length) {
+      throw new RangeError(`index ${index} out of bounds`);
+    }
+    const previousItem = this.items[index];
+    if (previousItem !== undefined && this.itemCodec.encode(previousItem) === this.itemCodec.encode(item)) {
+      this.items[index] = item;
+      return;
+    }
+    this.items[index] = item;
+    this.emit({
+      source: this,
+      type: "set",
+      items: [item],
+      index,
+      previousItems: previousItem === undefined ? [] : [previousItem],
+    });
+  }
+
   move(fromIndex: number, toIndex: number): void {
     if (fromIndex < 0 || fromIndex >= this.items.length) {
       throw new RangeError(`fromIndex ${fromIndex} out of bounds`);
@@ -794,11 +883,7 @@ export class ListData<T> implements Iterable<T> {
     if (item === undefined) {
       return;
     }
-    const normalizedToIndex = normalizeIndex(
-      toIndex,
-      this.items.length,
-      true,
-    );
+    const normalizedToIndex = normalizeIndex(toIndex, this.items.length, true);
     this.items.splice(normalizedToIndex, 0, item);
     this.emit({
       source: this,
@@ -806,6 +891,16 @@ export class ListData<T> implements Iterable<T> {
       items: [item],
       fromIndex,
       toIndex: normalizedToIndex,
+    });
+  }
+
+  sort(compare: (left: T, right: T) => number): void {
+    const desiredOrder = this.toArray().sort(compare);
+    desiredOrder.forEach((item, targetIndex) => {
+      const currentIndex = this.indexOf(item);
+      if (currentIndex !== targetIndex) {
+        this.move(currentIndex, targetIndex);
+      }
     });
   }
 
@@ -849,6 +944,16 @@ export class ListData<T> implements Iterable<T> {
   }
 }
 
+export class MutableListData<T> extends ListData<T> {
+  constructor(
+    itemCodec: Codec<T> = createDefaultCodec<T>(),
+    initialItems: readonly T[] = [],
+    preferenceKey = itemCodec.name,
+  ) {
+    super(itemCodec, initialItems, preferenceKey);
+  }
+}
+
 let nextTreeNodeId = 0;
 
 export class TreeNode<T> {
@@ -882,16 +987,40 @@ export class TreeData<T> {
     return new TreeNode(value);
   }
 
+  getChildren(parent: TreeNode<T> | null = null): readonly TreeNode<T>[] {
+    return [...(parent ? parent.children : this.roots)];
+  }
+
+  filter(
+    predicate: (node: TreeNode<T>, index: number, parent: TreeNode<T> | null) => boolean,
+  ): TreeNode<T>[] {
+    const matches: TreeNode<T>[] = [];
+    const visit = (nodes: readonly TreeNode<T>[], parent: TreeNode<T> | null): void => {
+      nodes.forEach((node, index) => {
+        if (predicate(node, index, parent)) {
+          matches.push(node);
+        }
+        visit(node.children, node);
+      });
+    };
+    visit(this.roots, null);
+    return matches;
+  }
+
   addRoot(value: T | TreeNode<T>, index = this.roots.length): TreeNode<T> {
     const node = value instanceof TreeNode ? value : this.createNode(value);
     if (node.parent) {
       this.removeNode(node);
     }
-    const normalizedIndex = normalizeIndex(index, this.roots.length);
+    const normalizedIndex = normalizeIndex(index, this.roots.length, true);
     this.roots.splice(normalizedIndex, 0, node);
     node.parent = null;
     this.emit({ source: this, type: "add", node, parent: null, index: normalizedIndex });
     return node;
+  }
+
+  addRootAt(index: number, value: T | TreeNode<T>): TreeNode<T> {
+    return this.addRoot(value, index);
   }
 
   addChild(parent: TreeNode<T>, value: T | TreeNode<T>, index = parent.children.length): TreeNode<T> {
@@ -902,11 +1031,15 @@ export class TreeData<T> {
     if (node.parent || this.roots.includes(node)) {
       this.removeNode(node);
     }
-    const normalizedIndex = normalizeIndex(index, parent.children.length);
+    const normalizedIndex = normalizeIndex(index, parent.children.length, true);
     parent.children.splice(normalizedIndex, 0, node);
     node.parent = parent;
     this.emit({ source: this, type: "add", node, parent, index: normalizedIndex });
     return node;
+  }
+
+  addChildAt(parent: TreeNode<T>, index: number, value: T | TreeNode<T>): TreeNode<T> {
+    return this.addChild(parent, value, index);
   }
 
   updateNode(node: TreeNode<T>, value: T): void {
@@ -945,7 +1078,7 @@ export class TreeData<T> {
     }
     previousSiblings.splice(previousIndex, 1);
     const nextSiblings = parent ? parent.children : this.roots;
-    const normalizedIndex = normalizeIndex(index ?? nextSiblings.length, nextSiblings.length);
+    const normalizedIndex = normalizeIndex(index ?? nextSiblings.length, nextSiblings.length, true);
     nextSiblings.splice(normalizedIndex, 0, node);
     node.parent = parent;
     this.emit({
@@ -961,6 +1094,23 @@ export class TreeData<T> {
 
   reorderNode(node: TreeNode<T>, index: number): void {
     this.moveNode(node, node.parent, index);
+  }
+
+  sortChildren(
+    parent: TreeNode<T> | null,
+    compare: (left: TreeNode<T>, right: TreeNode<T>) => number,
+  ): void {
+    const siblings = parent ? parent.children : this.roots;
+    const desiredOrder = [...siblings].sort(compare);
+    desiredOrder.forEach((node, targetIndex) => {
+      if (siblings[targetIndex] !== node) {
+        this.moveNode(node, parent, targetIndex);
+      }
+    });
+  }
+
+  sort(compare: (left: TreeNode<T>, right: TreeNode<T>) => number): void {
+    this.sortChildren(null, compare);
   }
 
   clear(): void {
@@ -1039,9 +1189,7 @@ export class ItemSelectionState<T> extends State<T | null> {
     this.itemCodec = options.itemCodec;
     this.availableItems = [...(options.items ?? [])];
     this.addListener(({ value }) => {
-      for (const [key, state] of this.itemSelectedStates) {
-        state.applyValue(value !== null && this.itemCodec.encode(value) === key);
-      }
+      this.syncItemSelectedStates(value);
     });
   }
 
@@ -1049,31 +1197,78 @@ export class ItemSelectionState<T> extends State<T | null> {
     return [...this.availableItems];
   }
 
+  get selectedIndex(): number {
+    if (this.currentValue === null) {
+      return -1;
+    }
+    const encoded = this.itemCodec.encode(this.currentValue);
+    return this.availableItems.findIndex((candidate) => this.itemCodec.encode(candidate) === encoded);
+  }
+
+  get selectedItem(): T | null {
+    return this.value;
+  }
+
   setItems(items: Iterable<T>): void {
     this.availableItems = [...items];
-    if (this.value !== null && !this.containsItem(this.value)) {
-      this.clearSelection();
+    if (this.currentValue === null) {
+      return;
     }
+    const matchingItem = this.findMatchingItem(this.currentValue);
+    if (matchingItem === null) {
+      this.clearSelection();
+      return;
+    }
+    this.currentValue = matchingItem;
+    this.syncItemSelectedStates(matchingItem);
   }
 
   containsItem(item: T): boolean {
-    const encoded = this.itemCodec.encode(item);
-    return this.availableItems.some((candidate) => this.itemCodec.encode(candidate) === encoded);
+    return this.findMatchingItem(item) !== null;
   }
 
   select(item: T, trigger?: ActionTrigger): void {
-    if (!this.containsItem(item) && this.availableItems.length > 0) {
+    const matchingItem = this.findMatchingItem(item);
+    if (matchingItem === null && this.availableItems.length > 0) {
       throw new Error(`item ${this.itemCodec.appendRepresentation(item)} is not in the selection model`);
     }
-    this.setValue(item, trigger);
+    this.setValue(matchingItem ?? item, trigger);
+  }
+
+  selectIndex(index: number, trigger?: ActionTrigger): void {
+    if (index === -1) {
+      this.clearSelection(trigger);
+      return;
+    }
+    const item = this.availableItems[index];
+    if (item === undefined) {
+      throw new RangeError(`index ${index} out of bounds`);
+    }
+    this.select(item, trigger);
   }
 
   clearSelection(trigger?: ActionTrigger): void {
     this.setValue(null, trigger);
   }
 
+  serializeSelection(): string {
+    return this.serializeValue();
+  }
+
+  restoreSelection(serialized: string, trigger?: ActionTrigger): void {
+    this.restoreValue(serialized, trigger);
+    if (this.currentValue === null) {
+      return;
+    }
+    const matchingItem = this.findMatchingItem(this.currentValue);
+    if (matchingItem !== null) {
+      this.currentValue = matchingItem;
+      this.syncItemSelectedStates(matchingItem);
+    }
+  }
+
   isSelected(item: T): boolean {
-    return this.value !== null && this.itemCodec.encode(this.value) === this.itemCodec.encode(item);
+    return this.currentValue !== null && this.itemCodec.encode(this.currentValue) === this.itemCodec.encode(item);
   }
 
   getItemSelectedState(item: T): BooleanState {
@@ -1112,6 +1307,20 @@ export class ItemSelectionState<T> extends State<T | null> {
     );
     this.selectionOperations.set(key, operation);
     return operation;
+  }
+
+  private findMatchingItem(item: T): T | null {
+    const encoded = this.itemCodec.encode(item);
+    return (
+      this.availableItems.find((candidate) => this.itemCodec.encode(candidate) === encoded) ?? null
+    );
+  }
+
+  private syncItemSelectedStates(value: T | null): void {
+    const selectedKey = value === null ? null : this.itemCodec.encode(value);
+    for (const [key, state] of this.itemSelectedStates) {
+      state.applyValue(selectedKey !== null && selectedKey === key);
+    }
   }
 }
 
@@ -1277,6 +1486,7 @@ export class Composite<TView = unknown> {
   private readonly operations = new Map<string, Operation>();
   private readonly activationListeners = new Set<(active: boolean) => void>();
   private readonly viewListeners = new Set<(event: ViewLifecycleEvent<TView>) => void>();
+  private readonly subComposites = new Set<Composite<any>>();
   private active = false;
   private createdView = false;
   private viewInstance?: TView;
@@ -1339,6 +1549,30 @@ export class Composite<TView = unknown> {
     return this.options.createView(this);
   }
 
+  protected registerSubComposite<C extends Composite<any>>(subComposite: C): C {
+    if (subComposite === (this as unknown as Composite<any>)) {
+      throw new Error("A composite cannot manage itself as a sub composite");
+    }
+    this.subComposites.add(subComposite);
+    if (this.active && this.getManagedSubComposites().includes(subComposite)) {
+      subComposite.activate();
+    }
+    return subComposite;
+  }
+
+  protected unregisterSubComposite(subComposite: Composite<any>): void {
+    if (!this.subComposites.delete(subComposite)) {
+      return;
+    }
+    if (subComposite.isActive) {
+      subComposite.deactivate();
+    }
+  }
+
+  protected getManagedSubComposites(): readonly Composite<any>[] {
+    return [...this.subComposites];
+  }
+
   getView(): TView {
     if (!this.createdView) {
       this.viewInstance = this.createView();
@@ -1369,7 +1603,12 @@ export class Composite<TView = unknown> {
       return;
     }
     this.active = true;
-    this.handleActivationChange(true);
+    this.handlePreActivation();
+    for (const composite of this.getManagedSubComposites()) {
+      composite.activate();
+    }
+    this.handleActivated();
+    this.notifyActivationListeners(true);
   }
 
   deactivate(): void {
@@ -1377,21 +1616,26 @@ export class Composite<TView = unknown> {
       return;
     }
     this.active = false;
-    this.handleActivationChange(false);
+    const managedComposites = [...this.getManagedSubComposites()].reverse();
+    for (const composite of managedComposites) {
+      composite.deactivate();
+    }
+    this.handlePostDeactivation();
+    this.handleDeactivated();
+    this.notifyActivationListeners(false);
   }
 
   protected handleViewCreated(_view: TView): void {}
 
+  protected handlePreActivation(): void {}
+
   protected handleActivated(): void {}
+
+  protected handlePostDeactivation(): void {}
 
   protected handleDeactivated(): void {}
 
-  private handleActivationChange(active: boolean): void {
-    if (active) {
-      this.handleActivated();
-    } else {
-      this.handleDeactivated();
-    }
+  private notifyActivationListeners(active: boolean): void {
     for (const listener of this.activationListeners) {
       listener(active);
     }
@@ -1407,15 +1651,21 @@ export interface TabTitleAppearance {
   tooltip?: string;
 }
 
+export interface TabCompositeOptions<TView> extends CompositeOptions<TView> {
+  readonly closeable?: boolean;
+  readonly potentiallyCloseable?: boolean;
+  readonly tabs?: readonly TabComposite<any>[];
+  readonly selectedTabIndex?: number;
+}
+
 export class TabComposite<TView = unknown> extends SimpleComposite<TView> {
   readonly titleAppearance: TabTitleAppearance;
+  readonly tabsData: MutableListData<TabComposite<any>>;
+  readonly selectedTabState: ItemSelectionState<TabComposite<any>>;
 
   constructor(
     name: string,
-    options: CompositeOptions<TView> & {
-      readonly closeable?: boolean;
-      readonly potentiallyCloseable?: boolean;
-    } = {},
+    options: TabCompositeOptions<TView> = {},
   ) {
     super(name, options);
     this.titleAppearance = {
@@ -1423,6 +1673,46 @@ export class TabComposite<TView = unknown> extends SimpleComposite<TView> {
       potentiallyCloseable: options.potentiallyCloseable ?? options.closeable ?? false,
       classes: [],
     };
+    const tabCodec = createLookupCodec<TabComposite<any>>(
+      `${name}.tab`,
+      () => this.tabsData?.toArray() ?? [],
+      (tab) => tab.name,
+    );
+    this.tabsData = new MutableListData<TabComposite<any>>(tabCodec, [], `${name}.tabs`);
+    this.selectedTabState = new ItemSelectionState<TabComposite<any>>(null, {
+      name: `${name}.selectedTab`,
+      itemCodec: tabCodec,
+      items: this.tabsData,
+    });
+    this.tabsData.addListener(() => {
+      this.selectedTabState.setItems(this.tabsData);
+      if (this.selectedTab === null && this.tabsData.getItemCount() > 0) {
+        this.selectedTabState.selectIndex(0);
+      }
+    });
+    this.selectedTabState.addListener(({ previousValue, value }) => {
+      if (!this.isActive) {
+        return;
+      }
+      previousValue?.deactivate();
+      value?.activate();
+    });
+    for (const tab of options.tabs ?? []) {
+      this.addTab(tab);
+    }
+    if (
+      options.selectedTabIndex !== undefined
+      && options.selectedTabIndex >= 0
+      && options.selectedTabIndex < this.tabsData.getItemCount()
+    ) {
+      this.selectedTabState.selectIndex(options.selectedTabIndex);
+    } else if (this.tabsData.getItemCount() > 0 && this.selectedTab === null) {
+      this.selectedTabState.selectIndex(0);
+    }
+  }
+
+  protected override getManagedSubComposites(): readonly Composite<any>[] {
+    return this.selectedTab ? [this.selectedTab] : [];
   }
 
   get isCloseable(): boolean {
@@ -1431,6 +1721,70 @@ export class TabComposite<TView = unknown> extends SimpleComposite<TView> {
 
   get isPotentiallyCloseable(): boolean {
     return this.titleAppearance.potentiallyCloseable;
+  }
+
+  get tabs(): readonly TabComposite<any>[] {
+    return this.tabsData.toArray();
+  }
+
+  get selectedTab(): TabComposite<any> | null {
+    return this.selectedTabState.selectedItem;
+  }
+
+  get selectedTabIndex(): number {
+    return this.selectedTabState.selectedIndex;
+  }
+
+  addTab(tab: TabComposite<any>, index = this.tabsData.getItemCount()): void {
+    this.registerSubComposite(tab);
+    this.tabsData.addAt(index, tab);
+  }
+
+  removeTab(tab: TabComposite<any>): boolean {
+    const index = this.tabsData.indexOf(tab);
+    if (index === -1) {
+      return false;
+    }
+    const wasSelected = this.selectedTab === tab;
+    const replacementIndex = wasSelected
+      ? Math.min(index, this.tabsData.getItemCount() - 2)
+      : this.selectedTabIndex;
+    this.tabsData.removeAt(index);
+    this.unregisterSubComposite(tab);
+    if (wasSelected) {
+      if (replacementIndex >= 0) {
+        this.selectedTabState.selectIndex(replacementIndex);
+      } else {
+        this.selectedTabState.clearSelection();
+      }
+    }
+    return true;
+  }
+
+  moveTab(fromIndex: number, toIndex: number): void {
+    this.tabsData.move(fromIndex, toIndex);
+  }
+
+  sortTabs(compare: (left: TabComposite<any>, right: TabComposite<any>) => number): void {
+    this.tabsData.sort(compare);
+  }
+
+  filterTabs(
+    predicate: (tab: TabComposite<any>, index: number, tabs: readonly TabComposite<any>[]) => boolean,
+  ): TabComposite<any>[] {
+    return this.tabsData.filter(predicate);
+  }
+
+  selectTab(tab: TabComposite<any>, trigger?: ActionTrigger): void {
+    this.selectedTabState.select(tab, trigger);
+  }
+
+  selectTabAt(index: number, trigger?: ActionTrigger): void {
+    this.selectedTabState.selectIndex(index, trigger);
+  }
+
+  ensureSelectedTabInitialized(): unknown | null {
+    return this.selectedTab?.getView() ?? null;
   }
 
   customizeTitleComponentAppearance(
