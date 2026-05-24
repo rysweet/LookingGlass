@@ -362,6 +362,23 @@ describe("isAssignableTo – unknown types", () => {
 // 10. METHOD CALL VALIDATION — valid calls
 // ═══════════════════════════════════════════════════════════════════════════
 
+describe("array and enum method validation", () => {
+  it("validates array-typed arguments", () => {
+    const cls = parseTweedle(`class Collector extends SThing { void collect(WholeNumber[] values) { doInOrder {} } }`);
+    const env = createTypeEnvironment([cls]);
+    const result = env.checkMethodCall("Collector", "collect", ["WholeNumber[]"]);
+    expect(result.valid).toBe(true);
+  });
+
+  it("validates enum-typed arguments", () => {
+    const color = parseTweedle(`enum Color { RED, GREEN }`);
+    const light = parseTweedle(`class Light extends SThing { void setColor(Color color) { doInOrder {} } }`);
+    const env = createTypeEnvironment([color, light]);
+    const result = env.checkMethodCall("Light", "setColor", ["Color"]);
+    expect(result.valid).toBe(true);
+  });
+});
+
 describe("checkMethodCall – valid calls", () => {
   it("validates a zero-arg void method", () => {
     const cls = parseTweedle(`
@@ -423,7 +440,7 @@ describe("checkMethodCall – valid calls", () => {
     const env = createTypeEnvironment([cls]);
     const result = env.checkMethodCall("Greeter", "greet", []);
     expect(result.valid).toBe(true);
-    expect(result.returnType).toEqual({
+    expect(result.returnType).toMatchObject({
       type: "SimpleTypeRef",
       name: "TextString",
       isArray: false,

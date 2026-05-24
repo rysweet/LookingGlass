@@ -184,7 +184,7 @@ describe("constructors", () => {
     const ctor = ast.constructors[0];
     expect(ctor.parameters).toHaveLength(2);
     expect(ctor.parameters[0].name).toBe("bunny");
-    expect(ctor.parameters[0].paramType).toEqual({
+    expect(ctor.parameters[0].paramType).toMatchObject({
       type: "SimpleTypeRef",
       name: "SBiped",
       isArray: false,
@@ -200,7 +200,7 @@ describe("constructors", () => {
     }`);
     const body = ast.constructors[0].body;
     expect(body).toHaveLength(1);
-    expect(body[0].type).toBe("ExpressionStatement");
+    expect(body[0].type).toBe("SuperConstructorInvocationStatement");
   });
 
   it("disambiguates constructor from method (no return type)", () => {
@@ -241,7 +241,7 @@ describe("method declarations", () => {
       }
     }`);
     const m = ast.methods[0];
-    expect(m.returnType).toEqual({
+    expect(m.returnType).toMatchObject({
       type: "SimpleTypeRef",
       name: "WholeNumber",
       isArray: false,
@@ -264,7 +264,7 @@ describe("method declarations", () => {
       }
     }`);
     const m = ast.methods[0];
-    expect(m.returnType).toEqual({
+    expect(m.returnType).toMatchObject({
       type: "SimpleTypeRef",
       name: "SJoint",
       isArray: true,
@@ -336,7 +336,7 @@ describe("field declarations", () => {
     const f = ast.fields[0];
     expect(f.type).toBe("FieldDeclaration");
     expect(f.name).toBe("bunny");
-    expect(f.fieldType).toEqual({
+    expect(f.fieldType).toMatchObject({
       type: "SimpleTypeRef",
       name: "SBiped",
       isArray: false,
@@ -403,7 +403,7 @@ describe("field declarations", () => {
 describe("type references", () => {
   it("parses simple class type", () => {
     const ast = parseTweedle(`class X { SBiped bunny; }`);
-    expect(ast.fields[0].fieldType).toEqual({
+    expect(ast.fields[0].fieldType).toMatchObject({
       type: "SimpleTypeRef",
       name: "SBiped",
       isArray: false,
@@ -417,7 +417,7 @@ describe("type references", () => {
 
   it("parses array type", () => {
     const ast = parseTweedle(`class X { SJoint[] joints; }`);
-    expect(ast.fields[0].fieldType).toEqual({
+    expect(ast.fields[0].fieldType).toMatchObject({
       type: "SimpleTypeRef",
       name: "SJoint",
       isArray: true,
@@ -431,22 +431,22 @@ describe("type references", () => {
       TextString c;
       Boolean d;
     }`);
-    expect(ast.fields[0].fieldType).toEqual({
+    expect(ast.fields[0].fieldType).toMatchObject({
       type: "SimpleTypeRef",
       name: "WholeNumber",
       isArray: false,
     });
-    expect(ast.fields[1].fieldType).toEqual({
+    expect(ast.fields[1].fieldType).toMatchObject({
       type: "SimpleTypeRef",
       name: "DecimalNumber",
       isArray: false,
     });
-    expect(ast.fields[2].fieldType).toEqual({
+    expect(ast.fields[2].fieldType).toMatchObject({
       type: "SimpleTypeRef",
       name: "TextString",
       isArray: false,
     });
-    expect(ast.fields[3].fieldType).toEqual({
+    expect(ast.fields[3].fieldType).toMatchObject({
       type: "SimpleTypeRef",
       name: "Boolean",
       isArray: false,
@@ -846,11 +846,11 @@ describe("expressions – this and super", () => {
       X() { super(); }
     }`);
     const stmt = ast.constructors[0].body[0] as {
-      type: "ExpressionStatement";
-      expression: { type: string };
+      type: "SuperConstructorInvocationStatement";
+      arguments?: unknown[];
     };
-    // super() is a method invocation on Super
-    expect(stmt.expression.type).toBe("MethodInvocation");
+    expect(stmt.type).toBe("SuperConstructorInvocationStatement");
+    expect(stmt.arguments ?? []).toHaveLength(0);
   });
 
   it("parses super with named arguments", () => {
@@ -860,14 +860,12 @@ describe("expressions – this and super", () => {
       }
     }`);
     const stmt = ast.constructors[0].body[0] as {
-      type: "ExpressionStatement";
-      expression: {
-        type: string;
-        arguments: Array<{ name: string | null; value: unknown }>;
-      };
+      type: "SuperConstructorInvocationStatement";
+      arguments?: Array<{ name: string | null; value: unknown }>;
     };
-    expect(stmt.expression.arguments).toHaveLength(1);
-    expect(stmt.expression.arguments[0].name).toBe("resource");
+    expect(stmt.type).toBe("SuperConstructorInvocationStatement");
+    expect(stmt.arguments).toHaveLength(1);
+    expect(stmt.arguments?.[0].name).toBe("resource");
   });
 });
 
@@ -1495,39 +1493,30 @@ describe("lexer error handling", () => {
 // 12. UNSUPPORTED CONSTRUCTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("unsupported constructs", () => {
-  it("throws on enum declaration", () => {
-    expect(() => parseTweedle("enum Color { RED, GREEN, BLUE }")).toThrow(
-      TweedleParseError
-    );
-    try {
-      parseTweedle("enum Color { RED, GREEN, BLUE }");
-    } catch (e) {
-      expect((e as Error).message).toContain("not yet supported");
-    }
+describe("previously unsupported constructs", () => {
+  it("parses enum declarations with values", () => {
+    const ast = parseTweedle("enum Color { RED, GREEN, BLUE }");
+    expect(ast.isEnum).toBe(true);
+    expect(ast.enumValues?.map((value) => value.name)).toEqual(["RED", "GREEN", "BLUE"]);
   });
 
-  it("throws on lambda expression in body", () => {
-    expect(() =>
-      parseTweedle(`class X {
-        void m() {
-          this.addListener(listener: (SceneActivationEvent event) -> {
-            this.doIt();
-          });
-        }
-      }`)
-    ).toThrow(TweedleParseError);
-    try {
-      parseTweedle(`class X {
-        void m() {
-          this.addListener(listener: (SceneActivationEvent event) -> {
-            this.doIt();
-          });
-        }
-      }`);
-    } catch (e) {
-      expect((e as Error).message).toContain("not yet supported");
-    }
+  it("parses lambda expressions in method bodies", () => {
+    const ast = parseTweedle(`class X {
+      void m() {
+        this.addListener(listener: (SceneActivationEvent event) -> {
+          this.doIt();
+        });
+      }
+    }`);
+    const stmt = ast.methods[0].body[0] as {
+      type: "ExpressionStatement";
+      expression: {
+        type: string;
+        arguments: Array<{ name: string | null; value: { type: string; value: { name: string } } }>;
+      };
+    };
+    expect(stmt.expression.arguments[0].value.type).toBe("LambdaExpression");
+    expect(stmt.expression.arguments[0].value.value.name).toContain("SceneActivationEvent event");
   });
 });
 
@@ -1569,7 +1558,7 @@ describe("integration – Default.twe (all static methods)", () => {
     const clickable = ast.methods.find(
       (m) => m.name === "clickableVisuals"
     )!;
-    expect(clickable.returnType).toEqual({
+    expect(clickable.returnType).toMatchObject({
       type: "SimpleTypeRef",
       name: "SThing",
       isArray: true,
@@ -1782,7 +1771,7 @@ describe("integration – SFlyer.twe excerpt (default params + array return)", (
     const ast = parseTweedle(source);
     expect(ast.constructors).toHaveLength(1);
     expect(ast.constructors[0].parameters).toHaveLength(1);
-    expect(ast.constructors[0].parameters[0].paramType).toEqual({
+    expect(ast.constructors[0].parameters[0].paramType).toMatchObject({
       type: "SimpleTypeRef",
       name: "FlyerResource",
       isArray: false,
@@ -1800,7 +1789,7 @@ describe("integration – SFlyer.twe excerpt (default params + array return)", (
   it("parses SJoint[] array return type", () => {
     const ast = parseTweedle(source);
     const getTail = ast.methods.find((m) => m.name === "getTailArray")!;
-    expect(getTail.returnType).toEqual({
+    expect(getTail.returnType).toMatchObject({
       type: "SimpleTypeRef",
       name: "SJoint",
       isArray: true,

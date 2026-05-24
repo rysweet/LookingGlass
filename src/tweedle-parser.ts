@@ -55,7 +55,13 @@ interface Token {
 // ── AST Types ────────────────────────────────────────────────────────────
 
 export type TypeRef =
-  | { type: "SimpleTypeRef"; name: string; isArray: boolean }
+  | {
+    type: "SimpleTypeRef";
+    name: string;
+    isArray: boolean;
+    arrayDimensions?: number;
+    typeArguments?: TypeRef[];
+  }
   | { type: "VoidTypeRef" }
   | { type: "LambdaTypeRef"; raw: string };
 
@@ -84,6 +90,8 @@ export type Statement =
   | { type: "ExpressionStatement"; expression: Expression }
   | { type: "LocalVariableDeclaration"; name: string; varType: TypeRef; initializer: Expression; isConstant: boolean }
   | { type: "Block"; body: Statement[] }
+  | { type: "ThisConstructorInvocationStatement"; className?: string | null; arguments?: Argument[] }
+  | { type: "SuperConstructorInvocationStatement"; className?: string | null; arguments?: Argument[] }
   | { type: "DisabledBlock"; raw: string }
   | { type: "Comment"; text: string };
 
@@ -103,7 +111,8 @@ export type Expression =
   | { type: "ArrayAccess"; target: Expression; index: Expression }
   | { type: "TypeCast"; expression: Expression; targetType: TypeRef }
   | { type: "InstanceOf"; expression: Expression; testType: TypeRef }
-  | { type: "Parenthesized"; expression: Expression };
+  | { type: "Parenthesized"; expression: Expression }
+  | { type: "LambdaExpression"; raw: string };
 
 export type ConstructorDecl = {
   type: "ConstructorDeclaration";
@@ -111,6 +120,7 @@ export type ConstructorDecl = {
   parameters: Parameter[];
   body: Statement[];
   visibility: string | null;
+  typeParameters?: string[];
 };
 
 export type MethodDecl = {
@@ -121,6 +131,7 @@ export type MethodDecl = {
   body: Statement[];
   isStatic: boolean;
   visibility: string | null;
+  typeParameters?: string[];
 };
 
 export type FieldDecl = {
@@ -133,6 +144,11 @@ export type FieldDecl = {
   visibility: string | null;
 };
 
+export type EnumValueDecl = {
+  name: string;
+  arguments: Argument[];
+};
+
 export type ClassDecl = {
   type: "ClassDeclaration";
   name: string;
@@ -142,6 +158,9 @@ export type ClassDecl = {
   constructors: ConstructorDecl[];
   methods: MethodDecl[];
   fields: FieldDecl[];
+  typeParameters?: string[];
+  isEnum?: boolean;
+  enumValues?: EnumValueDecl[];
 };
 
 // ── TweedleParseError ────────────────────────────────────────────────────
@@ -423,11 +442,12 @@ class Parser {
     if (this.check(TT.ANNOTATION)) visibility = this.advance().text;
 
     if (this.check(TT.ENUM)) {
-      this.fail("Enum declarations are not yet supported", this.peek());
+      return this.parseEnumDeclaration(visibility);
     }
 
     this.expect(TT.CLASS, "'class'");
     const name = this.expect(TT.IDENTIFIER, "class name (identifier)").text;
+    const typeParameters = this.parseOptionalTypeParameterNames();
 
     let superClass: string | null = null;
     if (this.match(TT.EXTENDS)) {
@@ -452,7 +472,52 @@ class Parser {
 
     this.expect(TT.RBRACE, "'}'");
 
-    return { type: "ClassDeclaration", name, superClass, modelType, visibility, constructors, methods, fields };
+    return { type: "ClassDeclaration", name, superClass, modelType, visibility, constructors, methods, fields, typeParameters };
+  }
+
+  private parseEnumDeclaration(visibility: string | null): ClassDecl {
+    this.expect(TT.ENUM, "'enum'");
+    const name = this.expect(TT.IDENTIFIER, "enum name").text;
+    this.expect(TT.LBRACE, "'{'");
+
+    const enumValues: EnumValueDecl[] = [];
+    while (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
+      if (this.check(TT.SEMI)) {
+        this.advance();
+        break;
+      }
+      const valueName = this.expect(TT.IDENTIFIER, "enum value").text;
+      const argumentsList = this.check(TT.LPAREN) ? this.parseArgumentList() : [];
+      enumValues.push({ name: valueName, arguments: argumentsList });
+      if (!this.match(TT.COMMA)) {
+        break;
+      }
+      if (this.check(TT.RBRACE)) {
+        break;
+      }
+    }
+
+    const constructors: ConstructorDecl[] = [];
+    const methods: MethodDecl[] = [];
+    const fields: FieldDecl[] = [];
+    while (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
+      if (this.match(TT.SEMI)) continue;
+      this.parseMember(name, constructors, methods, fields);
+    }
+    this.expect(TT.RBRACE, "'}'");
+
+    return {
+      type: "ClassDeclaration",
+      name,
+      superClass: null,
+      modelType: null,
+      visibility,
+      constructors,
+      methods,
+      fields,
+      isEnum: true,
+      enumValues,
+    };
   }
 
   // ── Member Declarations ────────────────────────────────────────────────
@@ -470,6 +535,7 @@ class Parser {
     let isConstant = false;
     if (this.check(TT.STATIC)) { this.advance(); isStatic = true; }
     if (this.check(TT.CONSTANT)) { this.advance(); isConstant = true; }
+    const typeParameters = this.parseOptionalTypeParameterNames();
 
     // void → method
     if (this.check(TT.VOID)) {
@@ -480,7 +546,7 @@ class Parser {
       const body = this.parseBlock();
       methods.push({
         type: "MethodDeclaration", name: mName, returnType, parameters: params,
-        body, isStatic, visibility,
+        body, isStatic, visibility, typeParameters,
       });
       return;
     }
@@ -492,7 +558,7 @@ class Parser {
       const body = this.parseBlock();
       constructors.push({
         type: "ConstructorDeclaration", name: cName, parameters: params,
-        body, visibility,
+        body, visibility, typeParameters,
       });
       return;
     }
@@ -507,7 +573,7 @@ class Parser {
       const body = this.parseBlock();
       methods.push({
         type: "MethodDeclaration", name: mName, returnType: typeRef,
-        parameters: params, body, isStatic, visibility,
+        parameters: params, body, isStatic, visibility, typeParameters,
       });
     } else {
       // Field
@@ -536,28 +602,103 @@ class Parser {
     }
 
     const name = this.expect(TT.IDENTIFIER, "type name").text;
-    let isArray = false;
-    if (this.check(TT.LBRACKET) && this.peekAt(1).type === TT.RBRACKET) {
-      this.advance(); this.advance();
-      isArray = true;
+    const typeArguments = this.parseOptionalTypeArguments();
+    let arrayDimensions = 0;
+    while (this.check(TT.LBRACKET) && this.peekAt(1).type === TT.RBRACKET) {
+      this.advance();
+      this.advance();
+      arrayDimensions += 1;
     }
-    return { type: "SimpleTypeRef", name, isArray };
+    return {
+      type: "SimpleTypeRef",
+      name,
+      isArray: arrayDimensions > 0,
+      arrayDimensions,
+      typeArguments,
+    };
   }
 
   private parseLambdaTypeRef(): TypeRef {
-    this.advance();
+    const raw = this.captureDelimitedRaw(TT.LT, TT.GT);
+    return { type: "LambdaTypeRef", raw };
+  }
+
+  private parseOptionalTypeArguments(): TypeRef[] | undefined {
+    if (!this.check(TT.LT)) {
+      return undefined;
+    }
+    this.expect(TT.LT, "'<'");
+    const args: TypeRef[] = [];
+    while (!this.check(TT.GT) && !this.check(TT.EOF)) {
+      if (args.length > 0) this.expect(TT.COMMA, "','");
+      args.push(this.parseTypeRef());
+    }
+    this.expect(TT.GT, "'>'");
+    return args;
+  }
+
+  private parseOptionalTypeParameterNames(): string[] | undefined {
+    if (!this.looksLikeTypeParameterList()) {
+      return undefined;
+    }
+    this.expect(TT.LT, "'<'");
+    const names: string[] = [];
+    while (!this.check(TT.GT) && !this.check(TT.EOF)) {
+      if (names.length > 0) this.expect(TT.COMMA, "','");
+      names.push(this.expect(TT.IDENTIFIER, "type parameter name").text);
+    }
+    this.expect(TT.GT, "'>'");
+    return names;
+  }
+
+  private looksLikeTypeParameterList(): boolean {
+    if (!this.check(TT.LT)) {
+      return false;
+    }
+    let offset = 1;
+    let expectIdentifier = true;
+    while (true) {
+      const tok = this.peekAt(offset);
+      if (tok.type === TT.EOF || tok.type === TT.ARROW) {
+        return false;
+      }
+      if (expectIdentifier) {
+        if (tok.type !== TT.IDENTIFIER) {
+          return false;
+        }
+        expectIdentifier = false;
+        offset += 1;
+        continue;
+      }
+      if (tok.type === TT.COMMA) {
+        expectIdentifier = true;
+        offset += 1;
+        continue;
+      }
+      if (tok.type === TT.GT) {
+        return this.peekAt(offset + 1).type !== TT.ARROW;
+      }
+      return false;
+    }
+  }
+
+  private captureDelimitedRaw(open: TT, close: TT): string {
     const parts: string[] = [];
+    const openText = this.expect(open).text;
+    parts.push(openText);
     let depth = 1;
     while (!this.check(TT.EOF)) {
-      const tok = this.peek();
-      if (tok.type === TT.LT) depth++;
-      if (tok.type === TT.GT) {
+      const tok = this.advance();
+      parts.push(tok.text);
+      if (tok.type === open) depth++;
+      if (tok.type === close) {
         depth--;
-        if (depth === 0) { this.advance(); break; }
+        if (depth === 0) {
+          break;
+        }
       }
-      parts.push(this.advance().text);
     }
-    return { type: "LambdaTypeRef", raw: parts.join("") };
+    return joinTokenText(parts);
   }
 
   // ── Parameters ─────────────────────────────────────────────────────────
@@ -663,14 +804,28 @@ class Parser {
       return { type: "WhileLoop", condition, body };
     }
 
-    // try { ... } catch (Type name) { ... }
+    // try { ... } catch (Type name) { ... } / catch (name Type) { ... }
     if (this.check(TT.TRY)) {
       this.advance();
       const tryBody = this.parseBlock();
       this.expect(TT.CATCH, "'catch'");
       this.expect(TT.LPAREN, "'('");
-      const catchType = this.parseTypeRef();
-      const catchVariable = this.expect(TT.IDENTIFIER, "variable name").text;
+      let catchType: TypeRef;
+      let catchVariable: string;
+      if (this.check(TT.IDENTIFIER) && this.peekAt(1).type === TT.IDENTIFIER) {
+        const first = this.advance().text;
+        const second = this.advance().text;
+        if (/^[A-Z]/.test(first)) {
+          catchType = { type: "SimpleTypeRef", name: first, isArray: false, arrayDimensions: 0 };
+          catchVariable = second;
+        } else {
+          catchVariable = first;
+          catchType = { type: "SimpleTypeRef", name: second, isArray: false, arrayDimensions: 0 };
+        }
+      } else {
+        catchType = this.parseTypeRef();
+        catchVariable = this.expect(TT.IDENTIFIER, "variable name").text;
+      }
       this.expect(TT.RPAREN, "')'");
       const catchBody = this.parseBlock();
       return { type: "TryCatch", tryBody, catchType, catchVariable, catchBody };
@@ -715,6 +870,22 @@ class Parser {
       return { type: "Return", expression };
     }
 
+    if (this.check(TT.LBRACE)) {
+      return { type: "Block", body: this.parseBlock() };
+    }
+
+    if (this.check(TT.THIS) && this.peekAt(1).type === TT.LPAREN) {
+      const args = this.parseConstructorInvocationArguments(TT.THIS);
+      this.expect(TT.SEMI, "';'");
+      return { type: "ThisConstructorInvocationStatement", arguments: args };
+    }
+
+    if (this.check(TT.SUPER) && this.peekAt(1).type === TT.LPAREN) {
+      const args = this.parseConstructorInvocationArguments(TT.SUPER);
+      this.expect(TT.SEMI, "';'");
+      return { type: "SuperConstructorInvocationStatement", arguments: args };
+    }
+
     // Disabled block: *< ... >*
     if (this.check(TT.DISABLED_BLOCK)) {
       const tok = this.advance();
@@ -739,15 +910,8 @@ class Parser {
   }
 
   private isLocalVarStart(): boolean {
-    if (!this.check(TT.IDENTIFIER)) return false;
-    const next = this.peekAt(1);
-    // Type name pattern
-    if (next.type === TT.IDENTIFIER) return true;
-    // Type[] name pattern
-    if (next.type === TT.LBRACKET &&
-        this.peekAt(2).type === TT.RBRACKET &&
-        this.peekAt(3).type === TT.IDENTIFIER) return true;
-    return false;
+    const end = this.lookaheadTypeRefEnd(this.pos);
+    return end !== null && this.tokens[end]?.type === TT.IDENTIFIER && this.tokens[end + 1]?.type === TT.ASSIGN;
   }
 
   private parseLocalVariable(isConstant: boolean): Statement {
@@ -767,9 +931,8 @@ class Parser {
     for (;;) {
       const tok = this.peek();
 
-      // Lambda expression detection (unsupported)
       if (tok.type === TT.ARROW) {
-        this.fail("Lambda expressions are not yet supported", tok);
+        break;
       }
 
       // Postfix / high-precedence operators (bp = 20)
@@ -843,7 +1006,7 @@ class Parser {
     // Parenthesized expression or lambda detection
     if (tok.type === TT.LPAREN) {
       if (this.isLambdaExpression()) {
-        this.fail("Lambda expressions are not yet supported", tok);
+        return this.parseLambdaExpression();
       }
       this.advance();
       this.depth++;
@@ -934,27 +1097,88 @@ class Parser {
     return this.peekAt(i).type === TT.ARROW;
   }
 
+  private parseLambdaExpression(): Expression {
+    const raw = this.captureLambdaRaw();
+    return { type: "LambdaExpression", raw };
+  }
+
+  private captureLambdaRaw(): string {
+    const parts: string[] = [];
+    let depth = 0;
+    while (!this.check(TT.EOF)) {
+      const tok = this.advance();
+      parts.push(tok.text);
+      if (tok.type === TT.LPAREN || tok.type === TT.LBRACE || tok.type === TT.LBRACKET) depth++;
+      if (tok.type === TT.RPAREN || tok.type === TT.RBRACE || tok.type === TT.RBRACKET) depth--;
+      if (tok.type === TT.ARROW) {
+        continue;
+      }
+      if (depth === 0 && (tok.type === TT.RBRACE || tok.type === TT.RPAREN)) {
+        if (this.peek().type !== TT.ARROW) {
+          break;
+        }
+      }
+      if (depth === 0 && (tok.type === TT.SEMI || tok.type === TT.COMMA)) {
+        this.pos--;
+        parts.pop();
+        break;
+      }
+    }
+    return joinTokenText(parts);
+  }
+
+  private parseConstructorInvocationArguments(keyword: TT.THIS | TT.SUPER): Argument[] {
+    this.expect(keyword);
+    return this.parseArgumentList();
+  }
+
+  private lookaheadTypeRefEnd(start: number): number | null {
+    let index = start;
+    if (this.tokens[index]?.type !== TT.IDENTIFIER) {
+      return null;
+    }
+    index += 1;
+    if (this.tokens[index]?.type === TT.LT) {
+      let depth = 1;
+      index += 1;
+      while (depth > 0) {
+        const tok = this.tokens[index];
+        if (!tok) return null;
+        if (tok.type === TT.ARROW) return null;
+        if (tok.type === TT.LT) depth++;
+        if (tok.type === TT.GT) depth--;
+        index += 1;
+      }
+    }
+    while (this.tokens[index]?.type === TT.LBRACKET && this.tokens[index + 1]?.type === TT.RBRACKET) {
+      index += 2;
+    }
+    return index;
+  }
+
   private parseNewExpression(): Expression {
     this.advance();
     const className = this.expect(TT.IDENTIFIER, "class name").text;
+    const elementType: TypeRef = { type: "SimpleTypeRef", name: className, isArray: false, arrayDimensions: 0 };
 
-    // new Type[]{elements} or new Type[size]
     if (this.check(TT.LBRACKET)) {
       this.advance();
-      this.expect(TT.RBRACKET, "']'");
-      this.expect(TT.LBRACE, "'{'");
-      const elements: Expression[] = [];
-      while (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
-        elements.push(this.parseExpression());
-        if (!this.check(TT.RBRACE)) this.expect(TT.COMMA, "','");
+      let size: Expression | null = null;
+      if (!this.check(TT.RBRACKET)) {
+        size = this.parseExpression();
       }
-      this.expect(TT.RBRACE, "'}'");
-      return {
-        type: "NewArray",
-        elementType: { type: "SimpleTypeRef", name: className, isArray: false },
-        elements,
-        size: null,
-      };
+      this.expect(TT.RBRACKET, "']'");
+      if (this.check(TT.LBRACE)) {
+        this.advance();
+        const elements: Expression[] = [];
+        while (!this.check(TT.RBRACE) && !this.check(TT.EOF)) {
+          elements.push(this.parseExpression());
+          if (!this.check(TT.RBRACE)) this.expect(TT.COMMA, "','");
+        }
+        this.expect(TT.RBRACE, "'}'");
+        return { type: "NewArray", elementType, elements, size };
+      }
+      return { type: "NewArray", elementType, elements: [], size };
     }
 
     // new Type(args)
@@ -1056,6 +1280,35 @@ function tokenName(type: TT): string {
   return TOKEN_NAMES.get(type) ?? String(type);
 }
 
+function joinTokenText(parts: string[]): string {
+  return parts
+    .join(" ")
+    .replace(/\s+([)\]};,.])/g, "$1")
+    .replace(/([(\[{])\s+/g, "$1")
+    .replace(/\s+(->)/g, " $1")
+    .replace(/(<-)\s+/g, "$1 ")
+    .replace(/\s+(<)/g, " $1")
+    .trim();
+}
+
+function applyDeclarationMetadata(raw: ClassDecl, hydrated: ClassDecl): ClassDecl {
+  const target = hydrated as ClassDecl & {
+    typeParameters?: string[];
+    isEnum?: boolean;
+    enumValues?: EnumValueDecl[];
+  };
+  target.typeParameters = raw.typeParameters;
+  target.isEnum = raw.isEnum;
+  target.enumValues = raw.enumValues;
+  for (let index = 0; index < raw.methods.length; index++) {
+    (target.methods[index] as MethodDecl & { typeParameters?: string[] }).typeParameters = raw.methods[index].typeParameters;
+  }
+  for (let index = 0; index < raw.constructors.length; index++) {
+    (target.constructors[index] as ConstructorDecl & { typeParameters?: string[] }).typeParameters = raw.constructors[index].typeParameters;
+  }
+  return target;
+}
+
 // ── Public API ───────────────────────────────────────────────────────────
 
 export function parseTweedle(source: string): ClassDecl {
@@ -1067,5 +1320,7 @@ export function parseTweedle(source: string): ClassDecl {
   }
   const tokens = tokenize(source);
   const parser = new Parser(tokens);
-  return hydrateClassDecl(parser.parse() as RawClassDecl) as unknown as ClassDecl;
+  const raw = parser.parse();
+  const hydrated = hydrateClassDecl(raw as RawClassDecl) as unknown as ClassDecl;
+  return applyDeclarationMetadata(raw, hydrated);
 }

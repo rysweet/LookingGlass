@@ -492,6 +492,8 @@ describe("Discriminated-union kind field", () => {
         case "primitive": return "prim";
         case "java": return "java";
         case "user": return "user";
+        case "array": return "array";
+        case "type_parameter": return "type-parameter";
       }
     }
 
@@ -575,6 +577,38 @@ describe("AbstractType.isAssignableTo() method", () => {
   });
 });
 
+describe("array, enum, and generic types", () => {
+  it("resolves array types on demand", () => {
+    const h = emptyHierarchy();
+    const arrayType = h.resolve("WholeNumber[]");
+    expect(arrayType).not.toBeNull();
+    expect(arrayType?.kind).toBe("array");
+    expect(arrayType?.name).toBe("WholeNumber[]");
+  });
+
+  it("registers enum values on enum declarations", () => {
+    const color = parseTweedle(`enum Color { RED, GREEN, BLUE }`);
+    const h = createTypeHierarchy([color]);
+    const resolved = h.resolve("Color") as UserType;
+    expect(resolved.enumValues).toEqual(["RED", "GREEN", "BLUE"]);
+  });
+
+  it("treats generic parameters as wildcard overloads behind exact matches", () => {
+    const cls = makeClass(`
+      class Box<T> extends SThing {
+        Box() {}
+        <U> U echo(U value) { return value; }
+        TextString echo(TextString value) { return value; }
+      }
+    `);
+    const h = createTypeHierarchy([cls]);
+    const box = h.resolve("Box")!;
+    const text = h.resolve("TextString")!;
+    const resolved = h.resolveMethod(box, "echo", [text]);
+    expect(resolved?.method.returnType).toMatchObject({ type: "SimpleTypeRef", name: "TextString" });
+  });
+});
+
 describe("resolveMethod()", () => {
   it("prefers exact overloads over widened matches", () => {
     const cls = makeClass(`
@@ -589,12 +623,12 @@ describe("resolveMethod()", () => {
     const whole = h.resolve("WholeNumber")!;
     const decimal = h.resolve("DecimalNumber")!;
 
-    expect(h.resolveMethod(calculator, "pick", [whole])?.method.returnType).toEqual({
+    expect(h.resolveMethod(calculator, "pick", [whole])?.method.returnType).toMatchObject({
       type: "SimpleTypeRef",
       name: "WholeNumber",
       isArray: false,
     });
-    expect(h.resolveMethod(calculator, "pick", [decimal])?.method.returnType).toEqual({
+    expect(h.resolveMethod(calculator, "pick", [decimal])?.method.returnType).toMatchObject({
       type: "SimpleTypeRef",
       name: "DecimalNumber",
       isArray: false,
@@ -652,7 +686,7 @@ describe("resolveMethod()", () => {
 
     const resolved = h.resolveMethod(receiver, "speak", [biped]);
     expect(resolved?.ownerType.name).toBe("Dog");
-    expect(resolved?.method.returnType).toEqual({
+    expect(resolved?.method.returnType).toMatchObject({
       type: "SimpleTypeRef",
       name: "DecimalNumber",
       isArray: false,

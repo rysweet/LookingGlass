@@ -214,6 +214,42 @@ describe("statements – switch/case", () => {
 
 // ── Array Literals ───────────────────────────────────────────────────────
 
+describe("type parameters and generics", () => {
+  it("parses class type parameters", () => {
+    const ast = parseTweedle(`class Box<T> {
+      T value;
+    }`);
+    expect(ast.typeParameters).toEqual(["T"]);
+    expect(ast.fields[0].fieldType).toMatchObject({ type: "SimpleTypeRef", name: "T", isArray: false });
+  });
+
+  it("parses generic method type parameters", () => {
+    const ast = parseTweedle(`class Box<T> {
+      <U> U echo(U value) { return value; }
+    }`);
+    expect(ast.methods[0].typeParameters).toEqual(["U"]);
+    expect(ast.methods[0].returnType).toMatchObject({ type: "SimpleTypeRef", name: "U", isArray: false });
+  });
+
+  it("parses generic type arguments and sized arrays", () => {
+    const ast = parseTweedle(`class X {
+      List<TextString> names;
+      void m() {
+        WholeNumber[] values <- new WholeNumber[3];
+      }
+    }`);
+    expect(ast.fields[0].fieldType).toMatchObject({ type: "SimpleTypeRef", name: "List", isArray: false });
+    const fieldType = ast.fields[0].fieldType as { typeArguments?: Array<{ name: string }> };
+    expect(fieldType.typeArguments?.[0].name).toBe("TextString");
+    const decl = ast.methods[0].body[0] as {
+      type: "LocalVariableDeclaration";
+      initializer: { type: string; size: { type: string; value: number } | null };
+    };
+    expect(decl.initializer.type).toBe("NewArray");
+    expect(decl.initializer.size?.value).toBe(3);
+  });
+});
+
 describe("expressions – array literal", () => {
   it("parses array literal with numbers", () => {
     const ast = parseTweedle(`class X {

@@ -11,6 +11,7 @@ export interface AliceObject {
   position: { x: number; y: number; z: number } | null;
   orientation: { x: number; y: number; z: number; w: number } | null;
   size: { width: number; height: number; depth: number } | null;
+  constructorArgs?: string[];
 }
 
 /** A parsed statement from the Alice AST. */
@@ -27,9 +28,14 @@ export interface AliceStatement {
   condition?: string;
   ifBody?: AliceStatement[];
   elseBody?: AliceStatement[];
+  /** For try/catch */
+  tryBody?: AliceStatement[];
+  catchBody?: AliceStatement[];
+  catchType?: string;
+  catchVariable?: string;
   /** For events */
   event?: string;
-  /** For return */
+  /** For return / throw */
   expression?: string;
   /** For variable */
   name?: string;
@@ -46,12 +52,26 @@ export interface AliceMethod {
   statements: AliceStatement[];
 }
 
+export interface AliceFieldDefinition {
+  name: string;
+  initializer?: string | null;
+}
+
+export interface AliceTypeDefinition {
+  name: string;
+  superTypeName?: string | null;
+  methods?: AliceMethod[];
+  constructors?: AliceMethod[];
+  fields?: AliceFieldDefinition[];
+}
+
 /** Top-level result from parsing an .a3p file. */
 export interface AliceProject {
   version: string;
   projectName: string;
   sceneObjects: AliceObject[];
   methods: AliceMethod[];
+  types?: AliceTypeDefinition[];
   jointHierarchy?: JointNode[];
   boundingBoxes?: Record<string, BoundingBox>;
   textureRefs?: string[];

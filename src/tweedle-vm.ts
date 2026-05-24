@@ -1,4 +1,11 @@
-import type { AliceProject, AliceMethod, AliceStatement } from "./a3p-parser.js";
+import type {
+  AliceFieldDefinition,
+  AliceMethod,
+  AliceObject,
+  AliceProject,
+  AliceStatement,
+  AliceTypeDefinition,
+} from "./a3p-parser.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -22,6 +29,26 @@ const MAX_VARIABLES_PER_SCOPE = 1_000;
 
 // ── Internal state ─────────────────────────────────────────────────────
 
+interface RuntimeObject {
+  name: string;
+  typeName: string;
+  fields: Map<string, unknown>;
+  source: AliceObject;
+}
+
+interface RuntimeType {
+  name: string;
+  superTypeName: string | null;
+  methods: AliceMethod[];
+  constructors: AliceMethod[];
+  fields: AliceFieldDefinition[];
+}
+
+interface VMException {
+  typeName: string;
+  value: unknown;
+}
+
 interface VMState {
   stepCounter: number;
   depth: number;
@@ -29,7 +56,10 @@ interface VMState {
   returned: boolean;
   returnValue: unknown;
   scopes: Map<string, unknown>[];
-  methodMap: Map<string, AliceMethod>;
+  methodMap: Map<string, AliceMethod[]>;
+  typeMap: Map<string, RuntimeType>;
+  objectMap: Map<string, RuntimeObject>;
+  currentSelf: RuntimeObject | null;
   returnValues: Map<string, unknown>;
 }
 
@@ -67,13 +97,22 @@ function scopeSet(state: VMState, name: string, value: unknown): void {
 function scopeAssign(state: VMState, name: string, value: unknown): boolean {
   const arrayAccess = parseArrayAccessExpression(name);
   if (arrayAccess) {
-    const target = scopeLookup(state, arrayAccess.target);
+    const target = evaluateValue(state, arrayAccess.target);
     const index = toArrayIndex(evaluateValue(state, arrayAccess.index));
     if (Array.isArray(target) && index !== null) {
       target[index] = value;
       return true;
     }
     return false;
+  }
+
+  const fieldPath = parseFieldPathExpression(name);
+  if (fieldPath) {
+    const owner = resolveObjectForPath(state, fieldPath.root);
+    if (owner) {
+      owner.fields.set(fieldPath.member, value);
+      return true;
+    }
   }
 
   for (let i = state.scopes.length - 1; i >= 0; i--) {
@@ -95,6 +134,26 @@ function evaluateValue(state: VMState, expr: unknown): unknown {
     return "";
   }
 
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return unescapeQuotedString(trimmed.slice(1, -1));
+  }
+  if (trimmed === "null") {
+    return null;
+  }
+  if (trimmed === "true" || trimmed === "false") {
+    return trimmed;
+  }
+
+  const binaryValue = evaluateBinaryExpression(state, trimmed);
+  if (binaryValue !== undefined) {
+    return binaryValue;
+  }
+
+  const newInstance = parseNewInstanceExpression(trimmed);
+  if (newInstance) {
+    return instantiateAnonymousObject(state, newInstance.className, newInstance.args);
+  }
+
   const arrayAccess = parseArrayAccessExpression(trimmed);
   if (arrayAccess) {
     const target = evaluateValue(state, arrayAccess.target);
@@ -103,6 +162,14 @@ function evaluateValue(state: VMState, expr: unknown): unknown {
       return target[index];
     }
     return trimmed;
+  }
+
+  const fieldPath = parseFieldPathExpression(trimmed);
+  if (fieldPath) {
+    const owner = resolveObjectForPath(state, fieldPath.root);
+    if (owner && owner.fields.has(fieldPath.member)) {
+      return owner.fields.get(fieldPath.member);
+    }
   }
 
   const scopedValue = scopeLookup(state, trimmed);
@@ -159,6 +226,147 @@ function parseArrayAccessExpression(expr: string): { target: string; index: stri
 function parseNewArraySizeExpression(expr: string): string | null {
   const match = expr.match(/^new\s+[A-Za-z_][A-Za-z0-9_.]*\[(.+)\]$/);
   return match ? match[1].trim() : null;
+}
+
+function parseNewInstanceExpression(expr: string): { className: string; args: string[] } | null {
+  const match = expr.match(/^new\s+([A-Za-z_][A-Za-z0-9_.]*)\((.*)\)$/);
+  if (!match) {
+    return null;
+  }
+  return { className: match[1], args: match[2].trim() ? splitTopLevel(match[2].trim()) : [] };
+}
+
+function parseFieldPathExpression(expr: string): { root: string; member: string } | null {
+  const match = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)$/);
+  return match ? { root: match[1], member: match[2] } : null;
+}
+
+function resolveObjectForPath(state: VMState, root: string): RuntimeObject | null {
+  if (root === "this") {
+    return state.currentSelf;
+  }
+  return state.objectMap.get(root) ?? null;
+}
+
+function evaluateBinaryExpression(state: VMState, expr: string): unknown {
+  const precedence = [
+    ["||"],
+    ["&&"],
+    ["==", "!=", "<=", ">=", "<", ">"],
+    [".."],
+    ["+", "-"],
+    ["*", "/", "%"],
+  ];
+  for (const operators of precedence) {
+    const split = splitByOperators(expr, operators);
+    if (!split) {
+      continue;
+    }
+    const left = evaluateValue(state, split.left);
+    const right = evaluateValue(state, split.right);
+    return applyBinaryOperator(split.operator, left, right);
+  }
+  return undefined;
+}
+
+function splitByOperators(source: string, operators: string[]): { left: string; operator: string; right: string } | null {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let index = 0; index < source.length; index++) {
+    const char = source[index];
+    const prev = index > 0 ? source[index - 1] : "";
+    if (quote) {
+      if (char === quote && prev !== "\\") {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === "(" || char === "[" || char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === ")" || char === "]" || char === "}") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth !== 0) {
+      continue;
+    }
+    for (const operator of operators) {
+      if (source.startsWith(operator, index)) {
+        return {
+          left: source.slice(0, index).trim(),
+          operator,
+          right: source.slice(index + operator.length).trim(),
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function applyBinaryOperator(operator: string, left: unknown, right: unknown): unknown {
+  switch (operator) {
+    case "||":
+      return Boolean(left === true || left === "true" || right === true || right === "true");
+    case "&&":
+      return Boolean((left === true || left === "true") && (right === true || right === "true"));
+    case "==":
+      return left === right;
+    case "!=":
+      return left !== right;
+    case "<":
+      return numericValue(left) < numericValue(right);
+    case ">":
+      return numericValue(left) > numericValue(right);
+    case "<=":
+      return numericValue(left) <= numericValue(right);
+    case ">=":
+      return numericValue(left) >= numericValue(right);
+    case "..":
+      return `${valueToString(left)}${valueToString(right)}`;
+    case "+": {
+      const leftNumber = maybeNumber(left);
+      const rightNumber = maybeNumber(right);
+      return leftNumber !== null && rightNumber !== null
+        ? String(leftNumber + rightNumber)
+        : `${valueToString(left)}${valueToString(right)}`;
+    }
+    case "-":
+      return String(numericValue(left) - numericValue(right));
+    case "*":
+      return String(numericValue(left) * numericValue(right));
+    case "/":
+      return String(numericValue(left) / numericValue(right));
+    case "%":
+      return String(numericValue(left) % numericValue(right));
+    default:
+      return undefined;
+  }
+}
+
+function maybeNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function numericValue(value: unknown): number {
+  return maybeNumber(value) ?? 0;
+}
+
+function instantiateAnonymousObject(state: VMState, className: string, args: string[]): RuntimeObject {
+  const runtimeObject: RuntimeObject = {
+    name: `${className}#${state.objectMap.size + 1}`,
+    typeName: className,
+    fields: new Map(),
+    source: { name: className, typeName: className, resourceType: null, position: null, orientation: null, size: null },
+  };
+  initializeRuntimeObject(runtimeObject, state, args);
+  return runtimeObject;
 }
 
 function parseArrayLiteralExpression(expr: string): string[] | null {
@@ -239,6 +447,9 @@ function valueToString(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map((entry) => valueToString(entry)).join(", ")}]`;
   }
+  if (value instanceof Map) {
+    return `{${[...value.entries()].map(([key, entry]) => `${key}: ${valueToString(entry)}`).join(", ")}}`;
+  }
   if (value === null) {
     return "null";
   }
@@ -246,6 +457,147 @@ function valueToString(value: unknown): string {
     return "undefined";
   }
   return String(value);
+}
+
+function buildRuntimeTypes(project: AliceProject): Map<string, RuntimeType> {
+  const typeMap = new Map<string, RuntimeType>();
+  for (const type of project.types ?? []) {
+    typeMap.set(type.name, {
+      name: type.name,
+      superTypeName: type.superTypeName ?? null,
+      methods: [...(type.methods ?? [])],
+      constructors: [...(type.constructors ?? [])],
+      fields: [...(type.fields ?? [])],
+    });
+  }
+  return typeMap;
+}
+
+function instantiateSceneObjects(
+  project: AliceProject,
+  typeMap: Map<string, RuntimeType>,
+  log: LogEntry[],
+  returnValues: Map<string, unknown>,
+  methodMap: Map<string, AliceMethod[]>,
+): Map<string, RuntimeObject> {
+  const objectMap = new Map<string, RuntimeObject>();
+  for (const source of project.sceneObjects) {
+    const runtimeObject: RuntimeObject = {
+      name: source.name,
+      typeName: source.typeName,
+      fields: new Map(),
+      source,
+    };
+    objectMap.set(source.name, runtimeObject);
+  }
+
+  let bootstrapStep = 0;
+  for (const runtimeObject of objectMap.values()) {
+    const state: VMState = {
+      stepCounter: bootstrapStep,
+      depth: 0,
+      log,
+      returned: false,
+      returnValue: undefined,
+      scopes: [new Map()],
+      methodMap,
+      typeMap,
+      objectMap,
+      currentSelf: runtimeObject,
+      returnValues,
+    };
+    initializeRuntimeObject(runtimeObject, state, sourceArgs(runtimeObject.source));
+    bootstrapStep = state.stepCounter;
+  }
+
+  return objectMap;
+}
+
+function sourceArgs(source: AliceObject): string[] {
+  return [...(source.constructorArgs ?? [])];
+}
+
+function initializeRuntimeObject(runtimeObject: RuntimeObject, state: VMState, args: string[]): void {
+  const typeChain = collectTypeChain(runtimeObject.typeName, state.typeMap);
+  for (const type of typeChain) {
+    for (const field of type.fields) {
+      runtimeObject.fields.set(field.name, field.initializer ? evaluateValue(state, field.initializer) : null);
+    }
+    const constructor = selectConstructor(type, args.length);
+    if (constructor) {
+      dispatchMethod(constructor, args, state, runtimeObject, type.name);
+    }
+  }
+}
+
+function collectTypeChain(typeName: string, typeMap: Map<string, RuntimeType>): RuntimeType[] {
+  const chain: RuntimeType[] = [];
+  let current = typeMap.get(typeName) ?? null;
+  while (current) {
+    chain.unshift(current);
+    current = current.superTypeName ? typeMap.get(current.superTypeName) ?? null : null;
+  }
+  return chain;
+}
+
+function selectConstructor(type: RuntimeType, argCount: number): AliceMethod | null {
+  for (const constructor of type.constructors) {
+    if (constructor.parameters.length === argCount) {
+      return constructor;
+    }
+  }
+  return type.constructors[0] ?? null;
+}
+
+function cloneScopes(scopes: Map<string, unknown>[]): Map<string, unknown>[] {
+  return scopes.map((scope) => new Map(scope));
+}
+
+function cloneObjectMap(objectMap: Map<string, RuntimeObject>): Map<string, RuntimeObject> {
+  const clone = new Map<string, RuntimeObject>();
+  for (const [name, runtimeObject] of objectMap.entries()) {
+    clone.set(name, {
+      ...runtimeObject,
+      fields: new Map(runtimeObject.fields),
+    });
+  }
+  return clone;
+}
+
+function mergeStateFromBranch(
+  state: VMState,
+  originalScopes: Map<string, unknown>[],
+  originalObjects: Map<string, RuntimeObject>,
+  branchState: VMState,
+): void {
+  for (let index = 0; index < originalScopes.length; index++) {
+    const originalScope = originalScopes[index];
+    const targetScope = state.scopes[index];
+    const branchScope = branchState.scopes[index];
+    if (!targetScope || !branchScope) {
+      continue;
+    }
+    for (const [name, originalValue] of originalScope.entries()) {
+      if (branchScope.has(name)) {
+        const branchValue = branchScope.get(name);
+        if (branchValue !== originalValue) {
+          targetScope.set(name, branchValue);
+        }
+      }
+    }
+  }
+  for (const [name, runtimeObject] of branchState.objectMap.entries()) {
+    const targetObject = state.objectMap.get(name);
+    const originalObject = originalObjects.get(name);
+    if (!targetObject || !originalObject) {
+      continue;
+    }
+    for (const [fieldName, fieldValue] of runtimeObject.fields.entries()) {
+      if (originalObject.fields.get(fieldName) !== fieldValue) {
+        targetObject.fields.set(fieldName, fieldValue);
+      }
+    }
+  }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────
@@ -256,10 +608,15 @@ export function executeProject(project: AliceProject): ExecutionResult {
   const log: LogEntry[] = [];
   let stepCounter = 0;
 
-  const methodMap = new Map<string, AliceMethod>();
-  for (const m of project.methods) {
-    methodMap.set(m.name, m);
+  const methodMap = new Map<string, AliceMethod[]>();
+  for (const method of project.methods) {
+    const methods = methodMap.get(method.name) ?? [];
+    methods.push(method);
+    methodMap.set(method.name, methods);
   }
+
+  const typeMap = buildRuntimeTypes(project);
+  const objectMap = instantiateSceneObjects(project, typeMap, log, returnValues, methodMap);
 
   for (const method of project.methods) {
     const state: VMState = {
@@ -270,6 +627,9 @@ export function executeProject(project: AliceProject): ExecutionResult {
       returnValue: undefined,
       scopes: [new Map()],
       methodMap,
+      typeMap,
+      objectMap,
+      currentSelf: null,
       returnValues,
     };
 
@@ -335,6 +695,12 @@ function executeOne(stmt: AliceStatement, state: VMState): void {
     case "IfElse":
       execIfElse(stmt, state);
       break;
+    case "TryCatch":
+      execTryCatch(stmt, state);
+      break;
+    case "ThrowStatement":
+      execThrow(stmt, state);
+      break;
     case "ReturnStatement":
       execReturn(stmt, state);
       break;
@@ -365,7 +731,7 @@ function executeOne(stmt: AliceStatement, state: VMState): void {
 
 function execMethodCall(stmt: AliceStatement, state: VMState): void {
   const objectName = stmt.object ?? "this";
-  const method = stmt.method ?? "unknown";
+  const methodName = stmt.method ?? "unknown";
   const args = stmt.arguments ?? [];
   const argsStr = `(${args.join(", ")})`;
 
@@ -373,34 +739,65 @@ function execMethodCall(stmt: AliceStatement, state: VMState): void {
   state.log.push({
     step: state.stepCounter,
     kind: "MethodCall",
-    detail: `${objectName}.${method}${argsStr}`,
+    detail: `${objectName}.${methodName}${argsStr}`,
   });
 
-  // Dispatch to user-defined method when object is "this"
+  const targetObject = objectName === "this" ? state.currentSelf : state.objectMap.get(objectName) ?? null;
+  const runtimeMethod = targetObject ? resolveRuntimeMethod(state, targetObject.typeName, methodName, args.length) : null;
+  if (runtimeMethod) {
+    dispatchMethod(runtimeMethod, args, state, targetObject, targetObject?.typeName ?? null);
+    return;
+  }
+
   if (objectName === "this") {
-    const target = state.methodMap.get(method);
-    if (target) {
-      dispatchMethod(target, args, state);
+    const topLevelMethod = resolveTopLevelMethod(state, methodName, args.length);
+    if (topLevelMethod) {
+      dispatchMethod(topLevelMethod, args, state, state.currentSelf, null);
     }
   }
+}
+
+function resolveRuntimeMethod(state: VMState, typeName: string, methodName: string, argCount: number): AliceMethod | null {
+  let current = state.typeMap.get(typeName) ?? null;
+  while (current) {
+    for (const method of current.methods) {
+      if (method.name === methodName && method.parameters.length === argCount) {
+        return method;
+      }
+    }
+    current = current.superTypeName ? state.typeMap.get(current.superTypeName) ?? null : null;
+  }
+  return null;
+}
+
+function resolveTopLevelMethod(state: VMState, methodName: string, argCount: number): AliceMethod | null {
+  const methods = state.methodMap.get(methodName) ?? [];
+  for (const method of methods) {
+    if (method.parameters.length === argCount) {
+      return method;
+    }
+  }
+  return methods[0] ?? null;
 }
 
 function dispatchMethod(
   target: AliceMethod,
   args: string[],
   state: VMState,
+  self: RuntimeObject | null = state.currentSelf,
+  declaringTypeName: string | null = null,
 ): void {
-  // Resolve args in caller's scope before creating callee scope
   const resolvedArgs: unknown[] = [];
   for (let i = 0; i < target.parameters.length && i < args.length; i++) {
     resolvedArgs.push(evaluateValue(state, args[i]));
   }
 
-  // Save and reset return state for callee
   const callerReturned = state.returned;
   const callerReturnValue = state.returnValue;
+  const callerSelf = state.currentSelf;
   state.returned = false;
   state.returnValue = undefined;
+  state.currentSelf = self;
 
   pushScope(state);
   for (let i = 0; i < resolvedArgs.length; i++) {
@@ -411,16 +808,18 @@ function dispatchMethod(
   runStatements(target.statements, state);
   state.depth--;
 
-  // Capture callee return value
   if (state.returned && state.returnValue !== undefined) {
     state.returnValues.set(target.name, state.returnValue);
   }
 
   popScope(state);
-
-  // Restore caller return state
+  state.currentSelf = callerSelf;
   state.returned = callerReturned;
   state.returnValue = callerReturnValue;
+
+  if (declaringTypeName) {
+    state.currentSelf = callerSelf;
+  }
 }
 
 function execDoInOrder(stmt: AliceStatement, state: VMState): void {
@@ -446,7 +845,41 @@ function execDoTogether(stmt: AliceStatement, state: VMState): void {
     detail: `run ${body.length} statements together`,
   });
 
-  runScopedStatements(body, state);
+  if (body.length === 0) {
+    return;
+  }
+
+  const scopeSnapshot = cloneScopes(state.scopes);
+  const objectSnapshot = cloneObjectMap(state.objectMap);
+  const branchStates: VMState[] = [];
+
+  for (const branchStatement of body) {
+    const branchObjectMap = cloneObjectMap(objectSnapshot);
+    const branchState: VMState = {
+      stepCounter: state.stepCounter,
+      depth: state.depth,
+      log: state.log,
+      returned: false,
+      returnValue: undefined,
+      scopes: cloneScopes(scopeSnapshot),
+      methodMap: state.methodMap,
+      typeMap: state.typeMap,
+      objectMap: branchObjectMap,
+      currentSelf: state.currentSelf ? (branchObjectMap.get(state.currentSelf.name) ?? null) : null,
+      returnValues: state.returnValues,
+    };
+    runScopedStatements([branchStatement], branchState);
+    branchStates.push(branchState);
+    state.stepCounter = Math.max(state.stepCounter, branchState.stepCounter);
+  }
+
+  for (const branchState of branchStates) {
+    mergeStateFromBranch(state, scopeSnapshot, objectSnapshot, branchState);
+    if (branchState.returned && !state.returned) {
+      state.returned = true;
+      state.returnValue = branchState.returnValue;
+    }
+  }
 }
 
 function execCountLoop(stmt: AliceStatement, state: VMState): void {
@@ -495,6 +928,48 @@ function execIfElse(stmt: AliceStatement, state: VMState): void {
   runStatements(branch, state);
   state.depth--;
   popScope(state);
+}
+
+function execTryCatch(stmt: AliceStatement, state: VMState): void {
+  state.stepCounter++;
+  state.log.push({
+    step: state.stepCounter,
+    kind: "TryCatch",
+    detail: `catch ${stmt.catchType ?? "Exception"} as ${stmt.catchVariable ?? "error"}`,
+  });
+
+  try {
+    runScopedStatements(stmt.tryBody ?? [], state);
+  } catch (error) {
+    if (!isVMException(error)) {
+      throw error;
+    }
+    const catchType = stmt.catchType ?? "Exception";
+    if (catchType !== error.typeName && catchType !== "Exception") {
+      throw error;
+    }
+    pushScope(state);
+    scopeSet(state, stmt.catchVariable ?? "error", error.value);
+    state.depth++;
+    runStatements(stmt.catchBody ?? [], state);
+    state.depth--;
+    popScope(state);
+  }
+}
+
+function execThrow(stmt: AliceStatement, state: VMState): void {
+  state.stepCounter++;
+  const value = evaluateValue(state, stmt.expression ?? "error");
+  state.log.push({
+    step: state.stepCounter,
+    kind: "ThrowStatement",
+    detail: `throw ${valueToString(value)}`,
+  });
+  throw { typeName: stmt.varType ?? "Exception", value } satisfies VMException;
+}
+
+function isVMException(error: unknown): error is VMException {
+  return typeof error === "object" && error !== null && "typeName" in error && "value" in error;
 }
 
 function evaluateCondition(condition: string, state: VMState): boolean {

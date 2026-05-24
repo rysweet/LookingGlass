@@ -6,6 +6,11 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import type { ClassDecl, TypeRef, MethodDecl } from "./tweedle-parser.js";
+import {
+  createTypeHierarchy,
+  type AbstractType,
+  type UserType,
+} from "./tweedle-type-system.js";
 
 // ── Error Class ──────────────────────────────────────────────────────────
 
@@ -46,149 +51,61 @@ export interface TypeEnvironment {
   ): MethodCallResult;
 }
 
-// ── Built-in Type Registry ───────────────────────────────────────────────
-
-const PRIMITIVES = new Set(["DecimalNumber", "WholeNumber", "TextString", "Boolean"]);
-
-interface BuiltinEntry {
-  name: string;
-  superClass: string | null;
-}
-
-const BUILTIN_HIERARCHY: BuiltinEntry[] = [
-  { name: "SThing", superClass: null },
-  { name: "SGround", superClass: "SThing" },
-  { name: "SScene", superClass: "SThing" },
-  { name: "STurnable", superClass: "SThing" },
-  { name: "SMovableTurnable", superClass: "STurnable" },
-  { name: "SCamera", superClass: "SMovableTurnable" },
-  { name: "SModel", superClass: "SMovableTurnable" },
-  { name: "SJointedModel", superClass: "SModel" },
-  { name: "SBiped", superClass: "SJointedModel" },
-  { name: "SFlyer", superClass: "SJointedModel" },
-  { name: "SQuadruped", superClass: "SJointedModel" },
-  { name: "SProp", superClass: "SJointedModel" },
-];
-
 // ── Factory ──────────────────────────────────────────────────────────────
 
+function toResolvedType(type: AbstractType): ResolvedType {
+  return {
+    name: type.name,
+    superClass: (type.kind === "java" || type.kind === "user") ? type.superType?.name ?? null : null,
+    isPrimitive: type.kind === "primitive",
+    methods: type.kind === "user" ? type.methods : [],
+    classDecl: type.kind === "user" ? type.classDecl : null,
+  };
+}
+
+function hasMethodNamed(receiver: AbstractType, methodName: string): boolean {
+  for (const type of receiver.kind === "user" || receiver.kind === "java" ? [receiver, ...collectSupertypes(receiver)] : [receiver]) {
+    if (type.kind === "user" && type.methods.some((method) => method.name === methodName)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function collectSupertypes(type: UserType | AbstractType): AbstractType[] {
+  if (type.kind !== "user" && type.kind !== "java") {
+    return [];
+  }
+  const chain: AbstractType[] = [];
+  let current: AbstractType | null = type.superType;
+  while (current) {
+    chain.push(current);
+    current = current.kind === "user" || current.kind === "java" ? current.superType : null;
+  }
+  return chain;
+}
+
 export function createTypeEnvironment(classes: ClassDecl[]): TypeEnvironment {
-  const registry = new Map<string, ResolvedType>();
-
-  // Register primitives
-  for (const name of PRIMITIVES) {
-    registry.set(name, {
-      name,
-      superClass: null,
-      isPrimitive: true,
-      methods: [],
-      classDecl: null,
-    });
-  }
-
-  // Register built-in class hierarchy
-  for (const entry of BUILTIN_HIERARCHY) {
-    registry.set(entry.name, {
-      name: entry.name,
-      superClass: entry.superClass,
-      isPrimitive: false,
-      methods: [],
-      classDecl: null,
-    });
-  }
-
-  // Register user-defined classes — check for duplicates
-  for (const cls of classes) {
-    if (registry.has(cls.name)) {
-      throw new TweedleTypeError(
-        `Duplicate class name '${cls.name}'`,
-        cls.name,
-        "duplicate class",
-      );
+  let hierarchy: ReturnType<typeof createTypeHierarchy>;
+  try {
+    hierarchy = createTypeHierarchy(classes);
+  } catch (error) {
+    if (error instanceof Error && "typeName" in error && "detail" in error) {
+      throw new TweedleTypeError(error.message, String((error as { typeName: unknown }).typeName), String((error as { detail: unknown }).detail));
     }
-    registry.set(cls.name, {
-      name: cls.name,
-      superClass: cls.superClass,
-      isPrimitive: false,
-      methods: cls.methods,
-      classDecl: cls,
-    });
-  }
-
-  // Detect inheritance cycles — skip already-verified prefixes
-  const verified = new Set<string>();
-  for (const cls of classes) {
-    const visited = new Set<string>();
-    let current: string | null = cls.name;
-    while (current !== null && !verified.has(current)) {
-      if (visited.has(current)) {
-        throw new TweedleTypeError(
-          `Inheritance cycle detected involving '${current}'`,
-          current,
-          "cycle",
-        );
-      }
-      visited.add(current);
-      const resolved = registry.get(current);
-      current = resolved?.superClass ?? null;
-    }
-    for (const name of visited) verified.add(name);
-  }
-
-  // Pre-build inherited method maps: O(1) method lookup at call time
-  const methodIndex = new Map<string, Map<string, MethodDecl>>();
-  for (const [name] of registry) {
-    const methods = new Map<string, MethodDecl>();
-    const chain: string[] = [];
-    let cur: string | null = name;
-    while (cur !== null) {
-      chain.push(cur);
-      cur = registry.get(cur)?.superClass ?? null;
-    }
-    for (let i = chain.length - 1; i >= 0; i--) {
-      const r = registry.get(chain[i]);
-      if (r) {
-        for (const m of r.methods) methods.set(m.name, m);
-      }
-    }
-    methodIndex.set(name, methods);
-  }
-
-  const assignableCache = new Map<string, boolean>();
-
-  function computeAssignable(source: string, target: string): boolean {
-    if (source === "null") {
-      const targetType = registry.get(target);
-      if (!targetType) return false;
-      return !targetType.isPrimitive;
-    }
-    if (source === "WholeNumber" && target === "DecimalNumber") return true;
-
-    const sourceType = registry.get(source);
-    if (!sourceType || sourceType.isPrimitive) return false;
-    if (!registry.has(target)) return false;
-
-    let current: string | null = sourceType.superClass;
-    while (current !== null) {
-      if (current === target) return true;
-      current = registry.get(current)?.superClass ?? null;
-    }
-    return false;
+    throw error;
   }
 
   return {
     resolveType(name: string): ResolvedType | null {
-      return registry.get(name) ?? null;
+      const type = hierarchy.resolve(name);
+      return type ? toResolvedType(type) : null;
     },
 
     isAssignableTo(source: string, target: string): boolean {
-      if (source === target) return true;
-      const key = `${source}\0${target}`;
-      const cached = assignableCache.get(key);
-      if (cached !== undefined) return cached;
-      const result = computeAssignable(source, target);
-      assignableCache.set(key, result);
-      return result;
+      const sourceType = hierarchy.resolve(source);
+      const targetType = hierarchy.resolve(target);
+      return !!sourceType && !!targetType && hierarchy.isAssignableTo(sourceType, targetType);
     },
 
     checkMethodCall(
@@ -196,8 +113,8 @@ export function createTypeEnvironment(classes: ClassDecl[]): TypeEnvironment {
       methodName: string,
       argTypes: string[],
     ): MethodCallResult {
-      const classType = registry.get(className);
-      if (!classType) {
+      const receiver = hierarchy.resolve(className);
+      if (!receiver) {
         return {
           valid: false,
           errors: [`Unknown class '${className}'`],
@@ -205,48 +122,37 @@ export function createTypeEnvironment(classes: ClassDecl[]): TypeEnvironment {
         };
       }
 
-      const method = methodIndex.get(className)?.get(methodName) ?? null;
-
-      if (!method) {
-        return {
-          valid: false,
-          errors: [`Method '${methodName}' not found on class '${className}'`],
-          returnType: null,
-        };
-      }
-
+      const resolvedArgs: AbstractType[] = [];
       const errors: string[] = [];
-
-      // Check argument count
-      if (argTypes.length !== method.parameters.length) {
-        errors.push(
-          `Expected ${method.parameters.length} argument(s) for '${methodName}', got ${argTypes.length}`,
-        );
-        return { valid: false, errors, returnType: null };
-      }
-
-      // Check argument types
-      for (let i = 0; i < argTypes.length; i++) {
-        const param = method.parameters[i];
-        const paramTypeName =
-          param.paramType.type === "SimpleTypeRef"
-            ? param.paramType.name
-            : param.paramType.type === "VoidTypeRef"
-              ? "void"
-              : "unknown";
-
-        if (!this.isAssignableTo(argTypes[i], paramTypeName)) {
-          errors.push(
-            `Argument ${i + 1}: '${argTypes[i]}' is not assignable to '${paramTypeName}'`,
-          );
+      for (const argType of argTypes) {
+        const resolvedArg = hierarchy.resolve(argType);
+        if (!resolvedArg) {
+          errors.push(`Unknown argument type '${argType}'`);
+        } else {
+          resolvedArgs.push(resolvedArg);
         }
       }
-
       if (errors.length > 0) {
         return { valid: false, errors, returnType: null };
       }
 
-      return { valid: true, errors: [], returnType: method.returnType };
+      const resolved = hierarchy.resolveMethod(receiver, methodName, resolvedArgs);
+      if (!resolved) {
+        if (!hasMethodNamed(receiver, methodName)) {
+          return {
+            valid: false,
+            errors: [`Method '${methodName}' not found on class '${className}'`],
+            returnType: null,
+          };
+        }
+        return {
+          valid: false,
+          errors: [`No overload of '${methodName}' on '${className}' accepts (${argTypes.join(", ")})`],
+          returnType: null,
+        };
+      }
+
+      return { valid: true, errors: [], returnType: resolved.method.returnType };
     },
   };
 }

@@ -51,8 +51,13 @@ function genTypeRef(ref: TypeRef): string {
   switch (ref.type) {
     case "VoidTypeRef":
       return "void";
-    case "SimpleTypeRef":
-      return ref.isArray ? `${ref.name}[]` : ref.name;
+    case "SimpleTypeRef": {
+      const typeArgs = ref.typeArguments && ref.typeArguments.length > 0
+        ? `<${ref.typeArguments.map(genTypeRef).join(", ")}>`
+        : "";
+      const dimensions = ref.arrayDimensions ?? (ref.isArray ? 1 : 0);
+      return `${ref.name}${typeArgs}${"[]".repeat(dimensions)}`;
+    }
     case "LambdaTypeRef":
       return ref.raw;
   }
@@ -122,13 +127,14 @@ function genExpr(expr: Expression, depth: number): string {
     }
     case "NewArray": {
       const typeStr = genTypeRef(expr.elementType);
-      if (expr.size !== null) {
+      if (expr.size !== null && expr.elements.length === 0) {
         return `new ${typeStr}[${genExpr(expr.size, depth + 1)}]`;
       }
       const elements = expr.elements
         .map((e) => genExpr(e, depth + 1))
         .join(", ");
-      return `new ${typeStr}[] {${elements}}`;
+      const suffix = expr.size !== null ? `[${genExpr(expr.size, depth + 1)}]` : "[]";
+      return `new ${typeStr}${suffix}{${elements}}`;
     }
     case "BinaryOp":
       return `${genExpr(expr.left, depth + 1)} ${expr.operator} ${genExpr(expr.right, depth + 1)}`;
@@ -150,6 +156,8 @@ function genExpr(expr: Expression, depth: number): string {
         .join(", ");
       return `{${elements}}`;
     }
+    case "LambdaExpression":
+      return expr.raw;
   }
 
   throw new TweedleCodegenError(
@@ -255,6 +263,14 @@ function genStmt(stmt: Statement, indent: string, depth: number): string {
     }
     case "Block":
       return genBody(stmt.body, "", indent, depth + 1);
+    case "ThisConstructorInvocationStatement": {
+      const args = (stmt.arguments ?? []).map((arg) => genArgument(arg, depth + 1)).join(", ");
+      return `this(${args});`;
+    }
+    case "SuperConstructorInvocationStatement": {
+      const args = (stmt.arguments ?? []).map((arg) => genArgument(arg, depth + 1)).join(", ");
+      return `super(${args});`;
+    }
     case "DisabledBlock":
       return `*<${stmt.raw}>*`;
     case "Comment":
@@ -288,7 +304,10 @@ function genField(field: FieldDecl, indent: string): string {
 
 function genConstructor(ctor: ConstructorDecl, indent: string): string {
   const params = ctor.parameters.map(genParameter).join(", ");
-  return indent + genBody(ctor.body, `${ctor.name}(${params})`, indent, 0);
+  const typeParams = ctor.typeParameters && ctor.typeParameters.length > 0
+    ? `<${ctor.typeParameters.join(", ")}> `
+    : "";
+  return indent + genBody(ctor.body, `${typeParams}${ctor.name}(${params})`, indent, 0);
 }
 
 // ── Method Generation ────────────────────────────────────────────────────
@@ -296,6 +315,9 @@ function genConstructor(ctor: ConstructorDecl, indent: string): string {
 function genMethod(method: MethodDecl, indent: string): string {
   const parts: string[] = [];
   if (method.isStatic) parts.push("static");
+  if (method.typeParameters && method.typeParameters.length > 0) {
+    parts.push(`<${method.typeParameters.join(", ")}>`);
+  }
   parts.push(genTypeRef(method.returnType));
   parts.push(`${method.name}(${method.parameters.map(genParameter).join(", ")})`);
   return indent + genBody(method.body, parts.join(" "), indent, 0);
@@ -329,13 +351,26 @@ export function generateTweedle(ast: ClassDecl): string {
     members.push(genMethod(method, indent));
   }
 
-  // Class header
-  let header = `class ${ast.name}`;
-  if (ast.superClass !== null) {
+  let header = ast.isEnum ? `enum ${ast.name}` : `class ${ast.name}`;
+  if (ast.typeParameters && ast.typeParameters.length > 0) {
+    header += `<${ast.typeParameters.join(", ")}>`;
+  }
+  if (!ast.isEnum && ast.superClass !== null) {
     header += ` extends ${ast.superClass}`;
   }
-  if (ast.modelType !== null) {
+  if (!ast.isEnum && ast.modelType !== null) {
     header += ` models ${ast.modelType}`;
+  }
+
+  if (ast.isEnum) {
+    const enumValues = (ast.enumValues ?? [])
+      .map((value) => value.arguments.length > 0
+        ? `${value.name}(${value.arguments.map((arg) => genArgument(arg, 0)).join(", ")})`
+        : value.name)
+      .join(", ");
+    if (enumValues.length > 0) {
+      members.unshift(`${indent}${enumValues};`);
+    }
   }
 
   const body = members.join("\n\n");

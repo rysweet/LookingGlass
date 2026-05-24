@@ -19,7 +19,7 @@ export class TweedleTypeError extends Error {
   }
 }
 
-export type TypeKind = "primitive" | "java" | "user";
+export type TypeKind = "primitive" | "java" | "user" | "array" | "type_parameter";
 
 export interface PrimitiveType {
   readonly kind: "primitive";
@@ -41,10 +41,28 @@ export interface UserType {
   readonly classDecl: ClassDecl;
   readonly methods: MethodDecl[];
   readonly fields: FieldDecl[];
+  readonly enumValues?: readonly string[];
+  readonly typeParameters?: readonly string[];
   isAssignableTo(target: AbstractType): boolean;
 }
 
-export type AbstractType = PrimitiveType | JavaType | UserType;
+export interface ArrayType {
+  readonly kind: "array";
+  readonly name: string;
+  readonly elementType: AbstractType;
+  readonly dimensionCount: number;
+  readonly superType: JavaType | null;
+  isAssignableTo(target: AbstractType): boolean;
+}
+
+export interface TypeParameterType {
+  readonly kind: "type_parameter";
+  readonly name: string;
+  readonly scope: "class" | "method";
+  isAssignableTo(target: AbstractType): boolean;
+}
+
+export type AbstractType = PrimitiveType | JavaType | UserType | ArrayType | TypeParameterType;
 
 export interface ResolvedMethod {
   readonly method: MethodDecl;
@@ -91,6 +109,7 @@ const BUILTIN_HIERARCHY: BuiltinEntry[] = [
 
 export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
   const typeMap = new Map<string, AbstractType>();
+  const arrayTypeCache = new Map<string, ArrayType>();
   const publicTypes: AbstractType[] = [];
 
   for (const name of PRIMITIVE_NAMES) {
@@ -138,6 +157,8 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
       classDecl: cls,
       methods: cls.methods,
       fields: cls.fields,
+      enumValues: cls.enumValues?.map((value) => value.name) ?? undefined,
+      typeParameters: cls.typeParameters,
       isAssignableTo: null!,
     };
     typeMap.set(cls.name, userType);
@@ -170,7 +191,7 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
       continue;
     }
     const parent = typeMap.get(cls.superClass);
-    if (!parent || parent.kind === "primitive") {
+    if (!parent || parent.kind === "primitive" || parent.kind === "array" || parent.kind === "type_parameter") {
       throw new TweedleTypeError(
         `Unknown superclass '${cls.superClass}' for '${cls.name}'`,
         cls.name,
@@ -180,6 +201,56 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
     (typeMap.get(cls.name) as UserType & { superType: JavaType | UserType | null }).superType = parent;
   }
 
+  function resolveNamedType(name: string): AbstractType | null {
+    const existing = typeMap.get(name);
+    if (existing) {
+      return existing;
+    }
+    const arrayMatch = name.match(/^(.*?)(\[\])+$/);
+    if (!arrayMatch) {
+      return null;
+    }
+    const elementName = name.replace(/(\[\])+$/, "");
+    const dimensionCount = (name.match(/\[\]/g) ?? []).length;
+    const cacheKey = `${elementName}:${dimensionCount}`;
+    const cached = arrayTypeCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    const elementType = resolveNamedType(elementName);
+    if (!elementType) {
+      return null;
+    }
+    const arrayType: ArrayType = {
+      kind: "array",
+      name,
+      elementType,
+      dimensionCount,
+      superType: null,
+      isAssignableTo: null!,
+    };
+    (arrayType as ArrayType & { isAssignableTo: (target: AbstractType) => boolean }).isAssignableTo =
+      (target: AbstractType) => hierarchyIsAssignableTo(arrayType, target);
+    arrayTypeCache.set(cacheKey, arrayType);
+    return arrayType;
+  }
+
+  function resolveTypeParameter(ownerType: UserType | null, method: MethodDecl | null, name: string): AbstractType | null {
+    if (method?.typeParameters?.includes(name)) {
+      const typeParameter: TypeParameterType = { kind: "type_parameter", name, scope: "method", isAssignableTo: null! };
+      (typeParameter as TypeParameterType & { isAssignableTo: (target: AbstractType) => boolean }).isAssignableTo =
+        (target: AbstractType) => hierarchyIsAssignableTo(typeParameter, target);
+      return typeParameter;
+    }
+    if (ownerType?.typeParameters?.includes(name)) {
+      const typeParameter: TypeParameterType = { kind: "type_parameter", name, scope: "class", isAssignableTo: null! };
+      (typeParameter as TypeParameterType & { isAssignableTo: (target: AbstractType) => boolean }).isAssignableTo =
+        (target: AbstractType) => hierarchyIsAssignableTo(typeParameter, target);
+      return typeParameter;
+    }
+    return null;
+  }
+
   function hierarchyIsAssignableTo(source: AbstractType, target: AbstractType): boolean {
     if (source === target) {
       return true;
@@ -187,8 +258,18 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
     if (source.name === "null") {
       return target.kind !== "primitive";
     }
+    if (target.kind === "type_parameter" || source.kind === "type_parameter") {
+      return true;
+    }
     if (source.name === "WholeNumber" && target.name === "DecimalNumber") {
       return true;
+    }
+    if (source.kind === "array" || target.kind === "array") {
+      if (source.kind !== "array" || target.kind !== "array") {
+        return false;
+      }
+      return source.dimensionCount === target.dimensionCount
+        && hierarchyIsAssignableTo(source.elementType, target.elementType);
     }
     if (source.kind === "primitive") {
       return false;
@@ -210,7 +291,10 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
 
   function supertypesOf(type: AbstractType): AbstractType[] {
     if (type.kind === "primitive") {
-      return type.name === "WholeNumber" ? [type, typeMap.get("DecimalNumber")!] : [type];
+      return type.name === "WholeNumber" ? [type, resolveNamedType("DecimalNumber")!] : [type];
+    }
+    if (type.kind === "array" || type.kind === "type_parameter") {
+      return [type];
     }
 
     const chain: AbstractType[] = [];
@@ -222,8 +306,17 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
     return chain;
   }
 
-  function resolveTypeRef(typeRef: TypeRef): AbstractType | null {
-    return typeRef.type === "SimpleTypeRef" ? typeMap.get(typeRef.name) ?? null : null;
+  function resolveTypeRef(typeRef: TypeRef, ownerType: UserType | null = null, method: MethodDecl | null = null): AbstractType | null {
+    if (typeRef.type !== "SimpleTypeRef") {
+      return null;
+    }
+    const genericParameter = resolveTypeParameter(ownerType, method, typeRef.name);
+    if (genericParameter) {
+      return genericParameter;
+    }
+    const dimensions = typeRef.arrayDimensions ?? (typeRef.isArray ? 1 : 0);
+    const baseName = typeRef.name;
+    return resolveNamedType(`${baseName}${"[]".repeat(dimensions)}`);
   }
 
   function parameterBounds(parameters: Parameter[]): { minimum: number; maximum: number } {
@@ -250,6 +343,9 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
     if (source === target) {
       return 0;
     }
+    if (target.kind === "type_parameter") {
+      return 3;
+    }
     if (source.name === "WholeNumber" && target.name === "DecimalNumber") {
       return 1;
     }
@@ -259,7 +355,12 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
     if (!hierarchyIsAssignableTo(source, target)) {
       return Number.POSITIVE_INFINITY;
     }
-    if (source.kind === "primitive") {
+    if (source.kind === "array" && target.kind === "array") {
+      return source.dimensionCount === target.dimensionCount
+        ? inheritanceDistance(source.elementType, target.elementType) + 1
+        : Number.POSITIVE_INFINITY;
+    }
+    if (source.kind === "primitive" || source.kind === "type_parameter") {
       return Number.POSITIVE_INFINITY;
     }
 
@@ -307,7 +408,7 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
             usesVarArgs = true;
           }
 
-          const parameterType = resolveTypeRef(parameter.paramType);
+          const parameterType = resolveTypeRef(parameter.paramType, ownerType, method);
           if (!parameterType) {
             valid = false;
             break;
@@ -367,7 +468,7 @@ export function createTypeHierarchy(classes: ClassDecl[]): TypeHierarchy {
 
   return {
     resolve(name: string): AbstractType | null {
-      return typeMap.get(name) ?? null;
+      return resolveNamedType(name);
     },
     allTypes(): AbstractType[] {
       return [...publicTypes];
