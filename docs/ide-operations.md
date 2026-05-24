@@ -13,9 +13,19 @@ ported to a pure TypeScript, framework-agnostic implementation.
 | **UndoRedo** | `src/undo-redo.ts` | Command-pattern undo/redo for all scene and entity modifications |
 | **Clipboard** | `src/clipboard.ts` | Copy/paste of entities and code blocks with collision-safe naming |
 | **ProjectManager** | `src/project-manager.ts` | Async project lifecycle (create, open, save, close) with recent files, save backups, corruption recovery, Java export, and dirty tracking |
+| **CodeEditor** | `src/code-editor.ts` | Statement-list editing, visual code block summaries, nested body traversal, and drag/drop targets for method bodies |
+| **DeclarationEditor** | `src/declaration-editor.ts` | Type, method, and field declaration editing with signature validation and type selection |
+| **TypeBrowser** | `src/type-browser.ts` | User/builtin type registry, hierarchy browsing, inherited member listing, type creation, and import/merge planning |
+| **CascadeMenus** | `src/cascade-menus.ts` | Expression-builder cascades with scope-aware locals, member chaining, and type-filtered value creators |
+| **RunSystem** | `src/run-system.ts` | Run/stop lifecycle, speed control, async stepping, restart, and runtime error capture |
 
 All modules are pure TypeScript with zero framework dependencies. They work
 identically in browser and Node.js environments.
+
+The IDE layer now also covers the major Java editor subsystems: structured code
+editing (`CodeEditor`), declaration panels (`DeclarationEditor`), type
+navigation/import (`TypeBrowser`), expression cascade construction
+(`CascadeMenus`), and runtime orchestration (`RunSystem`).
 
 `ProjectManager` now keeps a capped backup history per file, can recover from a
 corrupted archive by reopening the latest known-good backup, and can export the
