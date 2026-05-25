@@ -18,9 +18,9 @@ import {
   type TypeRef,
   simpleTypeRef,
   typeRefName,
-  typeRefsAssignable,
 } from "./ast-nodes.js";
 import { decodeAstNode, encodeAstNode } from "./ast-serialization.js";
+import { isTypeAssignable, resolveTypeInputName } from "./type-system.js";
 
 export interface TypeSearchOptions {
   query?: string;
@@ -243,16 +243,7 @@ function defaultTypes(): AbstractType[] {
 }
 
 function toTypeName(type: ClassDeclaration | AbstractType | TypeRef | string | null): string | null {
-  if (type === null) {
-    return null;
-  }
-  if (typeof type === "string") {
-    return type;
-  }
-  if (type instanceof AbstractType) {
-    return type.name;
-  }
-  return typeRefName(type);
+  return resolveTypeInputName(type);
 }
 
 export class TypeBrowser {
@@ -326,28 +317,12 @@ export class TypeBrowser {
     source: ClassDeclaration | AbstractType | TypeRef | string | null,
     target: ClassDeclaration | AbstractType | TypeRef | string | null,
   ): boolean {
-    const sourceType = this.resolveType(source);
-    const targetType = this.resolveType(target);
-    if (!sourceType || !targetType) {
-      return typeRefsAssignable(
-        target instanceof AbstractType ? target.toTypeRef() : typeof target === "string" ? simpleTypeRef(target) : target,
-        source instanceof AbstractType ? source.toTypeRef() : typeof source === "string" ? simpleTypeRef(source) : source,
-      );
-    }
-    if (sourceType.name === targetType.name) {
-      return true;
-    }
-    if (sourceType.name === "WholeNumber" && targetType.name === "DecimalNumber") {
-      return true;
-    }
-    let current: AbstractType | null = this.getResolvedSuperType(sourceType);
-    while (current) {
-      if (current.name === targetType.name) {
-        return true;
-      }
-      current = this.getResolvedSuperType(current);
-    }
-    return false;
+    return isTypeAssignable(source, target, {
+      resolveType: (input) => this.resolveType(input as ClassDeclaration | AbstractType | TypeRef | string | null),
+      getName: (type) => type.name,
+      getSuperType: (type) => this.getResolvedSuperType(type),
+      isPrimitive: (type) => type.isPrimitive(),
+    });
   }
 
   getResolvedSuperType(type: AbstractType | null): AbstractType | null {

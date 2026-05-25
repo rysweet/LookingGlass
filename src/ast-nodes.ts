@@ -1,3 +1,5 @@
+import { typeRefsAssignable as canonicalTypeRefsAssignable } from "./type-system.js";
+
 let nextAstNodeId = 0;
 
 export type TypeRef =
@@ -85,22 +87,7 @@ function isNumericTypeName(name: string | null): boolean {
 }
 
 export function typeRefsAssignable(expected: TypeRef | null, actual: TypeRef | null): boolean {
-  if (expected === null || actual === null) {
-    return true;
-  }
-  if (expected.type === "VoidTypeRef" || actual.type === "VoidTypeRef") {
-    return expected.type === actual.type;
-  }
-  if (expected.type === "LambdaTypeRef" || actual.type === "LambdaTypeRef") {
-    return expected.type === actual.type && typeRefName(expected) === typeRefName(actual);
-  }
-  if (expected.name === actual.name && expected.isArray === actual.isArray) {
-    return true;
-  }
-  if (expected.name === "Object" && !expected.isArray) {
-    return true;
-  }
-  return isNumericTypeName(expected.name) && isNumericTypeName(actual.name) && expected.isArray === actual.isArray;
+  return canonicalTypeRefsAssignable(expected, actual);
 }
 
 function inferLiteralTypeRef(literalType: "number" | "string" | "boolean" | "null", value?: number): TypeRef | null {
