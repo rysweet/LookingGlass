@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
+  AbruptStyle,
+  AnimationTimeline,
+  GentleStyle,
+  TraditionalStyle,
+  doInOrder,
+  doTogether,
   linear,
   easeIn,
   easeOut,
@@ -8,12 +14,18 @@ import {
   nlerp,
   lerpScalar,
   Tween,
+  type AnimationObserver,
   type EasingFn,
   type TweenConfig,
-  type TweenState,
 } from "../src/animation";
-import type { Vec3 } from "../src/story-api";
-import type { Orientation } from "../src/story-api";
+import {
+  MoveDirection,
+  NumberProperty,
+  PropertyOwnerImp,
+  SBox,
+  type Orientation,
+  type Vec3,
+} from "../src/story-api";
 
 // ---------------------------------------------------------------------------
 // Easing Functions
@@ -296,7 +308,7 @@ describe("Tween", () => {
 
     it("progresses linearly with linear easing", () => {
       const tween = new Tween(makeScalarConfig());
-      const state = tween.update(500); // 50%
+      const state = tween.update(500);
       expect(state.value).toBeCloseTo(0.5, 10);
       expect(state.progress).toBeCloseTo(0.5, 10);
       expect(state.complete).toBe(false);
@@ -305,7 +317,7 @@ describe("Tween", () => {
     it("completes at exactly durationMs", () => {
       const tween = new Tween(makeScalarConfig());
       tween.update(500);
-      const state = tween.update(500); // total 1000ms
+      const state = tween.update(500);
       expect(state.value).toBe(1);
       expect(state.progress).toBe(1);
       expect(state.complete).toBe(true);
@@ -313,7 +325,7 @@ describe("Tween", () => {
 
     it("clamps at 1 when overshooting duration", () => {
       const tween = new Tween(makeScalarConfig());
-      const state = tween.update(5000); // way past 1000ms
+      const state = tween.update(5000);
       expect(state.value).toBe(1);
       expect(state.progress).toBe(1);
       expect(state.complete).toBe(true);
@@ -322,7 +334,7 @@ describe("Tween", () => {
     it("stays complete on subsequent updates after completion", () => {
       const tween = new Tween(makeScalarConfig());
       tween.update(2000);
-      const state = tween.update(100); // extra update after done
+      const state = tween.update(100);
       expect(state.value).toBe(1);
       expect(state.progress).toBe(1);
       expect(state.complete).toBe(true);
@@ -330,9 +342,9 @@ describe("Tween", () => {
 
     it("accumulates delta across multiple updates", () => {
       const tween = new Tween(makeScalarConfig());
-      tween.update(250); // 25%
-      tween.update(250); // 50%
-      const state = tween.update(250); // 75%
+      tween.update(250);
+      tween.update(250);
+      const state = tween.update(250);
       expect(state.value).toBeCloseTo(0.75, 10);
       expect(state.progress).toBeCloseTo(0.75, 10);
     });
@@ -341,20 +353,20 @@ describe("Tween", () => {
   describe("easing integration", () => {
     it("applies easeIn to progress", () => {
       const tween = new Tween(makeScalarConfig({ easing: easeIn }));
-      const state = tween.update(500); // raw progress 0.5, eased 0.25
+      const state = tween.update(500);
       expect(state.value).toBeCloseTo(0.25, 5);
-      expect(state.progress).toBeCloseTo(0.5, 10); // raw progress
+      expect(state.progress).toBeCloseTo(0.5, 10);
     });
 
     it("applies easeOut to progress", () => {
       const tween = new Tween(makeScalarConfig({ easing: easeOut }));
-      const state = tween.update(500); // raw progress 0.5, eased 0.75
+      const state = tween.update(500);
       expect(state.value).toBeCloseTo(0.75, 5);
     });
 
     it("applies easeInOut to progress", () => {
       const tween = new Tween(makeScalarConfig({ easing: easeInOut }));
-      const state = tween.update(500); // raw progress 0.5, eased 0.5
+      const state = tween.update(500);
       expect(state.value).toBeCloseTo(0.5, 5);
     });
   });
@@ -366,7 +378,7 @@ describe("Tween", () => {
         to: { x: 10, y: 20, z: -6 },
       }));
 
-      const state = tween.update(500); // 50%
+      const state = tween.update(500);
       expect(state.value.x).toBeCloseTo(5, 5);
       expect(state.value.y).toBeCloseTo(10, 5);
       expect(state.value.z).toBeCloseTo(-3, 5);
@@ -412,11 +424,11 @@ describe("Tween", () => {
         easing: easeOut,
       }));
 
-      const mid = tween.update(250); // 50% progress, eased 0.75
-      expect(mid.value).toBeCloseTo(0.25, 5); // lerp(1, 0, 0.75) = 0.25
+      const mid = tween.update(250);
+      expect(mid.value).toBeCloseTo(0.25, 5);
       expect(mid.complete).toBe(false);
 
-      const end = tween.update(250); // done
+      const end = tween.update(250);
       expect(end.value).toBe(0);
       expect(end.complete).toBe(true);
     });
@@ -427,7 +439,6 @@ describe("Tween", () => {
       const tween = new Tween(makeScalarConfig());
       tween.update(500);
       const state = tween.update(-100);
-      // Should stay at 500ms (50%), not go to 400ms
       expect(state.progress).toBeCloseTo(0.5, 10);
     });
 
@@ -463,7 +474,7 @@ describe("Tween", () => {
   describe("reset()", () => {
     it("resets elapsed time to 0", () => {
       const tween = new Tween(makeScalarConfig());
-      tween.update(1000); // complete
+      tween.update(1000);
       expect(tween.isComplete).toBe(true);
 
       tween.reset();
@@ -494,7 +505,6 @@ describe("Tween", () => {
       const positionTween = new Tween(makeVec3Config({ durationMs: 2000 }));
       const opacityTween = new Tween(makeScalarConfig({ durationMs: 500 }));
 
-      // After 500ms: position at 25%, opacity at 100%
       const pos = positionTween.update(500);
       const opa = opacityTween.update(500);
 
@@ -508,8 +518,8 @@ describe("Tween", () => {
       const t1 = new Tween(makeScalarConfig());
       const t2 = new Tween(makeScalarConfig());
 
-      t1.update(1000); // complete
-      const s2 = t2.update(500); // 50%
+      t1.update(1000);
+      const s2 = t2.update(500);
 
       expect(t1.isComplete).toBe(true);
       expect(s2.progress).toBeCloseTo(0.5, 10);
@@ -531,5 +541,95 @@ describe("Tween", () => {
       expect(state.complete).toBe(true);
       expect(state.value).toBe(1);
     });
+  });
+});
+
+describe("faithful animation extensions", () => {
+  it("samples a linear animation timeline at t=0, 0.5, and 1.0", () => {
+    const timeline = new AnimationTimeline<number>([
+      { timeMs: 0, value: 0, easing: linear },
+      { timeMs: 1000, value: 10 },
+    ], lerpScalar);
+
+    expect(timeline.sampleAt(0).value).toBe(0);
+    expect(timeline.sampleAt(500).value).toBeCloseTo(5, 10);
+    expect(timeline.sampleAt(1000).value).toBe(10);
+  });
+
+  it("verifies the ease-in-out curve shape", () => {
+    expect(easeInOut(0.25)).toBeLessThan(0.25);
+    expect(easeInOut(0.5)).toBeCloseTo(0.5, 10);
+    expect(easeInOut(0.75)).toBeGreaterThan(0.75);
+  });
+
+  it("matches Java-style gentle and abrupt style behavior", () => {
+    expect(new AbruptStyle().calculatePortion(0.5, 1)).toBeCloseTo(0.5, 10);
+    expect(new GentleStyle().calculatePortion(0.25, 1)).toBeLessThan(0.25);
+    expect(TraditionalStyle.BEGIN_AND_END_GENTLY.calculatePortion(0.75, 1)).toBeGreaterThan(0.75);
+  });
+
+  it("computes sequential animation duration as the sum of its children", () => {
+    const first = new Tween({ from: 0, to: 1, durationMs: 1000, easing: linear, interpolate: lerpScalar });
+    const second = new Tween({ from: 0, to: 1, durationMs: 2000, easing: linear, interpolate: lerpScalar });
+    const sequence = doInOrder(first, second);
+
+    expect(sequence.durationMs).toBe(3000);
+    sequence.update(1500);
+    expect(first.isComplete).toBe(true);
+    expect(second.progress).toBeCloseTo(0.25, 10);
+  });
+
+  it("computes parallel animation duration as the max of its children", () => {
+    const first = new Tween({ from: 0, to: 1, durationMs: 1000, easing: linear, interpolate: lerpScalar });
+    const second = new Tween({ from: 0, to: 1, durationMs: 2000, easing: linear, interpolate: lerpScalar });
+    const together = doTogether(first, second);
+
+    expect(together.durationMs).toBe(2000);
+    together.update(1500);
+    expect(first.isComplete).toBe(true);
+    expect(second.progress).toBeCloseTo(0.75, 10);
+  });
+
+  it("animates Property<T> values and reports observer callbacks", () => {
+    class TestOwner extends PropertyOwnerImp {}
+    const property = new NumberProperty(new TestOwner(), "alpha", 0);
+    const events: string[] = [];
+    const observer: AnimationObserver = {
+      started: () => events.push("started"),
+      updated: () => events.push("updated"),
+      finished: () => events.push("finished"),
+    };
+
+    const animation = property.animateValue(1, 2, new AbruptStyle(), observer);
+    expect(animation).not.toBeNull();
+
+    const halfway = animation!.update(1000);
+    expect(halfway.value).toBeCloseTo(0.5, 10);
+    expect(property.value).toBeCloseTo(0.5, 10);
+
+    const end = animation!.update(1000);
+    expect(end.value).toBe(1);
+    expect(property.value).toBe(1);
+    expect(events[0]).toBe("started");
+    expect(events.at(-1)).toBe("finished");
+    expect(events.filter((event) => event === "updated").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("animates entity move and resize operations with duration and style", () => {
+    const box = new SBox();
+
+    const move = box.move(MoveDirection.FORWARD, 4, 2, new AbruptStyle());
+    expect(move).not.toBeNull();
+    move!.update(1000);
+    expect(box.position.z).toBeCloseTo(-2, 10);
+    move!.update(1000);
+    expect(box.position.z).toBeCloseTo(-4, 10);
+
+    const resize = box.resize(2, 2, new AbruptStyle());
+    expect(resize).not.toBeNull();
+    resize!.update(1000);
+    expect(box.size.width).toBeCloseTo(1.5, 10);
+    resize!.update(1000);
+    expect(box.size.width).toBeCloseTo(2, 10);
   });
 });

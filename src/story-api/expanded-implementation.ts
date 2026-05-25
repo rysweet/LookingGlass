@@ -31,6 +31,14 @@ import {
   subtractVec3,
   vectorFromMoveDirection,
 } from "./expanded-math";
+import {
+  DEFAULT_STYLE,
+  ParallelAnimation,
+  PropertyAnimation,
+  type AnimationClip,
+  type AnimationObserver,
+  type AnimationStyleLike,
+} from "../animation";
 import type {
   BoundingBox,
   JointId,
@@ -93,6 +101,25 @@ export interface PropertyOptions<T> {
 const identityClone = <T>(value: T): T => value;
 const nonEmptyString = (value: string): boolean => typeof value === "string" && value.trim().length > 0;
 let textBubbleId = 0;
+
+function notifyImmediateObserver(observer?: AnimationObserver): void {
+  if (!observer) {
+    return;
+  }
+  const completed: AnimationClip = {
+    durationMs: 0,
+    elapsedMs: 0,
+    progress: 1,
+    complete: true,
+    isComplete: true,
+    update: () => ({ elapsedMs: 0, durationMs: 0, progress: 1, complete: true }),
+    reset: () => {},
+  };
+  observer.started?.(completed);
+  observer.updated?.(completed, { elapsedMs: 0, durationMs: 0, progress: 1, complete: true });
+  observer.finished?.(completed);
+  observer.completed?.(completed);
+}
 
 function cloneTextBubbleEntity(value: TextBubbleEntity): TextBubbleEntity {
   return {
@@ -195,12 +222,29 @@ export class Property<T> {
     other.#bindings.delete(this);
   }
 
-  animateValue(nextValue: T, duration = 0): boolean {
+  animateValue(
+    nextValue: T,
+    duration = 0,
+    style: AnimationStyleLike = DEFAULT_STYLE,
+    observer?: AnimationObserver,
+  ): PropertyAnimation<T> | null {
     const adjustedDuration = this.owner.adjustDurationIfNecessary(duration);
     if (adjustedDuration <= 0 || !this.#interpolate) {
-      return this.setValue(nextValue);
+      this.setValue(nextValue);
+      notifyImmediateObserver(observer);
+      return null;
     }
-    return this.setValue(this.#interpolate(this.value, nextValue, 1));
+    return new PropertyAnimation<T>({
+      from: this.value,
+      to: nextValue,
+      durationMs: adjustedDuration * 1000,
+      easing: style,
+      interpolate: this.#interpolate,
+      setValue: (value) => {
+        this.setValue(value);
+      },
+      observer,
+    });
   }
 
   setValue(nextValue: T): boolean {
@@ -280,8 +324,13 @@ export class NumberProperty extends Property<number> {
     return super.setValueSilently(this.#clamp(nextValue));
   }
 
-  override animateValue(nextValue: number, duration = 0): boolean {
-    return super.animateValue(this.#clamp(nextValue), duration);
+  override animateValue(
+    nextValue: number,
+    duration = 0,
+    style: AnimationStyleLike = DEFAULT_STYLE,
+    observer?: AnimationObserver,
+  ): PropertyAnimation<number> | null {
+    return super.animateValue(this.#clamp(nextValue), duration, style, observer);
   }
 
   #clamp(value: number): number {
@@ -696,7 +745,13 @@ export class TransformableImp extends EntityImp {
   readonly orientation = this.registerProperty(new OrientationProperty(this, "orientation", IDENTITY_ORIENTATION));
   readonly paint = this.registerProperty(new StringProperty<string>(this, "paint", "WHITE"));
 
-  move(direction: MoveDirection | Vec3, amount: number): void {
+  move(
+    direction: MoveDirection | Vec3,
+    amount: number,
+    duration = 0,
+    style: AnimationStyleLike = DEFAULT_STYLE,
+    observer?: AnimationObserver,
+  ): PropertyAnimation<Position> | null {
     if (!Number.isFinite(amount)) {
       throw new TypeError("amount must be a finite number");
     }
@@ -704,7 +759,25 @@ export class TransformableImp extends EntityImp {
       ? rotateVector(this.getAbsoluteOrientation(), vectorFromMoveDirection(direction))
       : normalizeVec3(direction);
     const offset = scaleVec3(normalizeVec3(basis), amount);
-    this.setAbsolutePosition(addVec3(this.getAbsolutePosition(), offset));
+    const from = this.getAbsolutePosition();
+    const to = addVec3(from, offset);
+    const adjustedDuration = this.adjustDurationIfNecessary(duration);
+    if (adjustedDuration <= 0) {
+      this.setAbsolutePosition(to);
+      notifyImmediateObserver(observer);
+      return null;
+    }
+    return new PropertyAnimation<Position>({
+      from,
+      to,
+      durationMs: adjustedDuration * 1000,
+      easing: style,
+      interpolate: interpolatePosition,
+      setValue: (value) => {
+        this.setAbsolutePosition(value);
+      },
+      observer,
+    });
   }
 
   moveToward(target: EntityImp, amount: number): void {
@@ -751,22 +824,34 @@ export class TransformableImp extends EntityImp {
     this.setAbsolutePosition(addVec3(targetPosition, relationOffset(relation, relationDistance)));
   }
 
-  turn(direction: TurnDirection, amount: number): void {
+  turn(
+    direction: TurnDirection,
+    amount: number,
+    duration = 0,
+    style: AnimationStyleLike = DEFAULT_STYLE,
+    observer?: AnimationObserver,
+  ): PropertyAnimation<Orientation> | null {
     if (!Number.isFinite(amount)) {
       throw new TypeError("amount must be a finite number");
     }
     const signed = direction === "LEFT" ? amount : -amount;
     const delta = quaternionFromAxisAngle(0, 1, 0, revolutionsToRadians(signed));
-    this.orientation.setValue(quaternionMultiply(delta, this.orientation.value));
+    return this.orientation.animateValue(quaternionMultiply(delta, this.orientation.value), duration, style, observer);
   }
 
-  roll(direction: RollDirection, amount: number): void {
+  roll(
+    direction: RollDirection,
+    amount: number,
+    duration = 0,
+    style: AnimationStyleLike = DEFAULT_STYLE,
+    observer?: AnimationObserver,
+  ): PropertyAnimation<Orientation> | null {
     if (!Number.isFinite(amount)) {
       throw new TypeError("amount must be a finite number");
     }
     const signed = direction === "LEFT" ? amount : -amount;
     const delta = quaternionFromAxisAngle(0, 0, 1, revolutionsToRadians(signed));
-    this.orientation.setValue(quaternionMultiply(delta, this.orientation.value));
+    return this.orientation.animateValue(quaternionMultiply(delta, this.orientation.value), duration, style, observer);
   }
 
   orientTo(target: EntityImp): void {
@@ -878,7 +963,12 @@ export class ModelImp extends TransformableImp {
     this.opacity.setValue(opacity);
   }
 
-  resize(factor: number): void {
+  resize(
+    factor: number,
+    duration = 0,
+    style: AnimationStyleLike = DEFAULT_STYLE,
+    observer?: AnimationObserver,
+  ): ParallelAnimation | null {
     if (!Number.isFinite(factor) || factor <= 0) {
       throw new TypeError("factor must be a positive finite number");
     }
@@ -887,12 +977,18 @@ export class ModelImp extends TransformableImp {
       height: this.size.value.height * factor,
       depth: this.size.value.depth * factor,
     };
-    this.size.setValue(nextSize);
-    this.scale.setValue({
+    const nextScale = {
       width: this.scale.value.width * factor,
       height: this.scale.value.height * factor,
       depth: this.scale.value.depth * factor,
-    });
+    };
+    const sizeAnimation = this.size.animateValue(nextSize, duration, style);
+    const scaleAnimation = this.scale.animateValue(nextScale, duration, style);
+    if (!sizeAnimation || !scaleAnimation) {
+      notifyImmediateObserver(observer);
+      return null;
+    }
+    return new ParallelAnimation([sizeAnimation, scaleAnimation], observer);
   }
 
   resizeWidth(factor: number): void {

@@ -1,3 +1,4 @@
+import type { AnimationClip, AnimationObserver, AnimationStyleLike } from "../animation";
 import type { Scene } from "./expanded-scene";
 import {
   IDENTITY_ORIENTATION,
@@ -382,12 +383,24 @@ export class STurnable extends SThing {
     this.orientation = value;
   }
 
-  turn(direction: TurnDirection, amount: number): void {
-    this.transformableImp.turn(direction, amount);
+  turn(
+    direction: TurnDirection,
+    amount: number,
+    duration = 0,
+    style?: AnimationStyleLike,
+    observer?: AnimationObserver,
+  ): AnimationClip | null {
+    return this.transformableImp.turn(direction, amount, duration, style, observer);
   }
 
-  roll(direction: RollDirection, amount: number): void {
-    this.transformableImp.roll(direction, amount);
+  roll(
+    direction: RollDirection,
+    amount: number,
+    duration = 0,
+    style?: AnimationStyleLike,
+    observer?: AnimationObserver,
+  ): AnimationClip | null {
+    return this.transformableImp.roll(direction, amount, duration, style, observer);
   }
 
   turnToFace(target: SThing): void {
@@ -508,8 +521,14 @@ export class SMovableTurnable extends STurnable {
     this.position = value;
   }
 
-  move(direction: MoveDirection | Vec3, amount: number): void {
-    this.transformableImp.move(direction, amount);
+  move(
+    direction: MoveDirection | Vec3,
+    amount: number,
+    duration = 0,
+    style?: AnimationStyleLike,
+    observer?: AnimationObserver,
+  ): AnimationClip | null {
+    return this.transformableImp.move(direction, amount, duration, style, observer);
   }
 
   moveToward(target: SThing, amount: number): void {
@@ -727,8 +746,13 @@ export class SModel extends SMovableTurnable {
     this.modelImp.setOpacity(value);
   }
 
-  resize(factor: number): void {
-    this.modelImp.resize(factor);
+  resize(
+    factor: number,
+    duration = 0,
+    style?: AnimationStyleLike,
+    observer?: AnimationObserver,
+  ): AnimationClip | null {
+    return this.modelImp.resize(factor, duration, style, observer);
   }
 
   resizeWidth(factor: number): void {

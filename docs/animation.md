@@ -1,25 +1,27 @@
 # Animation System
 
-The animation module (`src/animation.ts`) is a pure-functional tween engine for
-animating Alice scene properties — position, orientation, and opacity — over
-time. It provides four interpolation curves and a tick-driven `Tween` class
-with no DOM or rendering dependencies.
+The animation module (`src/animation.ts`) now models the richer Alice/Java
+animation stack: keyframe timelines, sequential and parallel composition,
+property animation, Java-style animation styles, and observer callbacks. The
+system stays tick-driven and renderer-agnostic, so it works in tests, Node.js,
+and the browser.
 
 ## Overview
 
 | Export | Kind | Purpose |
 |---|---|---|
-| `linear` | `EasingFn` | Linear interpolation `t → t` |
-| `easeIn` | `EasingFn` | Quadratic ease-in `t → t²` |
-| `easeOut` | `EasingFn` | Quadratic ease-out `t → 1-(1-t)²` |
-| `easeInOut` | `EasingFn` | Cubic smoothstep `t → 3t²-2t³` |
-| `lerpVec3` | function | Linearly interpolate between two `Vec3` values |
-| `nlerp` | function | Normalized linear interpolation between two quaternions |
-| `lerpScalar` | function | Linearly interpolate between two numbers |
-| `Tween<T>` | class | Duration-based tween that produces interpolated values on tick |
+| `AnimationTimeline<T>` | class | Keyframe timeline with per-segment interpolation |
+| `Tween<T>` | class | Simple two-keyframe timeline wrapper |
+| `PropertyAnimation<T>` | class | Animates a setter from value A to B over time |
+| `SequentialAnimation` / `doInOrder()` | class/function | Compose animations one after another |
+| `ParallelAnimation` / `doTogether()` | class/function | Compose animations in parallel |
+| `TraditionalStyle`, `AbruptStyle`, `GentleStyle` | style types | Java-faithful style curves |
+| `linear`, `easeIn`, `easeOut`, `easeInOut`, `bounce` | `EasingFn` | Segment easing helpers |
+| `lerpVec3`, `nlerp`, `lerpScalar`, `lerpSize` | functions | Value interpolation helpers |
+| `AnimationObserver` | interface | `started`, `updated`, `finished`/`completed` callbacks |
 
-All functions are stateless and side-effect-free. The `Tween` class is the
-only stateful object — it tracks elapsed time and reports completion.
+Story entities (`move`, `turn`, `roll`, `resize`) and story properties can use
+these animations directly by supplying a duration and optional style.
 
 ## Quick Start
 
