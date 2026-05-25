@@ -2,19 +2,17 @@ import { expect } from "vitest";
 import type { AliceMethod, AliceProject, AliceStatement } from "../src/a3p-parser.js";
 import { encodeAstNode, type AstSerializableNode } from "../src/ast-serialization.js";
 import { AbstractNode } from "../src/ast-nodes.js";
+import {
+  createTweedleSource,
+  type TweedleMethodSpec,
+} from "../src/code-generation.js";
 import { Scene, SBox } from "../src/story-api";
 import type { ClassDecl } from "../src/tweedle-parser.js";
 import { parseTweedle } from "../src/tweedle-parser.js";
 import { TweedleVM, type ExecutionResult, type TweedleExecutionOptions } from "../src/tweedle-vm.js";
 
-export interface TweedleMethodSpec {
-  name: string;
-  returnType?: string;
-  parameters?: string[];
-  body?: string[];
-  isStatic?: boolean;
-  visibility?: string | null;
-}
+export { createTweedleSource };
+export type { TweedleMethodSpec };
 
 export interface ParseAndExecuteResult {
   ast: ClassDecl;
@@ -110,24 +108,6 @@ export function createProcedureWithStatements(stmts: AliceStatement[], name = "m
     parameters: [],
     statements: cloneJson(stmts),
   };
-}
-
-export function createTweedleSource(className: string, methods: Array<TweedleMethodSpec | string>): string {
-  const renderedMethods = methods.map((method) => {
-    if (typeof method === "string") {
-      return method.trim();
-    }
-    const visibility = method.visibility ? `${method.visibility} ` : "";
-    const isStatic = method.isStatic ? "static " : "";
-    const returnType = method.returnType ?? "void";
-    const parameters = method.parameters?.join(", ") ?? "";
-    const body = method.body?.length
-      ? `\n${method.body.map((line) => `    ${line}`).join("\n")}\n`
-      : "\n";
-    return `${visibility}${isStatic}${returnType} ${method.name}(${parameters}) {${body}  }`;
-  });
-
-  return `class ${className} {\n${renderedMethods.map((method) => `  ${method}`).join("\n\n")}\n}`;
 }
 
 export function parseAndExecute(source: string, options: TweedleExecutionOptions = {}): ParseAndExecuteResult {

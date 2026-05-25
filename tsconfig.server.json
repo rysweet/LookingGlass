@@ -14,5 +14,15 @@
     "lib": ["ES2022", "DOM"],
     "types": ["node"]
   },
-  "include": ["src/evidence-writer.ts", "src/server.ts", "src/cli.ts", "src/a3p-parser.ts", "src/tweedle-vm.ts", "src/hooks/*.ts"]
+  "include": [
+    "src/evidence-writer.ts",
+    "src/server.ts",
+    "src/cli.ts",
+    "src/a3p-parser.ts",
+    "src/ast-nodes.ts",
+    "src/code-generation.ts",
+    "src/tweedle-parser.ts",
+    "src/tweedle-vm.ts",
+    "src/hooks/*.ts"
+  ]
 }

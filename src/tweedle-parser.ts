@@ -5,7 +5,7 @@
 // Pure function, no I/O, no external dependencies.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { hydrateClassDecl, type RawClassDecl } from "./ast-nodes";
+import { hydrateClassDecl, type RawClassDecl } from "./ast-nodes.js";
 
 const MAX_SOURCE_LENGTH = 1_048_576; // 1 MB
 const MAX_PARSE_DEPTH = 100;
