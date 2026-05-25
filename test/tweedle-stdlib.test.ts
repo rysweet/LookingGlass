@@ -3,16 +3,31 @@ import {
   say,
   think,
   move,
+  moveForward,
+  moveBackward,
+  moveLeft,
+  moveRight,
+  moveUp,
+  moveDown,
   turn,
+  turnLeft,
+  turnRight,
   roll,
+  rollLeft,
+  rollRight,
   resize,
   setOpacity,
   setColor,
+  moveToPointOfView,
+  setFieldOfView,
   delay,
   getLastSaid,
   getLastThought,
   getDelays,
   clearDelays,
+  MoveDirection as AliceMoveDirection,
+  TurnDirection as AliceTurnDirection,
+  RollDirection as AliceRollDirection,
 } from "../src/tweedle-stdlib";
 import {
   SThing,
@@ -523,6 +538,117 @@ describe("delay", () => {
 // ---------------------------------------------------------------------------
 // Integration: move + turn compose
 // ---------------------------------------------------------------------------
+
+describe("directional helper methods", () => {
+  it("supports Alice move direction strings", () => {
+    const model = new SModel();
+
+    move(model, AliceMoveDirection.FORWARD, 2);
+    expect(model.position).toEqual({ x: 0, y: 0, z: -2 });
+
+    move(model, AliceMoveDirection.UP, 3);
+    expect(model.position).toEqual({ x: 0, y: 3, z: -2 });
+  });
+
+  it("covers all movement helpers students use", () => {
+    const cases: Array<[(entity: SMovableTurnable, amount: number) => void, { x: number; y: number; z: number }]> = [
+      [moveForward, { x: 0, y: 0, z: -2 }],
+      [moveBackward, { x: 0, y: 0, z: 2 }],
+      [moveLeft, { x: -2, y: 0, z: 0 }],
+      [moveRight, { x: 2, y: 0, z: 0 }],
+      [moveUp, { x: 0, y: 2, z: 0 }],
+      [moveDown, { x: 0, y: -2, z: 0 }],
+    ];
+
+    for (const [helper, expected] of cases) {
+      const model = new SModel();
+      helper(model, 2);
+      expect(model.position).toEqual(expected);
+    }
+  });
+
+  it("turn helpers use Alice left/right directions", () => {
+    const left = new SModel();
+    const right = new SModel();
+
+    turn(left, AliceTurnDirection.LEFT, Math.PI / 2);
+    turnRight(right, Math.PI / 2);
+
+    expect(left.orientation.y).toBeLessThan(0);
+    expect(right.orientation.y).toBeGreaterThan(0);
+
+    const helperLeft = new SModel();
+    const helperRight = new SModel();
+    turnLeft(helperLeft, Math.PI / 2);
+    turnRight(helperRight, Math.PI / 2);
+    expect(helperLeft.orientation.y).toBeLessThan(0);
+    expect(helperRight.orientation.y).toBeGreaterThan(0);
+  });
+
+  it("roll helpers use Alice left/right directions", () => {
+    const left = new SModel();
+    const right = new SModel();
+
+    roll(left, AliceRollDirection.LEFT, Math.PI / 2);
+    rollRight(right, Math.PI / 2);
+
+    expect(left.orientation.z).toBeLessThan(0);
+    expect(right.orientation.z).toBeGreaterThan(0);
+
+    const helperLeft = new SModel();
+    const helperRight = new SModel();
+    rollLeft(helperLeft, Math.PI / 2);
+    rollRight(helperRight, Math.PI / 2);
+    expect(helperLeft.orientation.z).toBeLessThan(0);
+    expect(helperRight.orientation.z).toBeGreaterThan(0);
+  });
+});
+
+describe("communication and camera helpers", () => {
+  it("say with duration updates model speech bubble state", () => {
+    const model = new SModel();
+
+    say(model, "Hello!", 2.5);
+
+    expect(getLastSaid(model)).toBe("Hello!");
+    expect(model.speechBubble).toEqual(
+      expect.objectContaining({ kind: "say", text: "Hello!", duration: 2.5 }),
+    );
+  });
+
+  it("think with duration updates model thought bubble state", () => {
+    const model = new SModel();
+
+    think(model, "Hmm...", 1.25);
+
+    expect(getLastThought(model)).toBe("Hmm...");
+    expect(model.speechBubble).toEqual(
+      expect.objectContaining({ kind: "think", text: "Hmm...", duration: 1.25 }),
+    );
+  });
+
+  it("moveToPointOfView moves camera to the target transform", () => {
+    const camera = new SCamera();
+    const target = new SModel();
+    target.position = { x: 4, y: 3, z: -9 };
+    target.orientation = { x: 0, y: 0.5, z: 0, w: 0.5 };
+
+    moveToPointOfView(camera, target);
+
+    expect(camera.position).toEqual(target.position);
+    expect(camera.orientation).toEqual(target.orientation);
+  });
+
+  it("setFieldOfView keeps horizontal and vertical viewing angles aligned", () => {
+    const camera = new SCamera();
+
+    setFieldOfView(camera, 0.9);
+
+    expect(camera.getFieldOfView()).toBe(0.9);
+    expect(camera.getHorizontalViewingAngle()).toBe(0.9);
+    expect(camera.getVerticalViewingAngle()).toBe(0.9);
+  });
+});
 
 describe("stdlib integration", () => {
   it("move after turn changes position based on world-space direction", () => {

@@ -1,9 +1,21 @@
-import type { Vec3, Orientation } from "./story-api/types";
+import type {
+  MoveDirection as StoryMoveDirection,
+  Orientation,
+  RollDirection as StoryRollDirection,
+  TurnDirection as StoryTurnDirection,
+  Vec3,
+} from "./story-api/types";
 import {
+  MoveDirection as StoryMoveDirections,
+  RollDirection as StoryRollDirections,
+  TurnDirection as StoryTurnDirections,
+} from "./story-api/types";
+import {
+  SCamera,
+  SModel,
+  SMovableTurnable,
   SThing,
   STurnable,
-  SMovableTurnable,
-  SModel,
 } from "./story-api/entities";
 
 // ---------------------------------------------------------------------------
@@ -13,6 +25,10 @@ import {
 const lastSaidText = new WeakMap<SThing, string>();
 const lastThoughtText = new WeakMap<SThing, string>();
 const delayLog: number[] = [];
+
+export const MoveDirection = StoryMoveDirections;
+export const TurnDirection = StoryTurnDirections;
+export const RollDirection = StoryRollDirections;
 
 // ---------------------------------------------------------------------------
 // Validation helpers
@@ -34,6 +50,12 @@ function assertFinite(value: number, label: string): void {
   }
 }
 
+function assertNonNegativeFinite(value: number, label: string): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new TypeError(`${label} must be a non-negative finite number`);
+  }
+}
+
 function assertFiniteVec3(v: Vec3, label: string): void {
   if (!Number.isFinite(v.x) || !Number.isFinite(v.y) || !Number.isFinite(v.z)) {
     throw new TypeError(`${label} coordinates must be finite numbers`);
@@ -44,22 +66,32 @@ function assertFiniteVec3(v: Vec3, label: string): void {
 // say / think
 // ---------------------------------------------------------------------------
 
-/** Record speech text for an entity. */
-export function say(entity: SThing, text: string): void {
+/** Record speech text for an entity and update model speech bubbles when available. */
+export function say(entity: SThing, text: string, duration = 0): void {
   assertInstance(entity, SThing, "entity");
   if (typeof text !== "string") {
     throw new TypeError("text must be a string");
   }
+  assertNonNegativeFinite(duration, "duration");
+
   lastSaidText.set(entity, text);
+  if (entity instanceof SModel) {
+    entity.say(text, duration);
+  }
 }
 
-/** Record thought text for an entity. */
-export function think(entity: SThing, text: string): void {
+/** Record thought text for an entity and update model thought bubbles when available. */
+export function think(entity: SThing, text: string, duration = 0): void {
   assertInstance(entity, SThing, "entity");
   if (typeof text !== "string") {
     throw new TypeError("text must be a string");
   }
+  assertNonNegativeFinite(duration, "duration");
+
   lastThoughtText.set(entity, text);
+  if (entity instanceof SModel) {
+    entity.think(text, duration);
+  }
 }
 
 /** Retrieve last speech text (undefined if entity never spoke). */
@@ -76,18 +108,53 @@ export function getLastThought(entity: SThing): string | undefined {
 // move
 // ---------------------------------------------------------------------------
 
-/** Translate an entity by direction × amount (world-space). */
-export function move(entity: SMovableTurnable, direction: Vec3, amount: number): void {
+/** Translate an entity by direction × amount (world-space or Alice direction). */
+export function move(
+  entity: SMovableTurnable,
+  direction: Vec3 | StoryMoveDirection,
+  amount: number,
+  duration = 0,
+): void {
   assertInstance(entity, SMovableTurnable, "entity");
-  assertFiniteVec3(direction, "direction");
   assertFinite(amount, "amount");
 
+  if (typeof direction === "string") {
+    assertNonNegativeFinite(duration, "duration");
+    entity.move(direction, amount, duration);
+    return;
+  }
+
+  assertFiniteVec3(direction, "direction");
   const pos = entity.position;
   entity.position = {
     x: pos.x + direction.x * amount,
     y: pos.y + direction.y * amount,
     z: pos.z + direction.z * amount,
   };
+}
+
+export function moveForward(entity: SMovableTurnable, amount: number, duration = 0): void {
+  move(entity, MoveDirection.FORWARD, amount, duration);
+}
+
+export function moveBackward(entity: SMovableTurnable, amount: number, duration = 0): void {
+  move(entity, MoveDirection.BACKWARD, amount, duration);
+}
+
+export function moveLeft(entity: SMovableTurnable, amount: number, duration = 0): void {
+  move(entity, MoveDirection.LEFT, amount, duration);
+}
+
+export function moveRight(entity: SMovableTurnable, amount: number, duration = 0): void {
+  move(entity, MoveDirection.RIGHT, amount, duration);
+}
+
+export function moveUp(entity: SMovableTurnable, amount: number, duration = 0): void {
+  move(entity, MoveDirection.UP, amount, duration);
+}
+
+export function moveDown(entity: SMovableTurnable, amount: number, duration = 0): void {
+  move(entity, MoveDirection.DOWN, amount, duration);
 }
 
 // ---------------------------------------------------------------------------
@@ -142,16 +209,58 @@ function applyAxisRotation(
  * Rotate entity around Y axis (yaw).
  * LEFT direction → positive angle, RIGHT → negative (right-hand rule).
  */
-export function turn(entity: STurnable, direction: Vec3, amount: number): void {
+export function turn(
+  entity: STurnable,
+  direction: Vec3 | StoryTurnDirection,
+  amount: number,
+  duration = 0,
+): void {
+  if (typeof direction === "string") {
+    assertInstance(entity, STurnable, "entity");
+    assertFinite(amount, "amount");
+    assertNonNegativeFinite(duration, "duration");
+    entity.turn(direction, amount, duration);
+    return;
+  }
+
   applyAxisRotation(entity, direction, amount, 0, 1, 0);
+}
+
+export function turnLeft(entity: STurnable, amount: number, duration = 0): void {
+  turn(entity, TurnDirection.LEFT, amount, duration);
+}
+
+export function turnRight(entity: STurnable, amount: number, duration = 0): void {
+  turn(entity, TurnDirection.RIGHT, amount, duration);
 }
 
 /**
  * Rotate entity around Z axis (roll).
  * LEFT direction → positive angle, RIGHT → negative (right-hand rule).
  */
-export function roll(entity: STurnable, direction: Vec3, amount: number): void {
+export function roll(
+  entity: STurnable,
+  direction: Vec3 | StoryRollDirection,
+  amount: number,
+  duration = 0,
+): void {
+  if (typeof direction === "string") {
+    assertInstance(entity, STurnable, "entity");
+    assertFinite(amount, "amount");
+    assertNonNegativeFinite(duration, "duration");
+    entity.roll(direction, amount, duration);
+    return;
+  }
+
   applyAxisRotation(entity, direction, amount, 0, 0, 1);
+}
+
+export function rollLeft(entity: STurnable, amount: number, duration = 0): void {
+  roll(entity, RollDirection.LEFT, amount, duration);
+}
+
+export function rollRight(entity: STurnable, amount: number, duration = 0): void {
+  roll(entity, RollDirection.RIGHT, amount, duration);
 }
 
 // ---------------------------------------------------------------------------
@@ -159,18 +268,14 @@ export function roll(entity: STurnable, direction: Vec3, amount: number): void {
 // ---------------------------------------------------------------------------
 
 /** Multiply all dimensions of an SModel's size by a uniform factor. */
-export function resize(entity: SModel, factor: number): void {
+export function resize(entity: SModel, factor: number, duration = 0): void {
   assertInstance(entity, SModel, "entity");
   if (!Number.isFinite(factor) || factor <= 0) {
     throw new TypeError("factor must be a positive finite number");
   }
+  assertNonNegativeFinite(duration, "duration");
 
-  const { width, height, depth } = entity.size;
-  entity.size = {
-    width: width * factor,
-    height: height * factor,
-    depth: depth * factor,
-  };
+  entity.resize(factor, duration);
 }
 
 /** Set the opacity of an SModel. Accepts any finite number (no clamping). */
@@ -193,14 +298,28 @@ export function setColor(entity: SModel, color: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// camera helpers
+// ---------------------------------------------------------------------------
+
+export function moveToPointOfView(camera: SCamera, target: SThing): void {
+  assertInstance(camera, SCamera, "camera");
+  assertInstance(target, SThing, "target");
+  camera.moveToPointOfView(target);
+}
+
+export function setFieldOfView(camera: SCamera, value: number): void {
+  assertInstance(camera, SCamera, "camera");
+  assertFinite(value, "fieldOfView");
+  camera.setFieldOfView(value);
+}
+
+// ---------------------------------------------------------------------------
 // delay
 // ---------------------------------------------------------------------------
 
 /** Record a delay duration (non-blocking). */
 export function delay(duration: number): void {
-  if (!Number.isFinite(duration) || duration < 0) {
-    throw new TypeError("duration must be a non-negative finite number");
-  }
+  assertNonNegativeFinite(duration, "duration");
   delayLog.push(duration);
 }
 
