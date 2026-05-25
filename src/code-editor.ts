@@ -5,6 +5,7 @@ import {
   CommentStatement,
   ConditionalStatement,
   ConstructorBlockStatement,
+  ConstructorInvocationStatement,
   CountLoop,
   CountUpToStatement,
   DisabledBlockStatement,
@@ -15,7 +16,6 @@ import {
   ExpressionStatement,
   FieldAccess,
   ForEachInArrayLoop,
-  ConstructorInvocationStatement,
   ForEachInIterableLoop,
   ForEachLoop,
   LocalDeclarationStatement,
@@ -33,6 +33,8 @@ import {
   type Statement,
 } from "./ast-nodes.js";
 
+export type StatementListPath = readonly string[];
+
 export interface StatementListLocation {
   list: StatementListModel;
   index: number;
@@ -42,17 +44,34 @@ export interface DropTarget extends StatementListLocation {
   kind: "insert";
   depth: number;
   label: string;
+  path: StatementListPath;
 }
 
 export interface VisualCodeBlock {
   statement: Statement;
   list: StatementListModel;
   index: number;
+  path: StatementListPath;
+  listPath: StatementListPath;
   depth: number;
   label: string;
   statementType: string;
   enabled: boolean;
   childListCount: number;
+}
+
+export interface StatementListDescriptor {
+  role: string;
+  path: StatementListPath;
+  depth: number;
+  length: number;
+  parentStatementType: string | null;
+  statementTypes: string[];
+}
+
+export interface MethodBodyVisualModel {
+  lists: StatementListDescriptor[];
+  blocks: VisualCodeBlock[];
 }
 
 interface ChildStatementList {
@@ -62,6 +81,14 @@ interface ChildStatementList {
 
 function attachToOwner(owner: unknown, node: AbstractNode): void {
   (node as unknown as { setParent(parent: unknown): void }).setParent(owner);
+}
+
+function copyPath(path: StatementListPath): StatementListPath {
+  return [...path];
+}
+
+function pathsEqual(left: StatementListPath, right: StatementListPath): boolean {
+  return left.length === right.length && left.every((segment, index) => segment === right[index]);
 }
 
 function describeExpression(expression: Expression | null): string {
@@ -178,10 +205,23 @@ export class StatementListModel {
     public readonly depth = 0,
     public readonly parentList: StatementListModel | null = null,
     public readonly parentStatement: Statement | null = null,
+    public readonly parentIndex: number | null = null,
+    public readonly path: StatementListPath = [role],
   ) {}
 
   list(): Statement[] {
     return [...this.statements];
+  }
+
+  describe(): StatementListDescriptor {
+    return {
+      role: this.role,
+      path: copyPath(this.path),
+      depth: this.depth,
+      length: this.length,
+      parentStatementType: this.parentStatement?.type ?? null,
+      statementTypes: this.statements.map((statement) => statement.type),
+    };
   }
 
   get length(): number {
@@ -207,6 +247,14 @@ export class StatementListModel {
     return this.insert(this.statements.length, statement);
   }
 
+  replace(index: number, statement: Statement): Statement {
+    this.at(index);
+    assertEditableStatement(statement);
+    attachToOwner(this.owner, statement);
+    const [replaced] = this.statements.splice(index, 1, statement);
+    return replaced;
+  }
+
   remove(index: number): Statement {
     this.at(index);
     const [removed] = this.statements.splice(index, 1);
@@ -219,6 +267,12 @@ export class StatementListModel {
     return this.insert(normalizedTarget, statement);
   }
 
+  setEnabled(index: number, enabled = !this.at(index).isEnabled): boolean {
+    const statement = this.at(index);
+    statement.isEnabled = enabled;
+    return statement.isEnabled;
+  }
+
   createDropTargets(): DropTarget[] {
     const targets: DropTarget[] = [];
     for (let index = 0; index <= this.statements.length; index += 1) {
@@ -228,6 +282,7 @@ export class StatementListModel {
         index,
         depth: this.depth,
         label: `${this.role}@${index}`,
+        path: copyPath(this.path),
       });
     }
     return targets;
@@ -248,11 +303,33 @@ function assertEditableStatement(statement: Statement): void {
   }
 }
 
+function createRootList(owner: AbstractCode | BlockStatement): StatementListModel {
+  return new StatementListModel(owner, getBodyStatements(owner), "body", 0, null, null, null, ["body"]);
+}
+
+function createChildList(
+  parentList: StatementListModel,
+  statement: Statement,
+  statementIndex: number,
+  child: ChildStatementList,
+): StatementListModel {
+  return new StatementListModel(
+    statement,
+    child.body,
+    child.role,
+    parentList.depth + 1,
+    parentList,
+    statement,
+    statementIndex,
+    [...parentList.path, `${statementIndex}:${child.role}`],
+  );
+}
+
 export class CodeEditor {
   readonly rootList: StatementListModel;
 
   constructor(public readonly code: AbstractCode | BlockStatement) {
-    this.rootList = new StatementListModel(code, getBodyStatements(code), "body", 0, null, null);
+    this.rootList = createRootList(code);
   }
 
   getLeadingConstructorInvocation(): ConstructorInvocationStatement | null {
@@ -271,14 +348,32 @@ export class CodeEditor {
     const results: StatementListModel[] = [];
     const visit = (list: StatementListModel): void => {
       results.push(list);
-      for (const statement of list.list()) {
+      list.list().forEach((statement, index) => {
         for (const child of getChildLists(statement)) {
-          visit(new StatementListModel(statement, child.body, child.role, list.depth + 1, list, statement));
+          visit(createChildList(list, statement, index, child));
         }
-      }
+      });
     };
     visit(this.rootList);
     return results;
+  }
+
+  findStatementList(path: StatementListPath): StatementListModel {
+    const match = this.getStatementLists().find((list) => pathsEqual(list.path, path));
+    if (!match) {
+      throw new Error(`unknown statement list path ${path.join(" > ")}`);
+    }
+    return match;
+  }
+
+  findStatementLocation(statement: Statement): StatementListLocation | null {
+    for (const list of this.getStatementLists()) {
+      const index = list.list().findIndex((candidate) => candidate === statement);
+      if (index !== -1) {
+        return { list, index };
+      }
+    }
+    return null;
   }
 
   getVisualBlocks(): VisualCodeBlock[] {
@@ -290,6 +385,8 @@ export class CodeEditor {
           statement,
           list,
           index,
+          path: [...list.path, `${index}`],
+          listPath: copyPath(list.path),
           depth: list.depth,
           label: summarizeStatement(statement),
           statementType: statement.type,
@@ -297,12 +394,19 @@ export class CodeEditor {
           childListCount: childLists.length,
         });
         for (const child of childLists) {
-          visit(new StatementListModel(statement, child.body, child.role, list.depth + 1, list, statement));
+          visit(createChildList(list, statement, index, child));
         }
       });
     };
     visit(this.rootList);
     return blocks;
+  }
+
+  getMethodBodyVisualModel(): MethodBodyVisualModel {
+    return {
+      lists: this.getStatementLists().map((list) => list.describe()),
+      blocks: this.getVisualBlocks(),
+    };
   }
 
   getDropTargets(): DropTarget[] {
@@ -314,8 +418,17 @@ export class CodeEditor {
     return target.list.insert(target.index, statement);
   }
 
+  replaceStatement(target: StatementListLocation, statement: Statement): Statement {
+    this.ensureSafeInsertion(statement, target.list);
+    return target.list.replace(target.index, statement);
+  }
+
   removeStatement(source: StatementListLocation): Statement {
     return source.list.remove(source.index);
+  }
+
+  setStatementEnabled(target: StatementListLocation, enabled?: boolean): boolean {
+    return target.list.setEnabled(target.index, enabled);
   }
 
   moveStatement(source: StatementListLocation, target: StatementListLocation): Statement {
@@ -330,7 +443,7 @@ export class CodeEditor {
   }
 
   createBodyModel(method: AbstractCode | BlockStatement): StatementListModel {
-    return new StatementListModel(method, getBodyStatements(method), "body");
+    return createRootList(method);
   }
 
   private ensureSafeInsertion(statement: Statement, targetList: StatementListModel): void {
