@@ -5,6 +5,15 @@ import type {
   AliceProject,
   AliceStatement,
 } from "./a3p-parser.js";
+import {
+  collectProjectDebugStatements,
+  TweedleDebugSession,
+  type DebugCallFrame,
+  type DebugStatementLocation,
+  type DebugTrace,
+  type DebugTraceEvent,
+  type DebugVariableSnapshot,
+} from "./debugging.js";
 import { generateExpression } from "./tweedle-codegen.js";
 import { parseTweedle, type ClassDecl, type ConstructorDecl, type Expression, type FieldDecl, type MethodDecl, type Statement, type TypeRef } from "./tweedle-parser.js";
 
@@ -65,6 +74,23 @@ interface RuntimeLambda {
   self: RuntimeObject | null;
 }
 
+interface DebugCallFrameState {
+  id: string;
+  ownerName: string | null;
+  methodName: string;
+  signature: string;
+  receiver: RuntimeObject | null;
+  scopeStartIndex: number;
+}
+
+interface DebugRuntime {
+  statementLookup: WeakMap<AliceStatement, DebugStatementLocation>;
+  trace: DebugTraceEvent[];
+  callStack: DebugCallFrameState[];
+  activeStatementIds: string[];
+  invocationCounter: number;
+}
+
 interface VMState {
   stepCounter: number;
   depth: number;
@@ -78,6 +104,7 @@ interface VMState {
   currentSelf: RuntimeObject | null;
   returnValues: Map<string, unknown>;
   listenerMap: Map<string, RuntimeLambda[]>;
+  debugRuntime?: DebugRuntime;
 }
 
 interface VMEnvironment {
@@ -623,6 +650,154 @@ function cloneObjectMap(objectMap: Map<string, RuntimeObject>): Map<string, Runt
   return clone;
 }
 
+function createDebugRuntime(statements: readonly DebugStatementLocation[]): DebugRuntime {
+  const statementLookup = new WeakMap<AliceStatement, DebugStatementLocation>();
+  for (const statement of statements) {
+    statementLookup.set(statement.statement, statement);
+  }
+  return {
+    statementLookup,
+    trace: [],
+    callStack: [],
+    activeStatementIds: [],
+    invocationCounter: 0,
+  };
+}
+
+function isRuntimeObjectValue(value: unknown): value is RuntimeObject {
+  return typeof value === "object"
+    && value !== null
+    && "name" in value
+    && "typeName" in value
+    && "fields" in value
+    && (value as { fields: unknown }).fields instanceof Map;
+}
+
+function snapshotDebugValue(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "undefined") {
+    return "undefined";
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => snapshotDebugValue(entry, seen));
+  }
+  if (isRuntimeObjectValue(value)) {
+    if (seen.has(value)) {
+      return `[Circular ${value.typeName}]`;
+    }
+    seen.add(value);
+    return {
+      name: value.name,
+      typeName: value.typeName,
+      fields: snapshotRuntimeFields(value.fields, seen),
+    };
+  }
+  if (value instanceof Map) {
+    return Object.fromEntries([...value.entries()].map(([key, entry]) => [String(key), snapshotDebugValue(entry, seen)]));
+  }
+  if (typeof value === "object") {
+    if (seen.has(value)) {
+      return "[Circular]";
+    }
+    seen.add(value);
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => key !== "source")
+        .map(([key, entry]) => [key, snapshotDebugValue(entry, seen)]),
+    );
+  }
+  return String(value);
+}
+
+function snapshotRuntimeFields(fields: Map<string, unknown>, seen = new WeakSet<object>()): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = {};
+  for (const [name, value] of fields.entries()) {
+    snapshot[name] = snapshotDebugValue(value, seen);
+  }
+  return snapshot;
+}
+
+function collectFrameLocals(scopes: Map<string, unknown>[], start: number, end: number): Record<string, unknown> {
+  const locals: Record<string, unknown> = {};
+  const safeEnd = Math.min(end, scopes.length);
+  for (let index = start; index < safeEnd; index++) {
+    for (const [name, value] of scopes[index].entries()) {
+      locals[name] = snapshotDebugValue(value);
+    }
+  }
+  return locals;
+}
+
+function snapshotCallStack(state: VMState): DebugCallFrame[] {
+  const runtime = state.debugRuntime;
+  if (!runtime) {
+    return [];
+  }
+  return runtime.callStack.map((frame, index) => {
+    const nextFrame = runtime.callStack[index + 1];
+    const locals = collectFrameLocals(state.scopes, frame.scopeStartIndex, nextFrame?.scopeStartIndex ?? state.scopes.length);
+    const fields = frame.receiver ? snapshotRuntimeFields(frame.receiver.fields) : {};
+    return {
+      id: frame.id,
+      ownerName: frame.ownerName,
+      methodName: frame.methodName,
+      signature: frame.signature,
+      receiverName: frame.receiver?.name ?? null,
+      receiverTypeName: frame.receiver?.typeName ?? null,
+      locals,
+      fields,
+    };
+  });
+}
+
+function snapshotVisibleVariables(callStack: readonly DebugCallFrame[]): DebugVariableSnapshot {
+  const currentFrame = callStack[callStack.length - 1];
+  if (!currentFrame) {
+    return {
+      locals: {},
+      fields: {},
+      visible: {},
+    };
+  }
+  const visible: Record<string, unknown> = {
+    ...currentFrame.fields,
+    ...currentFrame.locals,
+  };
+  if (currentFrame.receiverName) {
+    visible.this = {
+      name: currentFrame.receiverName,
+      typeName: currentFrame.receiverTypeName,
+    };
+  }
+  return {
+    locals: currentFrame.locals,
+    fields: currentFrame.fields,
+    visible,
+  };
+}
+
+function recordDebugEvent(state: VMState, stmt: AliceStatement): void {
+  const runtime = state.debugRuntime;
+  if (!runtime) {
+    return;
+  }
+  const statement = runtime.statementLookup.get(stmt);
+  if (!statement) {
+    return;
+  }
+  const callStack = snapshotCallStack(state);
+  runtime.trace.push({
+    statement,
+    ancestorStatementIds: [...runtime.activeStatementIds],
+    callStack,
+    variables: snapshotVisibleVariables(callStack),
+    step: state.stepCounter + 1,
+    executionLogSize: state.log.length,
+  });
+}
+
 function mergeStateFromBranch(
   state: VMState,
   originalScopes: Map<string, unknown>[],
@@ -687,7 +862,7 @@ function createExecutionEnvironment(project: AliceProject): VMEnvironment {
   };
 }
 
-function createState(environment: VMEnvironment, currentSelf: RuntimeObject | null): VMState {
+function createState(environment: VMEnvironment, currentSelf: RuntimeObject | null, debugRuntime?: DebugRuntime): VMState {
   return {
     stepCounter: environment.stepCounter,
     depth: 0,
@@ -701,6 +876,7 @@ function createState(environment: VMEnvironment, currentSelf: RuntimeObject | nu
     currentSelf,
     returnValues: environment.returnValues,
     listenerMap: environment.listenerMap,
+    debugRuntime,
   };
 }
 
@@ -746,6 +922,8 @@ function executeOne(stmt: AliceStatement, state: VMState): void {
   if (state.returned) return;
   if (state.stepCounter >= MAX_TOTAL_STEPS) return;
 
+  recordDebugEvent(state, stmt);
+
   if (state.depth >= MAX_DEPTH) {
     state.stepCounter++;
     state.log.push({
@@ -756,60 +934,71 @@ function executeOne(stmt: AliceStatement, state: VMState): void {
     return;
   }
 
-  switch (stmt.kind) {
-    case "MethodCall":
-      execMethodCall(stmt, state);
-      break;
-    case "DoInOrder":
-      execDoInOrder(stmt, state);
-      break;
-    case "DoTogether":
-      execDoTogether(stmt, state);
-      break;
-    case "CountLoop":
-      execCountLoop(stmt, state);
-      break;
-    case "CountUpTo":
-      execCountUpTo(stmt, state);
-      break;
-    case "WhileLoop":
-      execWhileLoop(stmt, state);
-      break;
-    case "ForEach":
-      execForEach(stmt, state);
-      break;
-    case "IfElse":
-      execIfElse(stmt, state);
-      break;
-    case "TryCatch":
-      execTryCatch(stmt, state);
-      break;
-    case "ThrowStatement":
-      execThrow(stmt, state);
-      break;
-    case "ReturnStatement":
-      execReturn(stmt, state);
-      break;
-    case "VariableDeclaration":
-      execVariableDeclaration(stmt, state);
-      break;
-    case "VariableAssignment":
-      execVariableAssignment(stmt, state);
-      break;
-    case "EventListener":
-      execEventListener(stmt, state);
-      break;
-    case "Comment":
-      // Comments produce no log entries — intentionally skipped
-      break;
-    default:
-      state.stepCounter++;
-      state.log.push({
-        step: state.stepCounter,
-        kind: "skipped",
-        detail: `Unknown statement kind: ${stmt.kind}`,
-      });
-      break;
+  const statementId = state.debugRuntime?.statementLookup.get(stmt)?.id ?? null;
+  if (statementId) {
+    state.debugRuntime?.activeStatementIds.push(statementId);
+  }
+
+  try {
+    switch (stmt.kind) {
+      case "MethodCall":
+        execMethodCall(stmt, state);
+        break;
+      case "DoInOrder":
+        execDoInOrder(stmt, state);
+        break;
+      case "DoTogether":
+        execDoTogether(stmt, state);
+        break;
+      case "CountLoop":
+        execCountLoop(stmt, state);
+        break;
+      case "CountUpTo":
+        execCountUpTo(stmt, state);
+        break;
+      case "WhileLoop":
+        execWhileLoop(stmt, state);
+        break;
+      case "ForEach":
+        execForEach(stmt, state);
+        break;
+      case "IfElse":
+        execIfElse(stmt, state);
+        break;
+      case "TryCatch":
+        execTryCatch(stmt, state);
+        break;
+      case "ThrowStatement":
+        execThrow(stmt, state);
+        break;
+      case "ReturnStatement":
+        execReturn(stmt, state);
+        break;
+      case "VariableDeclaration":
+        execVariableDeclaration(stmt, state);
+        break;
+      case "VariableAssignment":
+        execVariableAssignment(stmt, state);
+        break;
+      case "EventListener":
+        execEventListener(stmt, state);
+        break;
+      case "Comment":
+        // Comments produce no log entries — intentionally skipped
+        break;
+      default:
+        state.stepCounter++;
+        state.log.push({
+          step: state.stepCounter,
+          kind: "skipped",
+          detail: `Unknown statement kind: ${stmt.kind}`,
+        });
+        break;
+    }
+  } finally {
+    if (statementId) {
+      state.debugRuntime?.activeStatementIds.pop();
+    }
   }
 }
 
@@ -951,21 +1140,41 @@ function dispatchMethod(
     scopeSet(state, target.parameters[i].name, resolvedArgs[i]);
   }
 
-  state.depth++;
-  runStatements(target.statements, state);
-  state.depth--;
-
-  if (state.returned && state.returnValue !== undefined) {
-    state.returnValues.set(target.name, state.returnValue);
+  const runtime = state.debugRuntime;
+  if (runtime) {
+    runtime.invocationCounter += 1;
+    const ownerName = declaringTypeName ?? self?.typeName ?? null;
+    runtime.callStack.push({
+      id: `${ownerName ?? "global"}.${target.name}:${runtime.invocationCounter}`,
+      ownerName,
+      methodName: target.name,
+      signature: `${ownerName ?? "global"}.${target.name}/${target.parameters.length}`,
+      receiver: self,
+      scopeStartIndex: state.scopes.length - 1,
+    });
   }
 
-  popScope(state);
-  state.currentSelf = callerSelf;
-  state.returned = callerReturned;
-  state.returnValue = callerReturnValue;
-
-  if (declaringTypeName) {
+  let methodReturned = false;
+  let methodReturnValue: unknown = undefined;
+  try {
+    state.depth++;
+    runStatements(target.statements, state);
+    methodReturned = state.returned;
+    methodReturnValue = state.returnValue;
+    if (methodReturned && methodReturnValue !== undefined) {
+      state.returnValues.set(target.name, methodReturnValue);
+    }
+  } finally {
+    state.depth = Math.max(state.depth - 1, 0);
+    runtime?.callStack.pop();
+    popScope(state);
     state.currentSelf = callerSelf;
+    state.returned = callerReturned;
+    state.returnValue = callerReturnValue;
+
+    if (declaringTypeName) {
+      state.currentSelf = callerSelf;
+    }
   }
 }
 
@@ -1015,6 +1224,7 @@ function execDoTogether(stmt: AliceStatement, state: VMState): void {
       currentSelf: state.currentSelf ? (branchObjectMap.get(state.currentSelf.name) ?? null) : null,
       returnValues: state.returnValues,
       listenerMap: state.listenerMap,
+      debugRuntime: state.debugRuntime,
     };
     runScopedStatements([branchStatement], branchState);
     branchStates.push(branchState);
@@ -1508,6 +1718,45 @@ export class TweedleVM {
     dispatchMethod(runtimeMethod, options.arguments ?? [], state, receiver, receiver.typeName);
     environment.stepCounter = state.stepCounter;
     return { execution_log: environment.log, returnValues: environment.returnValues };
+  }
+
+  createDebugSession(mainDeclaration: ClassDecl, options: TweedleExecutionOptions = {}): TweedleDebugSession {
+    const project = compileProject(mainDeclaration, options);
+    const environment = createExecutionEnvironment(project);
+    const debugStatements = collectProjectDebugStatements(project);
+    const debugRuntime = createDebugRuntime(debugStatements);
+    this.environment = environment;
+
+    const instanceName = options.instanceName ?? lowerFirst(mainDeclaration.name);
+    const receiver = environment.objectMap.get(instanceName) ?? null;
+    const entryMethod = options.entryMethod ?? inferEntryMethod(mainDeclaration);
+    if (!receiver || !entryMethod) {
+      return new TweedleDebugSession({
+        statements: debugStatements,
+        events: debugRuntime.trace,
+        result: {
+          execution_log: [...environment.log],
+          returnValues: new Map(environment.returnValues),
+        },
+      });
+    }
+
+    const state = createState(environment, receiver, debugRuntime);
+    const runtimeMethod = resolveRuntimeMethod(state, receiver.typeName, entryMethod, options.arguments?.length ?? 0);
+    if (runtimeMethod) {
+      dispatchMethod(runtimeMethod, options.arguments ?? [], state, receiver, receiver.typeName);
+      environment.stepCounter = state.stepCounter;
+    }
+
+    const trace: DebugTrace = {
+      statements: debugStatements,
+      events: debugRuntime.trace,
+      result: {
+        execution_log: [...environment.log],
+        returnValues: new Map(environment.returnValues),
+      },
+    };
+    return new TweedleDebugSession(trace);
   }
 
   dispatchEvent(eventName: string, payload: unknown = null): ExecutionResult {
