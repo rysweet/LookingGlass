@@ -30,6 +30,7 @@ const EN_BUNDLE: LocalizationBundle = {
     set: "set ",
     classes: "classes",
     new: "new",
+    constant: "constant",
     emptyWorld: "Empty World",
   },
   methodNames: {
@@ -70,6 +71,7 @@ const ES_BUNDLE: LocalizationBundle = {
     set: "establecer ",
     classes: "clases",
     new: "nuevo",
+    constant: "constante",
     emptyWorld: "Mundo vacío",
   },
   methodNames: {
@@ -110,6 +112,7 @@ const ZH_BUNDLE: LocalizationBundle = {
     set: "设置",
     classes: "类",
     new: "新建",
+    constant: "常量",
     emptyWorld: "空世界",
   },
   methodNames: {

@@ -4,6 +4,7 @@
 import { readProject, writeProject, type AliceProjectArchive } from "./project-io";
 import type { AliceProject } from "./a3p-parser";
 import { getCurrentAliceVersion } from "./project-migration";
+import { sanitizeJavaIdentifier, sanitizePackageName } from "./naming.js";
 
 export interface RecentFile {
   fileName: string;
@@ -42,19 +43,6 @@ function cloneBytes(data: ArrayBuffer | Uint8Array): Uint8Array {
     return new Uint8Array(data);
   }
   return new Uint8Array(data.slice(0));
-}
-
-function sanitizeJavaIdentifier(value: string, fallback: string): string {
-  const cleaned = value.replace(/[^A-Za-z0-9_]/g, "_");
-  const withPrefix = /^[A-Za-z_]/.test(cleaned) ? cleaned : `_${cleaned}`;
-  return withPrefix.length > 0 ? withPrefix : fallback;
-}
-
-function sanitizePackageName(packageName: string): string {
-  return packageName
-    .split(".")
-    .map((segment, index) => sanitizeJavaIdentifier(segment, index === 0 ? "alice" : "pkg"))
-    .join(".");
 }
 
 export class ProjectManager {
