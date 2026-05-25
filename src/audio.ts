@@ -2,11 +2,11 @@
 // audio.ts — DOM-free audio state machine for the Alice web prototype
 //
 // Provides AudioPlayer (play/pause/stop with event callbacks),
-// AudioResource (data type for loaded audio), and loadAudioFromA3P
-// (extracts audio resources from .a3p ZIP archives).
+// SoundResourceManager, SoundGroup, and loadAudioFromA3P.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import JSZip from "jszip";
+import type { Vec3 } from "./story-api/types";
 
 /** DOM-free audio resource descriptor. */
 export interface AudioResource {
@@ -17,14 +17,165 @@ export interface AudioResource {
   format: string;
 }
 
+export interface SpatialAudioOptions {
+  sourcePosition?: Vec3;
+  listenerPosition?: Vec3;
+  maxDistance?: number;
+  rolloff?: number;
+}
+
+export interface SpatialAudioMix {
+  volume: number;
+  pan: number;
+  distance: number;
+}
+
 export type AudioPlayerState = "stopped" | "playing" | "paused";
 export type AudioEventType = "play" | "pause" | "stop" | "load";
 export type AudioEventCallback = () => void;
 
+const ZERO_VEC3: Vec3 = Object.freeze({ x: 0, y: 0, z: 0 });
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function assertFiniteNumber(value: number, label: string): void {
+  if (!Number.isFinite(value)) {
+    throw new TypeError(`${label} must be finite`);
+  }
+}
+
+function assertVec3(value: Vec3, label: string): void {
+  assertFiniteNumber(value.x, `${label}.x`);
+  assertFiniteNumber(value.y, `${label}.y`);
+  assertFiniteNumber(value.z, `${label}.z`);
+}
+
+function distance(a: Vec3, b: Vec3): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+export class SoundResourceManager {
+  private readonly resources = new Map<string, AudioResource>();
+
+  get size(): number {
+    return this.resources.size;
+  }
+
+  register(resource: AudioResource): void {
+    this.resources.set(resource.id, resource);
+  }
+
+  registerAll(resources: Iterable<AudioResource>): void {
+    for (const resource of resources) {
+      this.register(resource);
+    }
+  }
+
+  get(id: string): AudioResource | undefined {
+    return this.resources.get(id);
+  }
+
+  has(id: string): boolean {
+    return this.resources.has(id);
+  }
+
+  remove(id: string): boolean {
+    return this.resources.delete(id);
+  }
+
+  clear(): void {
+    this.resources.clear();
+  }
+
+  list(): AudioResource[] {
+    return Array.from(this.resources.values());
+  }
+}
+
+export class SoundGroup {
+  private readonly players = new Set<AudioPlayer>();
+  private _volume = 1.0;
+  private _pan = 0;
+  private _muted = false;
+
+  constructor(readonly id: string) {}
+
+  get volume(): number {
+    return this._volume;
+  }
+
+  set volume(value: number) {
+    this._volume = clamp(value, 0, 1);
+  }
+
+  get pan(): number {
+    return this._pan;
+  }
+
+  set pan(value: number) {
+    this._pan = clamp(value, -1, 1);
+  }
+
+  get muted(): boolean {
+    return this._muted;
+  }
+
+  set muted(value: boolean) {
+    this._muted = value;
+  }
+
+  addPlayer(player: AudioPlayer): void {
+    if (player.group === this) {
+      return;
+    }
+    player.group?.removePlayer(player);
+    this.players.add(player);
+    player.attachGroup(this);
+  }
+
+  removePlayer(player: AudioPlayer): void {
+    if (this.players.delete(player)) {
+      player.attachGroup(null);
+    }
+  }
+
+  hasPlayer(player: AudioPlayer): boolean {
+    return this.players.has(player);
+  }
+
+  listPlayers(): AudioPlayer[] {
+    return Array.from(this.players);
+  }
+
+  pauseAll(): void {
+    for (const player of this.players) {
+      player.pause();
+    }
+  }
+
+  stopAll(): void {
+    for (const player of this.players) {
+      player.stop();
+    }
+  }
+}
+
 export class AudioPlayer {
   private _state: AudioPlayerState = "stopped";
   private _volume = 1.0;
+  private _pan = 0;
   private _resource: AudioResource | null = null;
+  private _group: SoundGroup | null = null;
+  private _spatialEnabled = false;
+  private _sourcePosition: Vec3 = ZERO_VEC3;
+  private _listenerPosition: Vec3 = ZERO_VEC3;
+  private _maxDistance = 10;
+  private _rolloff = 1;
   private readonly listeners = new Map<AudioEventType, AudioEventCallback[]>();
 
   get state(): AudioPlayerState {
@@ -36,17 +187,53 @@ export class AudioPlayer {
   }
 
   set volume(value: number) {
-    this._volume = Math.max(0, Math.min(1, value));
+    this._volume = clamp(value, 0, 1);
+  }
+
+  get pan(): number {
+    return this._pan;
+  }
+
+  set pan(value: number) {
+    this._pan = clamp(value, -1, 1);
+  }
+
+  get effectiveVolume(): number {
+    const groupVolume = this._group?.volume ?? 1;
+    const groupMuted = this._group?.muted ?? false;
+    const spatialMix = this.getSpatialMix();
+    return groupMuted ? 0 : clamp(this._volume * groupVolume * spatialMix.volume, 0, 1);
+  }
+
+  get effectivePan(): number {
+    const groupPan = this._group?.pan ?? 0;
+    return clamp(this._pan + groupPan + this.getSpatialMix().pan, -1, 1);
+  }
+
+  get group(): SoundGroup | null {
+    return this._group;
   }
 
   get resource(): AudioResource | null {
     return this._resource;
   }
 
+  get spatialEnabled(): boolean {
+    return this._spatialEnabled;
+  }
+
   load(res: AudioResource): void {
     this._state = "stopped";
     this._resource = res;
     this.emit("load");
+  }
+
+  loadFromManager(manager: SoundResourceManager, resourceId: string): void {
+    const resource = manager.get(resourceId);
+    if (!resource) {
+      throw new Error(`Audio resource not found: ${resourceId}`);
+    }
+    this.load(resource);
   }
 
   play(): void {
@@ -70,6 +257,61 @@ export class AudioPlayer {
     this.emit("stop");
   }
 
+  configureSpatialAudio(options: SpatialAudioOptions = {}): void {
+    if (options.sourcePosition) {
+      assertVec3(options.sourcePosition, "sourcePosition");
+      this._sourcePosition = options.sourcePosition;
+    }
+    if (options.listenerPosition) {
+      assertVec3(options.listenerPosition, "listenerPosition");
+      this._listenerPosition = options.listenerPosition;
+    }
+    if (options.maxDistance !== undefined) {
+      assertFiniteNumber(options.maxDistance, "maxDistance");
+      this._maxDistance = Math.max(0, options.maxDistance);
+    }
+    if (options.rolloff !== undefined) {
+      assertFiniteNumber(options.rolloff, "rolloff");
+      this._rolloff = Math.max(0, options.rolloff);
+    }
+    this._spatialEnabled = true;
+  }
+
+  disableSpatialAudio(): void {
+    this._spatialEnabled = false;
+  }
+
+  setSourcePosition(position: Vec3): void {
+    assertVec3(position, "sourcePosition");
+    this._sourcePosition = position;
+    this._spatialEnabled = true;
+  }
+
+  setListenerPosition(position: Vec3): void {
+    assertVec3(position, "listenerPosition");
+    this._listenerPosition = position;
+    this._spatialEnabled = true;
+  }
+
+  getSpatialMix(): SpatialAudioMix {
+    if (!this._spatialEnabled) {
+      return { volume: 1, pan: 0, distance: 0 };
+    }
+    const actualDistance = distance(this._sourcePosition, this._listenerPosition);
+    const maxDistance = Math.max(this._maxDistance, 0);
+    const distanceRatio = maxDistance === 0 ? 1 : clamp(actualDistance / maxDistance, 0, 1);
+    const dryVolume = 1 - distanceRatio;
+    const volume = this._rolloff <= 0 ? dryVolume : Math.pow(dryVolume, this._rolloff);
+    const pan = maxDistance === 0
+      ? 0
+      : clamp((this._sourcePosition.x - this._listenerPosition.x) / maxDistance, -1, 1);
+    return {
+      volume,
+      pan,
+      distance: actualDistance,
+    };
+  }
+
   on(event: AudioEventType, callback: AudioEventCallback): void {
     const cbs = this.listeners.get(event) ?? [];
     cbs.push(callback);
@@ -81,6 +323,10 @@ export class AudioPlayer {
     if (!cbs) return;
     const idx = cbs.indexOf(callback);
     if (idx !== -1) cbs.splice(idx, 1);
+  }
+
+  attachGroup(group: SoundGroup | null): void {
+    this._group = group;
   }
 
   private emit(event: AudioEventType): void {
@@ -114,7 +360,7 @@ export async function loadAudioFromA3P(
     id: resourcePath,
     name,
     buffer,
-    duration: 0, // actual duration requires codec decoding
+    duration: 0,
     format,
   };
 }
