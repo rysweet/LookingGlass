@@ -120,7 +120,17 @@ describe("Outside-in: Full integration - animation + project-io + a3p-parser", (
         project: { version: "1.0", projectName: "X", sceneObjects: [], methods: [] },
         manifest: null,
         resources: new Map(),
+        resourceEntries: [],
         thumbnail: null,
+        versionInfo: {
+          originalAliceVersion: null,
+          detectedAliceVersion: "1.0",
+          manifestVersion: null,
+          xmlVersion: null,
+          versionSource: "default",
+          migrated: false,
+          migrationSteps: [],
+        },
       });
       const archive = await readProject(bytes);
       expect(archive.project.projectName).toBe("X");

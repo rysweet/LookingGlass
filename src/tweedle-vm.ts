@@ -1382,6 +1382,8 @@ function convertStatement(statement: Statement): AliceStatement | null {
     case "DisabledBlock":
     case "Comment":
       return { kind: "Comment" };
+    default:
+      return null;
   }
 }
 

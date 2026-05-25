@@ -97,6 +97,9 @@ describe("Java AST parity ports", () => {
     });
 
     expect(statement).toBeInstanceOf(ConstructorBlockStatement);
+    if (!(statement instanceof ConstructorBlockStatement)) {
+      throw new Error("Expected ConstructorBlockStatement");
+    }
     expect(statement.constructorInvocationStatement).toBeInstanceOf(ThisConstructorInvocationStatement);
     expect(statement.body[0]).toBeInstanceOf(ReturnStatement);
     expect(statement.body[0].parent).toBe(statement);

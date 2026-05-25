@@ -7,16 +7,13 @@ export type {
   BoundingBox,
   JointId,
   JointNode,
-  MoveDirection,
   Orientation,
   Position,
-  RollDirection,
   Size,
   SpatialRelation,
   SpeechBubbleState,
   TextBubbleEntity,
   TransformSnapshot,
-  TurnDirection,
   Vec3,
 } from "./expanded-types";
 export type {

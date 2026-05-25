@@ -17,7 +17,7 @@ export interface ResourceMetadata {
   width?: number | null;
   height?: number | null;
   duration?: number | null;
-  [key: string]: string | number | boolean | null | undefined;
+  [key: string]: string | number | boolean | Uint8Array | ResourceMetadata | null | undefined;
 }
 
 export interface ResourceRegistration extends ResourceMetadata {

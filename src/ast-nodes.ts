@@ -52,6 +52,10 @@ export function typeRefName(typeRef: TypeRef | null): string | null {
   }
 }
 
+function isNamedSimpleTypeRef(typeRef: TypeRef | null, name: string): boolean {
+  return typeRef?.type === "SimpleTypeRef" && typeRef.name === name;
+}
+
 export function componentTypeRef(typeRef: TypeRef | null): TypeRef | null {
   if (!typeRef || typeRef.type !== "SimpleTypeRef" || !typeRef.isArray) {
     return null;
@@ -124,7 +128,7 @@ export abstract class AbstractNode {
     return this.#parent;
   }
 
-  protected setParent(parent: AbstractNode | null): void {
+  setParent(parent: AbstractNode | null): void {
     this.#parent = parent;
   }
 
@@ -151,7 +155,7 @@ export abstract class AbstractNode {
   }
 
   getFirstAncestorAssignableTo<T extends AbstractNode>(
-    ctor: new (...args: never[]) => T,
+    ctor: abstract new (...args: never[]) => T,
     includeSelf = false,
   ): T | null {
     let current: AbstractNode | null = includeSelf ? this : this.parent;
@@ -181,6 +185,10 @@ export abstract class AbstractNode {
   }
 }
 
+function isNodeArrayEntry<T extends AbstractNode>(value: T | readonly T[]): value is readonly T[] {
+  return Array.isArray(value);
+}
+
 export class NodeProperty<T extends AbstractNode | null> {
   #value: T;
 
@@ -194,7 +202,7 @@ export class NodeProperty<T extends AbstractNode | null> {
 
   protected attach(value: T): void {
     if (value) {
-      value["setParent"](this.owner);
+      value.setParent(this.owner);
     }
   }
 
@@ -216,10 +224,10 @@ export class NodeListProperty<T extends AbstractNode> implements Iterable<T> {
 
   add(...values: Array<T | readonly T[]>): void {
     for (const entry of values) {
-      if (Array.isArray(entry)) {
+      if (isNodeArrayEntry(entry)) {
         this.add(...entry);
       } else {
-        entry["setParent"](this.owner);
+        entry.setParent(this.owner);
         this.#values.push(entry);
       }
     }
@@ -264,7 +272,7 @@ export class DeclarationProperty<T> {
 
   protected attach(value: T | null): void {
     if (!this.isReference && value instanceof AbstractNode) {
-      value["setParent"](this.owner);
+      value.setParent(this.owner);
     }
   }
 
@@ -451,7 +459,7 @@ export abstract class AbstractType extends AbstractAccessibleDeclaration {
     return false;
   }
 
-  override isStatic(): boolean {
+  isStatic(): boolean {
     return false;
   }
 
@@ -737,7 +745,7 @@ export abstract class AbstractUserMethod extends AbstractMethod {
     public isSignatureLocked = false,
     public isDeletionAllowed = true,
     public isSynchronized = false,
-    public isStrictFloatingPoint = false,
+    public strictFloatingPoint = false,
   ) {
     super(name, returnType, parameters, body, isStatic, visibility, accessLevel);
   }
@@ -980,7 +988,7 @@ export class NamedUserType extends UserType<NamedUserConstructor> implements Use
     accessLevel: AccessLevel = AccessLevel.PUBLIC,
     public packageNode: UserPackage | null = null,
     public finalAbstractOrNeither: TypeModifierFinalAbstractOrNeither = TypeModifierFinalAbstractOrNeither.NEITHER,
-    public isStrictFloatingPoint = false,
+    public strictFloatingPoint = false,
   ) {
     super(name, superClass, visibility, methods, fields, accessLevel);
     this.constructors = [...constructors];
@@ -1005,7 +1013,7 @@ export class NamedUserType extends UserType<NamedUserConstructor> implements Use
   }
 
   override isStrictFloatingPoint(): boolean {
-    return this.isStrictFloatingPoint;
+    return this.strictFloatingPoint;
   }
 
   protected override getChildNodes(): AbstractNode[] {
@@ -1365,7 +1373,7 @@ export abstract class AbstractLoop extends AbstractStatementWithBody {
 }
 
 export class CountLoop extends AbstractLoop {
-  readonly type = "CountLoop" as const;
+  readonly type: string = "CountLoop";
 
   constructor(
     public variable: UserLocal | null,
@@ -1425,7 +1433,7 @@ export abstract class AbstractForEachLoop extends AbstractLoop {
 }
 
 export class ForEachInArrayLoop extends AbstractForEachLoop {
-  readonly type = "ForEachInArrayLoop" as const;
+  readonly type: string = "ForEachInArrayLoop";
 
   constructor(itemType: TypeRef, itemName: string, collection: Expression, body: Statement[]) {
     super(new UserLocal(itemName, itemType, false), collection, body);
@@ -1586,7 +1594,7 @@ export class ExpressionStatement extends AbstractStatement {
 }
 
 export class LocalDeclarationStatement extends AbstractStatement {
-  readonly type = "LocalDeclarationStatement" as const;
+  readonly type: string = "LocalDeclarationStatement";
 
   constructor(
     public local: UserLocal,
@@ -1625,7 +1633,7 @@ export class LocalVariableDeclarationStatement extends LocalDeclarationStatement
 }
 
 export class BlockStatement extends AbstractStatement {
-  readonly type = "Block" as const;
+  readonly type: string = "Block";
 
   constructor(public body: Statement[]) {
     super();
@@ -1673,7 +1681,7 @@ export class BlockStatement extends AbstractStatement {
 }
 
 export class ConstructorInvocationStatement extends AbstractStatement {
-  readonly type = "ConstructorInvocationStatement" as const;
+  readonly type: string = "ConstructorInvocationStatement";
   readonly requiredArguments: SimpleArgument[];
   readonly variableArguments: SimpleArgument[];
   readonly keyedArguments: JavaKeyedArgument[];
@@ -1968,7 +1976,7 @@ export class MethodInvocation extends AbstractExpression implements ArgumentOwne
 }
 
 export class InstanceCreation extends AbstractExpression implements ArgumentOwner {
-  readonly type = "InstanceCreation" as const;
+  readonly type: string = "InstanceCreation";
   readonly requiredArguments: AbstractArgument[];
 
   constructor(
@@ -2133,11 +2141,13 @@ export class BinaryOpExpression extends InfixExpression<string> {
     if (["<", "<=", ">", ">=", "==", "!=", "&&", "||"].includes(this.operator)) {
       return simpleTypeRef("Boolean");
     }
-    if (this.operator === "+" && (this.left.getType()?.type === "SimpleTypeRef" && this.left.getType()?.name === "String"
-      || this.right.getType()?.type === "SimpleTypeRef" && this.right.getType()?.name === "String")) {
+    const leftType = this.left.getType();
+    const rightType = this.right.getType();
+    if (this.operator === "+" && (isNamedSimpleTypeRef(leftType, "String")
+      || isNamedSimpleTypeRef(rightType, "String"))) {
       return simpleTypeRef("String");
     }
-    return this.left.getType() ?? this.right.getType();
+    return leftType ?? rightType;
   }
 }
 
@@ -2693,8 +2703,10 @@ function hydrateParameter(parameter: RawParameter): Parameter {
 }
 
 function hydrateBinaryByOperator(operator: string, left: Expression, right: Expression): Expression {
-  if (operator === "+" && (left.getType()?.type === "SimpleTypeRef" && left.getType()?.name === "String"
-    || right.getType()?.type === "SimpleTypeRef" && right.getType()?.name === "String")) {
+  const leftType = left.getType();
+  const rightType = right.getType();
+  if (operator === "+" && (isNamedSimpleTypeRef(leftType, "String")
+    || isNamedSimpleTypeRef(rightType, "String"))) {
     return new StringConcatenation(left, right);
   }
   if (ArithmeticInfixExpression.OPERATORS.has(operator)) {

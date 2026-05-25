@@ -58,12 +58,21 @@ export class AstSerializationError extends Error {
   }
 }
 
-export type AstSerializableNode = ClassDeclaration | Statement | Expression;
+export type AstSerializableNode =
+  | ClassDeclaration
+  | ConstructorDeclaration
+  | MethodDeclaration
+  | FieldDeclaration
+  | Statement
+  | Expression;
 
 export function encodeAstNode(node: AstSerializableNode): string {
   const impl = new DOMImplementation();
   const doc = impl.createDocument(null, "ast");
   const root = doc.documentElement;
+  if (!root) {
+    throw new AstSerializationError("Expected <ast> root element");
+  }
   root.appendChild(encodeNode(doc, node));
   return new XMLSerializer().serializeToString(root);
 }
@@ -102,9 +111,9 @@ function encodeNode(doc: XmlDocument, node: AstSerializableNode): XmlElement {
     setOptionalAttribute(element, "superClass", node.superClass);
     setOptionalAttribute(element, "modelType", node.modelType);
     setOptionalAttribute(element, "visibility", node.visibility);
-    appendArray(doc, element, "constructors", node.constructors, encodeNode);
-    appendArray(doc, element, "methods", node.methods, encodeNode);
-    appendArray(doc, element, "fields", node.fields, encodeNode);
+    appendArray(doc, element, "constructors", node.constructors as ConstructorDeclaration[], encodeNode);
+    appendArray(doc, element, "methods", node.methods as MethodDeclaration[], encodeNode);
+    appendArray(doc, element, "fields", node.fields as FieldDeclaration[], encodeNode);
     return element;
   }
 

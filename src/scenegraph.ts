@@ -1557,7 +1557,7 @@ export class SingleAppearance extends Appearance implements VisualAppearance {
     return copy;
   }
 
-  toThreeMaterial(side = THREE.FrontSide): THREE.Material {
+  toThreeMaterial(side: THREE.Side = THREE.FrontSide): THREE.Material {
     return new THREE.MeshPhongMaterial({
       color: this.color,
       emissive: this.emissiveColor,
@@ -1612,7 +1612,7 @@ export class TexturedAppearance extends SingleAppearance {
     this.bumpTexture = bumpTexture;
   }
 
-  override toThreeMaterial(side = THREE.FrontSide): THREE.Material {
+  override toThreeMaterial(side: THREE.Side = THREE.FrontSide): THREE.Material {
     const material = super.toThreeMaterial(side) as THREE.MeshPhongMaterial;
     const texture = this.diffuseColorTexture ?? this.texture;
     if (texture) {

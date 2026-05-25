@@ -124,7 +124,7 @@ export abstract class PropertyOwnerImp {
     return null;
   }
 
-  protected adjustDurationIfNecessary(duration: number): number {
+  adjustDurationIfNecessary(duration: number): number {
     if (!Number.isFinite(duration) || duration <= 0) {
       return 0;
     }
@@ -184,9 +184,9 @@ export class Property<T> {
     this.#bindings.add(other);
     other.#bindings.add(this);
     if (initialSync === "self") {
-      other.#commit(this.#clone(this.#value), true, new Set([this]));
+      other.#commit(this.#clone(this.#value), true, new Set<Property<T>>([this]));
     } else if (initialSync === "other") {
-      this.#commit(other.value, true, new Set([other]));
+      this.#commit(other.value, true, new Set<Property<T>>([other]));
     }
   }
 
@@ -204,14 +204,14 @@ export class Property<T> {
   }
 
   setValue(nextValue: T): boolean {
-    return this.#commit(nextValue, true, new Set());
+    return this.#commit(nextValue, true, new Set<Property<T>>());
   }
 
   setValueSilently(nextValue: T): boolean {
-    return this.#commit(nextValue, false, new Set());
+    return this.#commit(nextValue, false, new Set<Property<T>>());
   }
 
-  #commit(nextValue: T, notify: boolean, visited: Set<Property<unknown>>): boolean {
+  #commit(nextValue: T, notify: boolean, visited: Set<Property<T>>): boolean {
     if (visited.has(this)) {
       return false;
     }
@@ -694,7 +694,7 @@ export class EntityImp extends PropertyOwnerImp {
 export class TransformableImp extends EntityImp {
   readonly position = this.registerProperty(new PositionProperty(this, "position", ZERO_POSITION));
   readonly orientation = this.registerProperty(new OrientationProperty(this, "orientation", IDENTITY_ORIENTATION));
-  readonly paint = this.registerProperty(new StringProperty(this, "paint", "WHITE"));
+  readonly paint = this.registerProperty(new StringProperty<string>(this, "paint", "WHITE"));
 
   move(direction: MoveDirection | Vec3, amount: number): void {
     if (!Number.isFinite(amount)) {
@@ -806,7 +806,7 @@ export class TransformableImp extends EntityImp {
 export class ModelImp extends TransformableImp {
   readonly size = this.registerProperty(new SizeProperty(this, "size", UNIT_SIZE));
   readonly scale = this.registerProperty(new SizeProperty(this, "scale", UNIT_SCALE));
-  readonly color = this.registerProperty(new StringProperty(this, "color", "WHITE"));
+  readonly color = this.registerProperty(new StringProperty<string>(this, "color", "WHITE"));
   readonly opacity = this.registerProperty(new NumberProperty(this, "opacity", 1));
   readonly speechBubble = this.registerProperty(
     new Property<SpeechBubbleState | null>(this, "speechBubble", null, {
@@ -957,13 +957,13 @@ export class ModelImp extends TransformableImp {
 }
 
 export class GroundImp extends EntityImp {
-  readonly paint = this.registerProperty(new StringProperty(this, "paint", "GRASS"));
+  readonly paint = this.registerProperty(new StringProperty<string>(this, "paint", "GRASS"));
   readonly opacity = this.registerProperty(new NumberProperty(this, "opacity", 1));
 }
 
 export class MarkerImp extends TransformableImp {
   readonly size = this.registerProperty(new SizeProperty(this, "size", UNIT_SIZE));
-  readonly color = this.registerProperty(new StringProperty(this, "color", "YELLOW"));
+  readonly color = this.registerProperty(new StringProperty<string>(this, "color", "YELLOW"));
   readonly opacity = this.registerProperty(new NumberProperty(this, "opacity", 1));
 
   constructor(owner: ImplementableEntity) {
@@ -1296,13 +1296,13 @@ export class TorusImp extends ShapeImp {
 }
 
 export class BillboardImp extends ShapeImp {
-  readonly backPaint = this.registerProperty(new StringProperty(this, "backPaint", "WHITE"));
+  readonly backPaint = this.registerProperty(new StringProperty<string>(this, "backPaint", "WHITE"));
 }
 
 export class AxesImp extends ShapeImp {}
 
 export class TextModelImp extends ModelImp {
-  readonly valueProperty = this.registerProperty(new StringProperty(this, "value", ""));
+  readonly valueProperty = this.registerProperty(new StringProperty<string>(this, "value", ""));
 
   get value(): string {
     return this.valueProperty.value;
