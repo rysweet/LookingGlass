@@ -176,7 +176,7 @@ export function orientationFromLookDirection(direction: Vec3): Orientation {
   }
   const yaw = Math.atan2(normalized.x, -normalized.z);
   const pitch = Math.atan2(normalized.y, Math.hypot(normalized.x, normalized.z));
-  return quaternionFromEuler(-pitch, yaw, 0);
+  return quaternionFromEuler(pitch, -yaw, 0);
 }
 
 export function vectorFromMoveDirection(direction: MoveDirection | Vec3): Vec3 {
