@@ -1,41 +1,50 @@
 #!/usr/bin/env node
+import * as path from "path";
 import { createServer } from "./server.js";
 
-function parseArgs(argv: string[]): {
-  command: string;
-  port: number;
-  evidenceDir: string;
-  project?: string;
-} {
-  const args = argv.slice(2);
-  const command = args[0] ?? "serve";
+export interface CliConfig {
+  readonly command: "serve" | "help" | "print-config";
+  readonly port: number;
+  readonly evidenceDir: string;
+  readonly project?: string;
+}
 
-  let port = 3000;
-  let evidenceDir = "./evidence";
+const DEFAULT_PORT = 3000;
+const DEFAULT_EVIDENCE_DIR = "./evidence";
+const USAGE = [
+  "Usage:",
+  "  alice-web serve [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>]",
+  "  alice-web print-config [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>]",
+  "  alice-web help",
+].join("\n");
+
+export function parseArgs(argv: string[]): CliConfig {
+  const args = argv.slice(2);
+  const commandToken = args[0] ?? "serve";
+  const command = normalizeCommand(commandToken);
+
+  let port = DEFAULT_PORT;
+  let evidenceDir = DEFAULT_EVIDENCE_DIR;
   let project: string | undefined;
 
   for (let i = 1; i < args.length; i++) {
-    switch (args[i]) {
+    const current = args[i];
+    switch (current) {
       case "--port":
-        port = parseInt(args[++i], 10);
-        if (isNaN(port) || port < 1 || port > 65535) {
-          console.error("--port must be a valid port number");
-          process.exit(1);
-        }
+        port = parsePort(args[++i]);
         break;
       case "--evidence-dir":
-        evidenceDir = args[++i];
+        evidenceDir = parseEvidenceDir(args[++i]);
         break;
       case "--project":
-        project = args[++i];
+        project = parseProjectPath(args[++i]);
         break;
+      case "--help":
+      case "-h":
+        return { command: "help", port, evidenceDir, project };
       default:
-        if (args[i].startsWith("-")) {
-          console.error(`Unknown option: ${args[i]}`);
-          console.error(
-            "Usage: alice-web serve --port 3000 --evidence-dir /path/to/evidence --project /path/to/starter.a3p",
-          );
-          process.exit(1);
+        if (current?.startsWith("-")) {
+          throw new Error(`Unknown option: ${current}`);
         }
     }
   }
@@ -43,30 +52,89 @@ function parseArgs(argv: string[]): {
   return { command, port, evidenceDir, project };
 }
 
-async function main(): Promise<void> {
-  const { command, port, evidenceDir, project } = parseArgs(process.argv);
-
-  if (command !== "serve") {
-    console.error(`Unknown command: ${command}`);
-    console.error("Available commands: serve");
-    process.exit(1);
+function normalizeCommand(value: string): CliConfig["command"] {
+  if (value === "serve" || value === "print-config" || value === "help") {
+    return value;
   }
+  throw new Error(`Unknown command: ${value}`);
+}
 
-  const app = createServer({ port, evidenceDir, projectPath: project });
-  const server = app.listen(port, "127.0.0.1", () => {
+function parsePort(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error("--port must be a valid port number");
+  }
+  return parsed;
+}
+
+function parseEvidenceDir(value: string | undefined): string {
+  if (!value || !value.trim()) {
+    throw new Error("--evidence-dir requires a directory path");
+  }
+  return value;
+}
+
+function parseProjectPath(value: string | undefined): string {
+  if (!value || !value.trim()) {
+    throw new Error("--project requires a file path");
+  }
+  if (!value.endsWith(".a3p")) {
+    throw new Error("--project must point to an .a3p file");
+  }
+  return value;
+}
+
+export function formatConfig(config: CliConfig): string {
+  return JSON.stringify(
+    {
+      command: config.command,
+      port: config.port,
+      evidenceDir: path.resolve(config.evidenceDir),
+      project: config.project ? path.resolve(config.project) : null,
+      runtime: "typescript-web-prototype",
+    },
+    null,
+    2,
+  );
+}
+
+export function printUsage(stream: NodeJS.WriteStream = process.stdout): void {
+  stream.write(`${USAGE}\n`);
+}
+
+async function run(config: CliConfig): Promise<void> {
+  switch (config.command) {
+    case "help":
+      printUsage(process.stdout);
+      return;
+    case "print-config":
+      console.log(formatConfig(config));
+      return;
+    case "serve":
+      await serve(config);
+      return;
+  }
+}
+
+async function serve(config: CliConfig): Promise<void> {
+  const app = createServer({
+    port: config.port,
+    evidenceDir: config.evidenceDir,
+    projectPath: config.project,
+  });
+  const server = app.listen(config.port, "127.0.0.1", () => {
     console.log(
       JSON.stringify({
         status: "listening",
-        port,
-        evidenceDir,
-        project: project ?? null,
+        port: config.port,
+        evidenceDir: config.evidenceDir,
+        project: config.project ?? null,
         pid: process.pid,
         runtime: "typescript-web-prototype",
       }),
     );
   });
 
-  // Graceful shutdown
   for (const signal of ["SIGTERM", "SIGINT"] as const) {
     process.on(signal, () => {
       console.log(`Received ${signal}, shutting down...`);
@@ -75,7 +143,17 @@ async function main(): Promise<void> {
   }
 }
 
+async function main(): Promise<void> {
+  try {
+    await run(parseArgs(process.argv));
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    printUsage(process.stderr);
+    process.exit(1);
+  }
+}
+
 main().catch((err) => {
-  console.error(err);
+  console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
 });

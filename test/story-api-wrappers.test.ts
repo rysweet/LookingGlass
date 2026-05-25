@@ -70,6 +70,7 @@ describe("story-api wrapper helpers", () => {
 
     expect(snapshotScene(scene)).toEqual({
       entityNames: ["bunny"],
+      entityTypes: { bunny: "SBiped" },
       isActive: false,
       atmosphereColor: "#123456",
       fogDensity: 0.25,

@@ -1,88 +1,163 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { parseA3P } from "./a3p-parser";
+import { parseA3P, type AliceObject, type AliceProject } from "./a3p-parser";
 import { buildScene } from "./scene-builder";
 
-// ── UI elements ─────────────────────────────────────────────────────
-const fileInput = document.getElementById("file-input") as HTMLInputElement;
-const objectList = document.getElementById("object-list") as HTMLUListElement;
-const status = document.getElementById("status") as HTMLElement;
-const canvas = document.getElementById("viewport") as HTMLCanvasElement;
+function requireElement<T extends HTMLElement>(id: string, ctor: { new (...args: any[]): T }): T {
+  const element = document.getElementById(id);
+  if (!(element instanceof ctor)) {
+    throw new Error(`Missing required element #${id}`);
+  }
+  return element;
+}
 
-// ── Three.js bootstrap ──────────────────────────────────────────────
+const fileInput = requireElement("file-input", HTMLInputElement);
+const objectList = requireElement("object-list", HTMLUListElement);
+const status = requireElement("status", HTMLElement);
+const canvas = requireElement("viewport", HTMLCanvasElement);
+
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.shadowMap.enabled = true;
-resizeRenderer();
 
 let currentScene: THREE.Scene | null = null;
 let currentCamera: THREE.PerspectiveCamera | null = null;
 let controls: OrbitControls | null = null;
+let lastProject: AliceProject | null = null;
 
-function resizeRenderer() {
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  renderer.setSize(w, h, false);
+function describeObject(obj: AliceObject): string {
+  const shortType = obj.typeName.split(".").pop() ?? obj.typeName;
+  const resource = obj.resourceType ? ` [${obj.resourceType.split(".").pop()}]` : "";
+  return `${obj.name} (${shortType})${resource}`;
+}
+
+function describeProject(project: AliceProject): string {
+  return `Loaded "${project.projectName}" (v${project.version}) – ${project.sceneObjects.length} objects`;
+}
+
+function setStatusMessage(message: string): void {
+  status.textContent = message;
+  status.dataset.state = "ready";
+}
+
+function setErrorMessage(error: unknown): void {
+  status.textContent = `Error: ${error instanceof Error ? error.message : String(error)}`;
+  status.dataset.state = "error";
+}
+
+function clearObjectList(): void {
+  objectList.innerHTML = "";
+}
+
+function renderObjectList(project: AliceProject): void {
+  clearObjectList();
+  for (const object of project.sceneObjects) {
+    const item = document.createElement("li");
+    item.textContent = describeObject(object);
+    objectList.appendChild(item);
+  }
+}
+
+function resizeRenderer(): void {
+  const width = Math.max(canvas.clientWidth, 1);
+  const height = Math.max(canvas.clientHeight, 1);
+  renderer.setSize(width, height, false);
   if (currentCamera) {
-    currentCamera.aspect = w / h;
+    currentCamera.aspect = width / height;
     currentCamera.updateProjectionMatrix();
   }
 }
-window.addEventListener("resize", resizeRenderer);
 
-// ── Render loop ─────────────────────────────────────────────────────
-function animate() {
+function disposeControls(): void {
+  controls?.dispose();
+  controls = null;
+}
+
+function applyScene(project: AliceProject): void {
+  const { scene, camera, cameraConfig } = buildScene(project);
+  currentScene = scene;
+  currentCamera = camera;
+  resizeRenderer();
+
+  disposeControls();
+  controls = new OrbitControls(camera, canvas);
+  controls.target.set(cameraConfig.target.x, cameraConfig.target.y, cameraConfig.target.z);
+  controls.minDistance = cameraConfig.minDistance;
+  controls.maxDistance = cameraConfig.maxDistance;
+  controls.maxPolarAngle = cameraConfig.maxPolarAngle;
+  controls.enableDamping = cameraConfig.enableDamping;
+}
+
+function animate(): void {
   requestAnimationFrame(animate);
   controls?.update();
   if (currentScene && currentCamera) {
     renderer.render(currentScene, currentCamera);
   }
 }
-animate();
 
-// ── File handling ───────────────────────────────────────────────────
-fileInput.addEventListener("change", async () => {
-  const file = fileInput.files?.[0];
-  if (!file) return;
+async function readSelectedFile(input: HTMLInputElement): Promise<File | null> {
+  const file = input.files?.[0] ?? null;
+  return file;
+}
+
+async function loadProjectFromFile(file: File): Promise<AliceProject> {
+  const buffer = await file.arrayBuffer();
+  return parseA3P(buffer);
+}
+
+async function handleFileSelection(): Promise<void> {
+  const file = await readSelectedFile(fileInput);
+  if (!file) {
+    return;
+  }
 
   status.textContent = `Loading ${file.name}…`;
-  objectList.innerHTML = "";
+  clearObjectList();
 
   try {
-    const buffer = await file.arrayBuffer();
-    const project = await parseA3P(buffer);
-
-    status.textContent = `Loaded "${project.projectName}" (v${project.version}) – ${project.sceneObjects.length} objects`;
-
-    // Populate object list
-    for (const obj of project.sceneObjects) {
-      const li = document.createElement("li");
-      const shortType = obj.typeName.split(".").pop() ?? obj.typeName;
-      li.textContent = `${obj.name} (${shortType})`;
-      if (obj.resourceType) {
-        const small = document.createElement("small");
-        small.textContent = ` [${obj.resourceType.split(".").pop()}]`;
-        li.appendChild(small);
-      }
-      objectList.appendChild(li);
-    }
-
-    // Build and display scene
-    const { scene, camera, cameraConfig } = buildScene(project);
-    currentScene = scene;
-    currentCamera = camera;
-    resizeRenderer();
-
-    // Orbit controls — configured from scene-builder's cameraConfig
-    controls?.dispose();
-    controls = new OrbitControls(camera, canvas);
-    controls.target.set(cameraConfig.target.x, cameraConfig.target.y, cameraConfig.target.z);
-    controls.minDistance = cameraConfig.minDistance;
-    controls.maxDistance = cameraConfig.maxDistance;
-    controls.maxPolarAngle = cameraConfig.maxPolarAngle;
-    controls.enableDamping = cameraConfig.enableDamping;
-  } catch (err) {
-    status.textContent = `Error: ${err instanceof Error ? err.message : String(err)}`;
-    console.error(err);
+    const project = await loadProjectFromFile(file);
+    lastProject = project;
+    renderObjectList(project);
+    applyScene(project);
+    setStatusMessage(describeProject(project));
+  } catch (error) {
+    console.error(error);
+    setErrorMessage(error);
   }
-});
+}
+
+function describeLastProject(): string {
+  if (!lastProject) {
+    return "No project loaded";
+  }
+  return `${lastProject.projectName}: ${lastProject.sceneObjects.length} objects`;
+}
+
+function installWindowHandlers(): void {
+  window.addEventListener("resize", resizeRenderer);
+  window.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r" && lastProject) {
+      event.preventDefault();
+      renderObjectList(lastProject);
+      applyScene(lastProject);
+      setStatusMessage(`Reloaded ${describeLastProject()}`);
+    }
+  });
+}
+
+function installInputHandlers(): void {
+  fileInput.addEventListener("change", () => {
+    void handleFileSelection();
+  });
+}
+
+function initializeApplication(): void {
+  resizeRenderer();
+  installWindowHandlers();
+  installInputHandlers();
+  animate();
+  setStatusMessage("Choose an .a3p file to begin.");
+}
+
+initializeApplication();
