@@ -15,7 +15,10 @@ import {
   type DebugVariableSnapshot,
 } from "./debugging.js";
 import { generateExpression } from "./tweedle-codegen.js";
+import { ExpressionEvaluator } from "./expression-evaluator.js";
+import { StatementExecutor } from "./statement-executor.js";
 import { parseTweedle, type ClassDecl, type ConstructorDecl, type Expression, type FieldDecl, type MethodDecl, type Statement, type TypeRef } from "./tweedle-parser.js";
+import { VirtualMachine } from "./virtual-machine.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -880,21 +883,24 @@ function createState(environment: VMEnvironment, currentSelf: RuntimeObject | nu
   };
 }
 
+const expressionEvaluator = new ExpressionEvaluator<VMState, string, unknown>((state, expression) => evaluateValue(state, expression));
+const statementExecutor = new StatementExecutor<AliceStatement, VMState>({
+  executeSequence: (statements, state) => runStatements([...statements], state),
+  executeScopedSequence: (statements, state) => runScopedStatements([...statements], state),
+  executeStatement: (statement, state) => executeOne(statement, state),
+});
+const virtualMachine = new VirtualMachine<AliceProject, RuntimeObject, AliceStatement, AliceMethod, VMState, VMEnvironment>({
+  createExecutionEnvironment,
+  createState: (environment, currentSelf, debugRuntime) =>
+    createState(environment, currentSelf, debugRuntime as DebugRuntime | undefined),
+  resolveRuntimeMethod,
+  dispatchMethod,
+  scopeSet,
+}, expressionEvaluator, statementExecutor);
+
 /** Execute all methods in an AliceProject, returning a structured execution log. */
 export function executeProject(project: AliceProject): ExecutionResult {
-  const environment = createExecutionEnvironment(project);
-
-  for (const method of project.methods) {
-    const state = createState(environment, null);
-    runStatements(method.statements, state);
-    environment.stepCounter = state.stepCounter;
-
-    if (state.returned && state.returnValue !== undefined) {
-      environment.returnValues.set(method.name, state.returnValue);
-    }
-  }
-
-  return { execution_log: environment.log, returnValues: environment.returnValues };
+  return virtualMachine.executeProject(project);
 }
 
 // ── Statement execution ────────────────────────────────────────────────
@@ -1699,54 +1705,27 @@ export class TweedleVM {
 
   execute(mainDeclaration: ClassDecl, options: TweedleExecutionOptions = {}): ExecutionResult {
     const project = compileProject(mainDeclaration, options);
-    const environment = createExecutionEnvironment(project);
-    this.environment = environment;
-
-    const instanceName = options.instanceName ?? lowerFirst(mainDeclaration.name);
-    const receiver = environment.objectMap.get(instanceName) ?? null;
-    const entryMethod = options.entryMethod ?? inferEntryMethod(mainDeclaration);
-    if (!receiver || !entryMethod) {
-      return { execution_log: environment.log, returnValues: environment.returnValues };
-    }
-
-    const state = createState(environment, receiver);
-    const runtimeMethod = resolveRuntimeMethod(state, receiver.typeName, entryMethod, options.arguments?.length ?? 0);
-    if (!runtimeMethod) {
-      return { execution_log: environment.log, returnValues: environment.returnValues };
-    }
-
-    dispatchMethod(runtimeMethod, options.arguments ?? [], state, receiver, receiver.typeName);
-    environment.stepCounter = state.stepCounter;
-    return { execution_log: environment.log, returnValues: environment.returnValues };
+    const execution = virtualMachine.executeEntryPoint(project, {
+      receiverName: options.instanceName ?? lowerFirst(mainDeclaration.name),
+      entryMethod: options.entryMethod ?? inferEntryMethod(mainDeclaration),
+      args: options.arguments ?? [],
+    });
+    this.environment = execution.environment;
+    return execution.result;
   }
 
   createDebugSession(mainDeclaration: ClassDecl, options: TweedleExecutionOptions = {}): TweedleDebugSession {
     const project = compileProject(mainDeclaration, options);
-    const environment = createExecutionEnvironment(project);
     const debugStatements = collectProjectDebugStatements(project);
     const debugRuntime = createDebugRuntime(debugStatements);
+    const execution = virtualMachine.executeEntryPoint(project, {
+      receiverName: options.instanceName ?? lowerFirst(mainDeclaration.name),
+      entryMethod: options.entryMethod ?? inferEntryMethod(mainDeclaration),
+      args: options.arguments ?? [],
+      debugRuntime,
+    });
+    const environment = execution.environment;
     this.environment = environment;
-
-    const instanceName = options.instanceName ?? lowerFirst(mainDeclaration.name);
-    const receiver = environment.objectMap.get(instanceName) ?? null;
-    const entryMethod = options.entryMethod ?? inferEntryMethod(mainDeclaration);
-    if (!receiver || !entryMethod) {
-      return new TweedleDebugSession({
-        statements: debugStatements,
-        events: debugRuntime.trace,
-        result: {
-          execution_log: [...environment.log],
-          returnValues: new Map(environment.returnValues),
-        },
-      });
-    }
-
-    const state = createState(environment, receiver, debugRuntime);
-    const runtimeMethod = resolveRuntimeMethod(state, receiver.typeName, entryMethod, options.arguments?.length ?? 0);
-    if (runtimeMethod) {
-      dispatchMethod(runtimeMethod, options.arguments ?? [], state, receiver, receiver.typeName);
-      environment.stepCounter = state.stepCounter;
-    }
 
     const trace: DebugTrace = {
       statements: debugStatements,
@@ -1763,15 +1742,6 @@ export class TweedleVM {
     if (!this.environment) {
       return { execution_log: [], returnValues: new Map() };
     }
-    const listeners = this.environment.listenerMap.get(eventName) ?? [];
-    for (const listener of listeners) {
-      const state = createState(this.environment, listener.self);
-      if (listener.parameterName) {
-        scopeSet(state, listener.parameterName, payload);
-      }
-      runStatements(listener.body, state);
-      this.environment.stepCounter = state.stepCounter;
-    }
-    return { execution_log: this.environment.log, returnValues: this.environment.returnValues };
+    return virtualMachine.dispatchEvent(this.environment, eventName, payload);
   }
 }
