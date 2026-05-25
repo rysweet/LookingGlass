@@ -3,7 +3,9 @@ import {
   ActionOperation,
   BooleanState,
   BooleanStateOperation,
+  BorderPanel,
   Composite,
+  CompositeView,
   DialogComposite,
   DoubleState,
   EnumCodec,
@@ -13,16 +15,21 @@ import {
   ItemSelectionState,
   KeyPressedTrigger,
   LazyOperation,
+  LineAxisPanel,
   ListData,
   ListSelectionState,
   MutableListData,
   MutableDataSingleSelectListState,
+  PageAxisPanel,
+  Panel,
+  ScrollPane,
   SimulatedActionTrigger,
   SimpleComposite,
   StringCodec,
   StringState,
   TabComposite,
   TreeData,
+  ViewController,
   WizardDialogComposite,
 } from "../src/croquet";
 import { AddEntityCommand, UndoRedoManager } from "../src/undo-redo";
@@ -411,5 +418,78 @@ describe("croquet state framework", () => {
     expect(wizard.visitedSteps).toEqual(new Set([0, 1, 2]));
     expect(activation).toContain("simple:activated");
     expect(activation).toContain("simple:deactivated");
+  });
+
+  it("ports composite-backed view controllers and panels", () => {
+    const lifecycle: string[] = [];
+
+    class TokenView extends ViewController<string> {}
+
+    class LoggingCompositeView extends CompositeView<Composite<LoggingCompositeView>> {
+      override handleCompositePreActivation(): void {
+        lifecycle.push("view:pre");
+      }
+
+      override handleCompositePostDeactivation(): void {
+        lifecycle.push("view:post");
+      }
+    }
+
+    class RefreshingPanel extends Panel {
+      refreshCount = 0;
+
+      protected override internalRefresh(): void {
+        this.refreshCount += 1;
+      }
+    }
+
+    const composite = new Composite<LoggingCompositeView>("view-backed", {
+      createView: (owner) => new LoggingCompositeView(owner),
+    });
+    const view = composite.getView();
+    composite.activate();
+    composite.deactivate();
+
+    expect(view.composite).toBe(composite);
+    expect(composite.getRootComponent()).toBe(view);
+    expect(lifecycle).toEqual(["view:pre", "view:post"]);
+
+    const first = new TokenView("first");
+    const second = new TokenView("second");
+    const page = new PageAxisPanel(null, [first]);
+    page.appendChild(second);
+    expect(page.axis).toBe("page");
+    expect(page.childViews).toEqual([first, second]);
+    expect(first.parentView).toBe(page);
+
+    const line = new LineAxisPanel();
+    line.appendChild(first);
+    expect(page.childViews).toEqual([second]);
+    expect(line.childViews).toEqual([first]);
+    expect(first.parentView).toBe(line);
+
+    const border = new BorderPanel();
+    border.setRegion("center", second);
+    expect(border.getRegion("center")).toBe(second);
+    border.clearRegion("center");
+    expect(border.getRegion("center")).toBeUndefined();
+
+    const refreshing = new RefreshingPanel(null, { refreshOnAttach: true });
+    const host = new PageAxisPanel();
+    host.appendChild(refreshing);
+    refreshing.refreshLater();
+    refreshing.refreshIfNecessary();
+    expect(refreshing.refreshCount).toBe(2);
+
+    const scrolling = new Composite<ScrollPane<Composite<any>>>("scrolling", {
+      createView: (owner) => new ScrollPane(owner, new TokenView("content")),
+    });
+    const firstScrollView = scrolling.getView();
+    expect(scrolling.getScrollPaneIfExists()).toBe(firstScrollView);
+    expect(scrolling.getRootComponent()).toBe(firstScrollView);
+    expect(firstScrollView.contentView?.parentView).toBe(firstScrollView);
+    scrolling.releaseView();
+    expect(firstScrollView.contentView?.parentView).toBeUndefined();
+    expect(scrolling.getView()).not.toBe(firstScrollView);
   });
 });
