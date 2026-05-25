@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import JSZip from "jszip";
 
-const EVIDENCE_DIR = "/tmp/hook-integration-test-evidence";
+const EVIDENCE_DIR = path.resolve(".hook-integration-test-evidence");
 let testProjectPath: string;
 
 beforeAll(async () => {
@@ -101,6 +101,30 @@ describe("eatme CLI hooks", () => {
     expect(placement.object_class).toBe("org.lgna.story.SBiped");
   });
 
+  it("place-object honors explicit names and resource types", () => {
+    const stdout = runHook("place-object", [
+      "--name",
+      "heroBunny",
+      "--resource-type",
+      "org.lgna.story.resources.biped.BunnyResource",
+    ]);
+    const result = JSON.parse(stdout);
+    expect(result.object_identifier).toBe("heroBunny");
+
+    const evidenceDir = path.join(EVIDENCE_DIR, "place-object");
+    const placement = JSON.parse(
+      fs.readFileSync(path.join(evidenceDir, "placement.json"), "utf-8"),
+    );
+    const diff = JSON.parse(
+      fs.readFileSync(path.join(evidenceDir, "scene.diff.json"), "utf-8"),
+    );
+    expect(placement.object_identifier).toBe("heroBunny");
+    expect(placement.resource_type).toBe(
+      "org.lgna.story.resources.biped.BunnyResource",
+    );
+    expect(diff.added_fields).toEqual(["heroBunny"]);
+  });
+
   it("edit-procedure produces valid JSON and artifacts", () => {
     const stdout = runHook("edit-procedure");
     const result = JSON.parse(stdout);
@@ -119,6 +143,26 @@ describe("eatme CLI hooks", () => {
         path.join(evidenceDir, "first-lesson-code-editor-action-proof.json"),
       ),
     ).toBe(true);
+  });
+
+  it("edit-procedure creates missing methods for plain selectors and custom markers", () => {
+    const stdout = runHook("edit-procedure", [
+      "--procedure-selector",
+      "customStep",
+      "--edit-spec",
+      "append-comment:custom-marker",
+    ]);
+    const result = JSON.parse(stdout);
+    expect(result.procedure_selector).toBe("customStep");
+
+    const evidenceDir = path.join(EVIDENCE_DIR, "edit-procedure");
+    const diff = JSON.parse(
+      fs.readFileSync(path.join(evidenceDir, "procedure.diff.json"), "utf-8"),
+    );
+    expect(diff.method_name).toBe("customStep");
+    expect(diff.before_statement_count).toBe(0);
+    expect(diff.after_statement_count).toBe(1);
+    expect(diff.added_statements).toEqual(["custom-marker"]);
   });
 
   it("run-world produces valid JSON and artifacts", () => {
@@ -163,5 +207,23 @@ describe("eatme CLI hooks", () => {
     );
     expect(saveResult.status).toBe("saved");
     expect(saveResult.saved_file_size_bytes).toBeGreaterThan(0);
+  });
+
+  it("save-project preserves custom targets while emitting canonical evidence copy", () => {
+    const customTarget = path.join(EVIDENCE_DIR, "custom-output", "lesson-copy.a3p");
+    const stdout = runHook("save-project", [
+      "--save-selector",
+      "scene.eatmeFirstLessonStep",
+      "--target",
+      customTarget,
+    ]);
+    const result = JSON.parse(stdout);
+    expect(result.status).toBe("saved");
+
+    const evidenceDir = path.join(EVIDENCE_DIR, "save-project");
+    expect(fs.existsSync(customTarget)).toBe(true);
+    expect(
+      fs.existsSync(path.join(evidenceDir, "saved-project.a3p")),
+    ).toBe(true);
   });
 });
