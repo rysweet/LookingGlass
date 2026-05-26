@@ -9,6 +9,7 @@ import {
   LocalVariableDeclarationStatement,
   MethodDeclaration,
   StringLiteral,
+  UserParameter,
   simpleTypeRef,
 } from "../src/ast-nodes.js";
 import { ExpressionCascade } from "../src/cascade-menus.js";
@@ -21,7 +22,13 @@ function createActorType(): { type: ClassDeclaration; method: MethodDeclaration;
     new ArrayLiteralExpression([new StringLiteral("a")]),
     [new LocalVariableDeclarationStatement("count", simpleTypeRef("WholeNumber"), new IntegerLiteral(1), false)],
   );
-  const method = new MethodDeclaration("act", { type: "VoidTypeRef" }, [], [loop], false);
+  const method = new MethodDeclaration(
+    "act",
+    { type: "VoidTypeRef" },
+    [new UserParameter("speaker", simpleTypeRef("String"))],
+    [loop],
+    false,
+  );
   const type = new ClassDeclaration(
     "Actor",
     "SThing",
@@ -87,5 +94,34 @@ describe("cascade-menus", () => {
 
     const sayOption = menu.options.find((option) => option.label === "say()")!;
     expect(sayOption.submenu).not.toBeNull();
+  });
+
+  it("includes matching parameter references in the root menu", () => {
+    const { type, method } = createActorType();
+    const browser = new TypeBrowser([type]);
+    const cascade = new ExpressionCascade(browser);
+    const loop = method.body[0] as ForEachLoop;
+    const menu = cascade.buildMenu({
+      desiredType: simpleTypeRef("String"),
+      currentType: type,
+      code: method,
+      block: new BlockStatement(loop.body),
+      statementIndex: 1,
+    });
+
+    const labels = menu.options.map((option) => option.label);
+    expect(labels).toContain("speaker: String");
+    expect(labels).toContain('"text"');
+    expect(labels).not.toContain("count: WholeNumber");
+  });
+
+  it("respects maxDepth when building member submenus", () => {
+    const { type } = createActorType();
+    const browser = new TypeBrowser([type]);
+    const cascade = new ExpressionCascade(browser);
+    const menu = cascade.buildMenu({ desiredType: simpleTypeRef("String"), currentType: type, maxDepth: 0 });
+
+    const sayOption = menu.options.find((option) => option.label === "say()")!;
+    expect(sayOption.submenu).toBeNull();
   });
 });
