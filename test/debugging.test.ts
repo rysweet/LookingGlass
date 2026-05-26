@@ -45,6 +45,23 @@ describe("TweedleVM debugging", () => {
     expect(session.hasBreakpoint(helperLabel)).toBe(false);
   });
 
+  it("manages breakpoints across statement ids, locations, and AST nodes", () => {
+    const session = createSession();
+    const runCall = findStatement(session.getStatements(), "DebugScene.run/0", "0", "MethodCall");
+    const runAfter = findStatement(session.getStatements(), "DebugScene.run/0", "1", "VariableDeclaration");
+    const helperLabel = findStatement(session.getStatements(), "DebugScene.helper/1", "1", "VariableDeclaration");
+
+    expect(session.setBreakpoint(runAfter.id)).toBe(true);
+    expect(session.setBreakpoint(helperLabel.statement)).toBe(true);
+    expect(session.setBreakpoint(runCall)).toBe(true);
+    expect(session.setBreakpoint("DebugScene.run/0:missing")).toBe(false);
+    expect(session.hasBreakpoint(runCall.id)).toBe(true);
+    expect(session.getBreakpoints()).toEqual([helperLabel.id, runAfter.id, runCall.id].sort());
+    expect(session.clearBreakpoint(helperLabel.statement)).toBe(true);
+    expect(session.clearBreakpoint("DebugScene.run/0:missing")).toBe(false);
+    expect(session.getBreakpoints()).toEqual([runAfter.id, runCall.id].sort());
+  });
+
   it("pauses at breakpoints with variable inspection and call stack display", () => {
     const session = createSession();
     const helperLabel = findStatement(session.getStatements(), "DebugScene.helper/1", "1", "VariableDeclaration");
@@ -60,6 +77,45 @@ describe("TweedleVM debugging", () => {
       value: "2",
       local: "3",
     });
+    expect(session.inspectVariables().visible).toMatchObject({
+      value: "2",
+      local: "3",
+      this: {
+        name: "debugScene",
+        typeName: "DebugScene",
+      },
+    });
+  });
+
+  it("continues from breakpoint to breakpoint before completing", () => {
+    const session = createSession();
+    const helperLabel = findStatement(session.getStatements(), "DebugScene.helper/1", "1", "VariableDeclaration");
+    const runAfter = findStatement(session.getStatements(), "DebugScene.run/0", "1", "VariableDeclaration");
+    session.setBreakpoint(helperLabel);
+    session.setBreakpoint(runAfter);
+
+    const first = session.continueExecution();
+    expect(first.reason).toBe("breakpoint");
+    expect(first.statement?.id).toBe(helperLabel.id);
+    expect(session.getCurrentStatement()?.id).toBe(helperLabel.id);
+    expect(session.getCallStack().map((frame) => frame.methodName)).toEqual(["run", "helper"]);
+
+    const second = session.continueExecution();
+    expect(second.reason).toBe("breakpoint");
+    expect(second.statement?.id).toBe(runAfter.id);
+    expect(second.variables.visible).toMatchObject({
+      this: {
+        name: "debugScene",
+        typeName: "DebugScene",
+      },
+    });
+    expect(session.getCallStack().map((frame) => frame.methodName)).toEqual(["run"]);
+
+    const completed = session.continueExecution();
+    expect(completed.reason).toBe("completed");
+    expect(completed.isComplete).toBe(true);
+    expect(session.getCurrentStatement()).toBeNull();
+    expect(session.inspectVariables()).toEqual({ locals: {}, fields: {}, visible: {} });
   });
 
   it("steps into called methods", () => {
