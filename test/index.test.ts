@@ -14,6 +14,7 @@ describe("index barrel", () => {
     expect(PublicApi.VirtualMachine.VirtualMachine).toBe(VirtualMachine);
     expect(PublicApi.SceneRenderer.renderSceneToPng).toBe(SceneRenderer.renderSceneToPng);
     expect(PublicApi.RenderAnimation.AnimationStateMachine).toBe(RenderAnimation.AnimationStateMachine);
+    expect(PublicApi.RenderAnimation.sampleAnimationMarkers).toBe(RenderAnimation.sampleAnimationMarkers);
     expect(PublicApi.RenderMesh.MeshBuilder).toBe(RenderMesh.MeshBuilder);
   });
 
@@ -21,6 +22,7 @@ describe("index barrel", () => {
     expect(Object.keys(PublicApi.SceneRenderer)).toContain("renderSceneToPng");
     expect(Object.keys(PublicApi.VirtualMachine)).toContain("VirtualMachine");
     expect(Object.keys(PublicApi.RenderAnimation)).toContain("renderAnimationFrame");
+    expect(Object.keys(PublicApi.RenderAnimation)).toContain("sampleAnimationMarkers");
     expect(Object.keys(PublicApi.RenderMesh)).toContain("createBoxMesh");
     expect(PublicApi.SceneRenderer).not.toBe(PublicApi.VirtualMachine);
   });

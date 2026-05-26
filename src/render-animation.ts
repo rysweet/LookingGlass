@@ -40,11 +40,17 @@ export interface BoneAnimationTrack {
   readonly keyframes: readonly BoneKeyframe[];
 }
 
+export interface AnimationMarker {
+  readonly name: string;
+  readonly timeMs: number;
+}
+
 export interface SkeletalAnimationClip {
   readonly name: string;
   readonly durationMs: number;
   readonly tracks: readonly BoneAnimationTrack[];
   readonly loop?: boolean;
+  readonly markers?: readonly AnimationMarker[];
 }
 
 export interface VertexBoneWeight {
@@ -302,6 +308,59 @@ function sampleTrack(track: BoneAnimationTrack | undefined, clip: SkeletalAnimat
     }
   }
   return mergeTransform(fallback, frames[frames.length - 1]!.transform);
+}
+
+function getSortedMarkers(clip: SkeletalAnimationClip): AnimationMarker[] {
+  return [...(clip.markers ?? [])]
+    .filter((marker) => Number.isFinite(marker.timeMs))
+    .sort((left, right) => left.timeMs - right.timeMs);
+}
+
+function getForwardMarkersInRange(markers: readonly AnimationMarker[], startMs: number, endMs: number): AnimationMarker[] {
+  return markers.filter((marker) => marker.timeMs > startMs && marker.timeMs <= endMs);
+}
+
+function getBackwardMarkersInRange(markers: readonly AnimationMarker[], startMs: number, endMs: number): AnimationMarker[] {
+  return markers.filter((marker) => marker.timeMs <= startMs && marker.timeMs > endMs).reverse();
+}
+
+export function sampleAnimationMarkers(
+  clip: SkeletalAnimationClip | undefined,
+  previousTimeMs: number,
+  currentTimeMs: number,
+): AnimationMarker[] {
+  if (!clip) {
+    return [];
+  }
+  const markers = getSortedMarkers(clip);
+  if (markers.length === 0 || !Number.isFinite(previousTimeMs) || !Number.isFinite(currentTimeMs)) {
+    return [];
+  }
+  const delta = currentTimeMs - previousTimeMs;
+  if (delta === 0) {
+    return [];
+  }
+  if (clip.loop === false || clip.durationMs <= 0) {
+    const start = Math.min(Math.max(previousTimeMs, 0), Math.max(clip.durationMs, 0));
+    const end = Math.min(Math.max(currentTimeMs, 0), Math.max(clip.durationMs, 0));
+    return delta > 0
+      ? getForwardMarkersInRange(markers, start, end)
+      : getBackwardMarkersInRange(markers, start, end);
+  }
+  if (Math.abs(delta) >= clip.durationMs) {
+    return delta > 0 ? markers : [...markers].reverse();
+  }
+
+  const start = normalizeClipTime(clip, previousTimeMs);
+  const end = normalizeClipTime(clip, currentTimeMs);
+  if (delta > 0) {
+    return end >= start
+      ? getForwardMarkersInRange(markers, start, end)
+      : [...getForwardMarkersInRange(markers, start, clip.durationMs), ...getForwardMarkersInRange(markers, -1, end)];
+  }
+  return end <= start
+    ? getBackwardMarkersInRange(markers, start, end)
+    : [...getBackwardMarkersInRange(markers, start, -1), ...getBackwardMarkersInRange(markers, clip.durationMs, end)];
 }
 
 function buildTrackMap(clip: SkeletalAnimationClip | undefined): Map<string, BoneAnimationTrack> {

@@ -4,6 +4,7 @@ import {
   createAnimationTransform,
   renderAnimationFrame,
   renderAnimationStateFrame,
+  sampleAnimationMarkers,
   sampleSkeletalAnimation,
   type MorphTarget,
   type Skeleton,
@@ -64,6 +65,34 @@ describe("render animation", () => {
 
     expectVec3Close(poses[0]!.worldTransform.translation, { x: 1, y: 0, z: 0 });
     expectVec3Close(poses[1]!.worldTransform.translation, { x: 1, y: 1, z: 0 });
+  });
+
+  it("samples animation event markers for clamped and looping clips", () => {
+    const clip: SkeletalAnimationClip = {
+      name: "walk",
+      durationMs: 1000,
+      loop: true,
+      tracks: [],
+      markers: [
+        { name: "left-step", timeMs: 100 },
+        { name: "right-step", timeMs: 550 },
+        { name: "turn", timeMs: 950 },
+      ],
+    };
+
+    expect(sampleAnimationMarkers({ ...clip, loop: false }, 0, 700).map((marker) => marker.name)).toEqual([
+      "left-step",
+      "right-step",
+    ]);
+    expect(sampleAnimationMarkers(clip, 900, 1100).map((marker) => marker.name)).toEqual([
+      "turn",
+      "left-step",
+    ]);
+    expect(sampleAnimationMarkers(clip, 100, 1300).map((marker) => marker.name)).toEqual([
+      "left-step",
+      "right-step",
+      "turn",
+    ]);
   });
 
   it("blends morph targets before skin deformation", () => {
