@@ -137,6 +137,23 @@ describe("UndoRedoManager — stack cap", () => {
     }
     expect(undoCount).toBe(100);
   });
+
+  it("drops the oldest commands and preserves the newest reachable state", () => {
+    const scene = makeScene();
+    const manager = new UndoRedoManager();
+
+    for (let i = 0; i < 150; i++) {
+      manager.execute(new MoveEntityCommand(scene, "box", { x: i, y: 0, z: 0 }));
+    }
+
+    while (manager.canUndo) {
+      manager.undo();
+    }
+
+    expect((scene.getEntity("box") as SModel).position).toEqual({ x: 49, y: 0, z: 0 });
+    expect(manager.undoCount).toBe(0);
+    expect(manager.redoCount).toBe(100);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -157,6 +174,55 @@ describe("UndoRedoManager — stack counts", () => {
     manager.undo();
     expect(manager.undoCount).toBe(0);
     expect(manager.redoCount).toBe(1);
+  });
+
+  it("clears the entire redo depth when a new command executes after multiple undos", () => {
+    const scene = makeScene();
+    const manager = new UndoRedoManager();
+
+    manager.execute(new MoveEntityCommand(scene, "box", { x: 10, y: 0, z: 0 }));
+    manager.execute(new MoveEntityCommand(scene, "box", { x: 20, y: 0, z: 0 }));
+    manager.execute(new MoveEntityCommand(scene, "box", { x: 30, y: 0, z: 0 }));
+
+    manager.undo();
+    manager.undo();
+    expect(manager.undoCount).toBe(1);
+    expect(manager.redoCount).toBe(2);
+
+    manager.execute(new MoveEntityCommand(scene, "box", { x: 99, y: 0, z: 0 }));
+
+    expect((scene.getEntity("box") as SModel).position).toEqual({ x: 99, y: 0, z: 0 });
+    expect(manager.undoCount).toBe(2);
+    expect(manager.redoCount).toBe(0);
+
+    manager.redo();
+    expect((scene.getEntity("box") as SModel).position).toEqual({ x: 99, y: 0, z: 0 });
+  });
+
+  it("replays redo states in original order after a deep undo chain", () => {
+    const scene = makeScene();
+    const manager = new UndoRedoManager();
+
+    manager.execute(new MoveEntityCommand(scene, "box", { x: 10, y: 0, z: 0 }));
+    manager.execute(new MoveEntityCommand(scene, "box", { x: 20, y: 0, z: 0 }));
+    manager.execute(new MoveEntityCommand(scene, "box", { x: 30, y: 0, z: 0 }));
+    manager.execute(new MoveEntityCommand(scene, "box", { x: 40, y: 0, z: 0 }));
+
+    manager.undo();
+    manager.undo();
+    manager.undo();
+    expect((scene.getEntity("box") as SModel).position).toEqual({ x: 10, y: 0, z: 0 });
+    expect(manager.undoCount).toBe(1);
+    expect(manager.redoCount).toBe(3);
+
+    manager.redo();
+    expect((scene.getEntity("box") as SModel).position).toEqual({ x: 20, y: 0, z: 0 });
+    manager.redo();
+    expect((scene.getEntity("box") as SModel).position).toEqual({ x: 30, y: 0, z: 0 });
+    manager.redo();
+    expect((scene.getEntity("box") as SModel).position).toEqual({ x: 40, y: 0, z: 0 });
+    expect(manager.undoCount).toBe(4);
+    expect(manager.redoCount).toBe(0);
   });
 });
 
