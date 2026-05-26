@@ -130,8 +130,14 @@ function attachA3PSource(project: AliceProject, source: A3PSourceMetadata): void
  * Works in both browser (File/ArrayBuffer) and Node (Buffer).
  */
 export async function parseA3P(data: ArrayBuffer | Uint8Array): Promise<AliceProject> {
-  const zip = await JSZip.loadAsync(data);
-  return parseA3PFromZip(zip);
+  try {
+    const zip = await JSZip.loadAsync(data);
+    return parseA3PFromZip(zip);
+  } catch (error) {
+    throw new Error("Failed to parse .a3p archive: corrupted ZIP data", {
+      cause: error instanceof Error ? error : undefined,
+    });
+  }
 }
 
 /** Internal: parse from an already-loaded JSZip instance (avoids re-parsing in readProject). */

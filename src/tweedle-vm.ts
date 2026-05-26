@@ -431,10 +431,20 @@ function applyBinaryOperator(operator: string, left: unknown, right: unknown): u
       return String(numericValue(left) - numericValue(right));
     case "*":
       return String(numericValue(left) * numericValue(right));
-    case "/":
-      return String(numericValue(left) / numericValue(right));
-    case "%":
-      return String(numericValue(left) % numericValue(right));
+    case "/": {
+      const divisor = numericValue(right);
+      if (divisor === 0) {
+        throw new TypeError("division by zero");
+      }
+      return String(numericValue(left) / divisor);
+    }
+    case "%": {
+      const divisor = numericValue(right);
+      if (divisor === 0) {
+        throw new TypeError("division by zero");
+      }
+      return String(numericValue(left) % divisor);
+    }
     default:
       return undefined;
   }
@@ -1008,7 +1018,12 @@ function execMethodCall(stmt: AliceStatement, state: VMState): void {
     detail: `${objectName}.${methodName}${argsStr}`,
   });
 
+  const resolvedValue = objectName === "this" ? state.currentSelf : evaluateValue(state, objectName);
   const targetObject = resolveRuntimeObjectByName(state, objectName);
+  if (objectName !== "this" && resolvedValue === null && targetObject === null) {
+    throw new TypeError(`null reference: ${objectName}`);
+  }
+
   const runtimeMethod = targetObject ? resolveRuntimeMethod(state, targetObject.typeName, methodName, args.length) : null;
   if (runtimeMethod) {
     dispatchMethod(runtimeMethod, args, state, targetObject, targetObject?.typeName ?? null);
