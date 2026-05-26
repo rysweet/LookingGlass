@@ -51,7 +51,13 @@ describe("naming utilities", () => {
   it("sanitizes identifiers and package names for Java exports", () => {
     expect(sanitizeJavaIdentifier("demo project", "fallback")).toBe("demo_project");
     expect(sanitizeJavaIdentifier("9lives", "fallback")).toBe("_9lives");
+    expect(sanitizeJavaIdentifier("class", "fallback")).toBe("class_");
     expect(sanitizePackageName("Org.Alice Demo.3D-World")).toBe("org.alicedemo._3dworld");
+  });
+
+  it("supports custom collision suffix starts and empty-name fallbacks", () => {
+    expect(resolveNameCollision("bunny", ["bunny", "bunny5"], { startAt: 5 })).toBe("bunny6");
+    expect(identifierNameGenerator.suggestParameterName("", ["value", "value2"])).toBe("value3");
   });
 
   it("reports identifier validity", () => {

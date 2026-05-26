@@ -64,6 +64,20 @@ describe("formatters", () => {
     expect(registry.list().map((formatter) => formatter.id)).toEqual(["alice", "java"]);
     expect(registry.setDefault("java")).toBeInstanceOf(JavaFormatter);
     expect(registry.getDefault()).toBeInstanceOf(JavaFormatter);
+    expect(() => registry.require("missing")).toThrow("Unknown formatter: missing");
+  });
+
+  it("defaults Alice locale and formats enum gallery labels", () => {
+    const aliceFormatter = new AliceFormatter(null);
+    const javaFormatter = new JavaFormatter();
+
+    expect(aliceFormatter.locale).toBe("en");
+    expect(javaFormatter.galleryLabelFor("Color", { isEnum: true, isLeaf: true })).toBe("new Color(  )");
+    expect(javaFormatter.galleryLabelFor("Color", { isEnum: true, isLeaf: false })).toBe("new Color( ␣ )");
+  });
+
+  it("rejects empty formatter registries", () => {
+    expect(() => new FormatterRegistry([])).toThrow("FormatterRegistry requires at least one formatter");
   });
 
   it("allows custom formatter registration", () => {
