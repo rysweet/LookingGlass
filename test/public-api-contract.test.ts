@@ -86,6 +86,7 @@ function buildFactoryCases() {
     ["PrintSystem.createPrintableDocument", () => PublicApi.PrintSystem.createPrintableDocument(parsedScript)],
     ["ProjectTemplate.createEmptyWorldProject", () => PublicApi.ProjectTemplate.createEmptyWorldProject({ projectName: "FactoryWorld" })],
     ["ProjectTemplate.createProjectFromTemplate", () => contractArchive],
+    ["RenderAnimation.createAnimationTransform", () => PublicApi.RenderAnimation.createAnimationTransform()],
     ["RenderMesh.createBoxMesh", () => PublicApi.RenderMesh.createBoxMesh({ width: 2, height: 4, depth: 6 })],
     ["RenderMesh.createSphereMesh", () => PublicApi.RenderMesh.createSphereMesh({ radius: 2, widthSegments: 8, heightSegments: 4 })],
     ["RenderMesh.createCylinderMesh", () => PublicApi.RenderMesh.createCylinderMesh({ radiusTop: 1, radiusBottom: 0.5, height: 4, radialSegments: 8 })],
@@ -190,6 +191,9 @@ function assertFactoryResult(key: string, value: unknown): void {
       return;
     case "ProjectTemplate.createProjectFromTemplate":
       expectKeys(value, ["project", "resources", "resourceEntries", "versionInfo"]);
+      return;
+    case "RenderAnimation.createAnimationTransform":
+      expectKeys(value, ["translation", "rotation", "scale"]);
       return;
     case "RenderMesh.createBoxMesh":
       expectKeys(value, ["vertices", "normals", "uvs", "indices", "bounds"]);
