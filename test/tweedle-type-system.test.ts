@@ -707,4 +707,66 @@ describe("resolveMethod()", () => {
 
     expect(h.resolveMethod(choice, "pick", [nullType])).toBeNull();
   });
+
+  it("applies array assignability rules across widening and dimensions", () => {
+    const h = emptyHierarchy();
+    const wholeArray = h.resolve("WholeNumber[]")!;
+    const decimalArray = h.resolve("DecimalNumber[]")!;
+    const twoDimensionalWholeArray = h.resolve("WholeNumber[][]")!;
+
+    expect(h.isAssignableTo(wholeArray, decimalArray)).toBe(true);
+    expect(h.isAssignableTo(decimalArray, wholeArray)).toBe(false);
+    expect(h.isAssignableTo(wholeArray, twoDimensionalWholeArray)).toBe(false);
+  });
+
+  it("treats class generic parameters as wildcard method matches", () => {
+    const cls = makeClass(`
+      class Box<T> extends SThing {
+        Box() {}
+        T keep(T value) { return value; }
+      }
+    `);
+    const h = createTypeHierarchy([cls]);
+    const box = h.resolve("Box")!;
+    const text = h.resolve("TextString")!;
+
+    const resolved = h.resolveMethod(box, "keep", [text]);
+
+    expect(resolved?.method.returnType).toMatchObject({ type: "SimpleTypeRef", name: "T" });
+    expect(resolved?.ownerType.typeParameters).toEqual(["T"]);
+  });
+
+  it("prefers exact overloads over class generic wildcard methods", () => {
+    const cls = makeClass(`
+      class Box<T> extends SThing {
+        Box() {}
+        T keep(T value) { return value; }
+        TextString keep(TextString value) { return value; }
+      }
+    `);
+    const h = createTypeHierarchy([cls]);
+    const box = h.resolve("Box")!;
+    const text = h.resolve("TextString")!;
+
+    const resolved = h.resolveMethod(box, "keep", [text]);
+
+    expect(resolved?.method.returnType).toMatchObject({ type: "SimpleTypeRef", name: "TextString" });
+  });
+
+  it("keeps method generic parameters independent from class generic parameters", () => {
+    const cls = makeClass(`
+      class Box<T> extends SThing {
+        Box() {}
+        <U> U swap(U value) { return value; }
+      }
+    `);
+    const h = createTypeHierarchy([cls]);
+    const box = h.resolve("Box")!;
+    const decimal = h.resolve("DecimalNumber")!;
+
+    const resolved = h.resolveMethod(box, "swap", [decimal]);
+
+    expect(resolved?.method.typeParameters).toEqual(["U"]);
+    expect(resolved?.method.returnType).toMatchObject({ type: "SimpleTypeRef", name: "U" });
+  });
 });
