@@ -80,8 +80,9 @@ function userMethod(options: {
   </node>`;
 }
 
-function field(name: string, valueTypeXml: string, uuid: string, initializerXml = ""): string {
-  return `<node type="org.lgna.project.ast.UserField" uuid="${uuid}">
+function field(name: string, valueTypeXml: string, uuid: string, initializerXml = "", key?: string): string {
+  const keyAttr = key ? ` key="${key}"` : "";
+  return `<node${keyAttr} type="org.lgna.project.ast.UserField" uuid="${uuid}">
     <property name="name"><value type="java.lang.String">${name}</value></property>
     <property name="valueType">${valueTypeXml}</property>
     ${initializerXml}
@@ -104,6 +105,20 @@ function namedUserType(options: {
     <property name="methods"><collection type="java.util.ArrayList">${(options.methods ?? []).join("")}</collection></property>
     <property name="constructors"><collection type="java.util.ArrayList"/></property>
   </node>`;
+}
+
+function fieldAccess(fieldKey: string, uuid: string): string {
+  return `<node type="org.lgna.project.ast.FieldAccess" uuid="${uuid}">
+    <property name="field"><node key="${fieldKey}"/></property>
+  </node>`;
+}
+
+function thisExpression(uuid: string): string {
+  return `<node type="org.lgna.project.ast.ThisExpression" uuid="${uuid}"/>`;
+}
+
+function nullLiteral(uuid: string): string {
+  return `<node type="org.lgna.project.ast.NullLiteral" uuid="${uuid}"/>`;
 }
 
 function textureNode(path: string, uuid: string): string {
@@ -240,5 +255,133 @@ describe("project-validation", () => {
     const cycleErrors = result.errors.filter((error) => error.code === "circular-type-hierarchy");
     expect(cycleErrors.length).toBeGreaterThanOrEqual(2);
     expect(cycleErrors.some((error) => error.message.includes("CycleA -> CycleB -> CycleA"))).toBe(true);
+  });
+
+  it("continues reporting type mismatches when invalid arguments reference circular user types", async () => {
+    const cycleA = namedUserType({
+      key: "cycle-a",
+      uuid: "cycle-a",
+      name: "CycleA",
+      superTypeXml: `<node key="cycle-b"/>`,
+    });
+    const cycleB = namedUserType({
+      key: "cycle-b",
+      uuid: "cycle-b",
+      name: "CycleB",
+      superTypeXml: `<node key="cycle-a"/>`,
+    });
+    const xml = validProjectXml(
+      [
+        field("cycleA", `<node key="cycle-a"/>`, "cycle-a-field", "", "cycle-a-field-ref"),
+        field("cycleB", `<node key="cycle-b"/>`, "cycle-b-field", "", "cycle-b-field-ref"),
+      ],
+      [
+        userMethod({
+          name: "problematicCycleUsage",
+          uuid: "problematic-cycle-usage",
+          statements: [
+            expressionStatement(
+              methodInvocation({
+                name: "consumeLabel",
+                uuid: "consume-cycle",
+                parameterTypes: ["java.lang.String"],
+                argumentNodes: [fieldAccess("cycle-a-field-ref", "cycle-a-access")],
+              }),
+              "consume-cycle-statement",
+            ),
+          ],
+        }),
+      ],
+      `${cycleA}${cycleB}${textureNode("resources/textures/cycle-missing.png", "cycle-missing-texture")}`,
+    );
+    const archive = await readProject(await createArchive(xml));
+
+    const result = await validateProjectArchive(archive);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.map((error) => error.code)).toEqual(
+      expect.arrayContaining([
+        "circular-type-hierarchy",
+        "invalid-method-argument-type",
+        "missing-resource-reference",
+      ]),
+    );
+    expect(result.errors.some((error) => error.message.includes("expects java.lang.String but received CycleA"))).toBe(true);
+    expect(result.errors.filter((error) => error.code === "circular-type-hierarchy").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("allows inherited this and null arguments while preserving unrelated complex errors", async () => {
+    const baseActor = namedUserType({
+      key: "base-actor",
+      uuid: "base-actor",
+      name: "BaseActor",
+      superTypeXml: javaType("org.lgna.story.SModel", "base-actor-super"),
+    });
+    const heroType = namedUserType({
+      key: "hero-type",
+      uuid: "hero-type",
+      name: "Hero",
+      superTypeXml: `<node key="base-actor"/>`,
+      methods: [
+        userMethod({
+          name: "validateInteractions",
+          uuid: "hero-validate-interactions",
+          statements: [
+            expressionStatement(
+              methodInvocation({
+                name: "rememberActor",
+                uuid: "remember-this",
+                parameterTypes: ["BaseActor"],
+                argumentNodes: [thisExpression("hero-this")],
+              }),
+              "remember-this-statement",
+            ),
+            expressionStatement(
+              methodInvocation({
+                name: "rememberActor",
+                uuid: "remember-label",
+                parameterTypes: ["BaseActor"],
+                argumentNodes: [fieldAccess("label-field-ref", "label-access")],
+              }),
+              "remember-label-statement",
+            ),
+            expressionStatement(
+              methodInvocation({
+                name: "describeObject",
+                uuid: "describe-null",
+                parameterTypes: ["java.lang.Object"],
+                argumentNodes: [nullLiteral("null-arg")],
+              }),
+              "describe-null-statement",
+            ),
+          ],
+        }),
+      ],
+    });
+    const xml = validProjectXml(
+      [
+        field("hero", `<node key="hero-type"/>`, "hero-field", "", "hero-field-ref"),
+        field("label", javaType("java.lang.String", "label-type"), "label-field", "", "label-field-ref"),
+        field("missingThing", javaType("MissingType", "missing-thing-type"), "missing-thing-field"),
+      ],
+      [],
+      `${baseActor}${heroType}${textureNode("resources/textures/inherited-missing.png", "inherited-missing-texture")}`,
+    );
+    const archive = await readProject(await createArchive(xml));
+
+    const result = await validateProjectArchive(archive);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.map((error) => error.code)).toEqual(
+      expect.arrayContaining([
+        "unresolved-type-reference",
+        "invalid-method-argument-type",
+        "missing-resource-reference",
+      ]),
+    );
+    const argumentTypeErrors = result.errors.filter((error) => error.code === "invalid-method-argument-type");
+    expect(argumentTypeErrors).toHaveLength(1);
+    expect(argumentTypeErrors[0]?.message).toContain("expects BaseActor but received java.lang.String");
+    expect(result.errors.some((error) => error.message.includes("hero-this"))).toBe(false);
   });
 });

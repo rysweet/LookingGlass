@@ -607,7 +607,9 @@ function isTypeAssignable(
     return true;
   }
   let current = context.userTypes.get(actual);
-  while (current?.superTypeName) {
+  const visited = new Set<string>();
+  while (current?.superTypeName && !visited.has(current.name)) {
+    visited.add(current.name);
     const parent = normalizeTypeName(current.superTypeName);
     if (parent === expected) {
       return true;
