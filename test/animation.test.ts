@@ -14,6 +14,7 @@ import {
   nlerp,
   lerpScalar,
   Tween,
+  SequentialAnimation,
   type AnimationObserver,
   type EasingFn,
   type TweenConfig,
@@ -590,6 +591,114 @@ describe("faithful animation extensions", () => {
     expect(first.isComplete).toBe(true);
     expect(second.progress).toBeCloseTo(0.75, 10);
   });
+
+  it("carries sequential overflow into later children", () => {
+    const first = new Tween({ from: 0, to: 1, durationMs: 100, easing: linear, interpolate: lerpScalar });
+    const second = new Tween({ from: 10, to: 20, durationMs: 200, easing: linear, interpolate: lerpScalar });
+    const third = new Tween({ from: -1, to: 1, durationMs: 50, easing: linear, interpolate: lerpScalar });
+    const sequence = doInOrder(first, second, third);
+
+    const state = sequence.update(250);
+
+    expect(state.elapsedMs).toBe(250);
+    expect(first.isComplete).toBe(true);
+    expect(second.value).toBeCloseTo(17.5, 10);
+    expect(third.progress).toBe(0);
+  });
+
+  it("resets sequential animations back to the first child", () => {
+    const first = new Tween({ from: 0, to: 1, durationMs: 100, easing: linear, interpolate: lerpScalar });
+    const second = new Tween({ from: 5, to: 15, durationMs: 100, easing: linear, interpolate: lerpScalar });
+    const sequence = doInOrder(first, second);
+
+    sequence.update(200);
+    expect(sequence.isComplete).toBe(true);
+    sequence.reset();
+    sequence.update(50);
+
+    expect(sequence.isComplete).toBe(false);
+    expect(first.value).toBeCloseTo(0.5, 10);
+    expect(second.value).toBe(5);
+  });
+
+  it("only advances unfinished children in parallel animations", () => {
+    const first = new Tween({ from: 0, to: 1, durationMs: 100, easing: linear, interpolate: lerpScalar });
+    const second = new Tween({ from: 10, to: 30, durationMs: 200, easing: linear, interpolate: lerpScalar });
+    const together = doTogether(first, second);
+
+    together.update(150);
+    expect(first.value).toBe(1);
+    expect(second.value).toBeCloseTo(25, 10);
+
+    together.update(25);
+    expect(first.value).toBe(1);
+    expect(second.value).toBeCloseTo(27.5, 10);
+  });
+
+  it("reports parent observer lifecycle once for sequential animations", () => {
+    const events: string[] = [];
+    const first = new Tween({ from: 0, to: 1, durationMs: 50, easing: linear, interpolate: lerpScalar });
+    const second = new Tween({ from: 1, to: 2, durationMs: 50, easing: linear, interpolate: lerpScalar });
+    const sequence = new SequentialAnimation([first, second], {
+      started: () => events.push("started"),
+      updated: () => events.push("updated"),
+      finished: () => events.push("finished"),
+      completed: () => events.push("completed"),
+    });
+
+    sequence.update(25);
+    sequence.update(75);
+    sequence.update(25);
+
+    expect(events.filter((event) => event === "started")).toHaveLength(1);
+    expect(events.filter((event) => event === "finished")).toHaveLength(1);
+    expect(events.filter((event) => event === "completed")).toHaveLength(1);
+    expect(events.filter((event) => event === "updated").length).toBeGreaterThanOrEqual(2);
+  });
+
+  const sequentialProgressCases = [
+    { deltaMs: 0, first: 0, second: 0, third: 0 },
+    { deltaMs: 50, first: 0.5, second: 0, third: 0 },
+    { deltaMs: 100, first: 1, second: 0, third: 0 },
+    { deltaMs: 150, first: 1, second: 0.25, third: 0 },
+    { deltaMs: 300, first: 1, second: 1, third: 0 },
+  ];
+
+  for (const testCase of sequentialProgressCases) {
+    it(`tracks sequential child progress after ${testCase.deltaMs}ms`, () => {
+      const first = new Tween({ from: 0, to: 1, durationMs: 100, easing: linear, interpolate: lerpScalar });
+      const second = new Tween({ from: 10, to: 20, durationMs: 200, easing: linear, interpolate: lerpScalar });
+      const third = new Tween({ from: -1, to: 1, durationMs: 50, easing: linear, interpolate: lerpScalar });
+      const sequence = doInOrder(first, second, third);
+
+      sequence.update(testCase.deltaMs);
+
+      expect(first.progress).toBeCloseTo(testCase.first, 10);
+      expect(second.progress).toBeCloseTo(testCase.second, 10);
+      expect(third.progress).toBeCloseTo(testCase.third, 10);
+    });
+  }
+
+  const parallelProgressCases = [
+    { deltaMs: 0, first: 0, second: 0 },
+    { deltaMs: 50, first: 0.5, second: 0.25 },
+    { deltaMs: 100, first: 1, second: 0.5 },
+    { deltaMs: 150, first: 1, second: 0.75 },
+    { deltaMs: 200, first: 1, second: 1 },
+  ];
+
+  for (const testCase of parallelProgressCases) {
+    it(`tracks parallel child progress after ${testCase.deltaMs}ms`, () => {
+      const first = new Tween({ from: 0, to: 1, durationMs: 100, easing: linear, interpolate: lerpScalar });
+      const second = new Tween({ from: 10, to: 30, durationMs: 200, easing: linear, interpolate: lerpScalar });
+      const together = doTogether(first, second);
+
+      together.update(testCase.deltaMs);
+
+      expect(first.progress).toBeCloseTo(testCase.first, 10);
+      expect(second.progress).toBeCloseTo(testCase.second, 10);
+    });
+  }
 
   it("animates Property<T> values and reports observer callbacks", () => {
     class TestOwner extends PropertyOwnerImp {}

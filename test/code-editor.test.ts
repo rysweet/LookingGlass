@@ -218,4 +218,124 @@ describe("code-editor", () => {
     expect(editor.setStatementEnabled({ list: editor.rootList, index: 2 }, false)).toBe(false);
     expect(editor.getVisualBlocks().find((block) => block.path.join(">") === "body>2")?.enabled).toBe(false);
   });
+
+  it("clamps direct list insertions to the nearest valid index", () => {
+    const editor = new CodeEditor(createMethod());
+
+    expect(editor.rootList.insert(-5, new CommentStatement("first"))).toBe(0);
+    expect(editor.rootList.insert(99, new CommentStatement("last"))).toBe(3);
+    expect(editor.rootList.list().map((statement) => statement.type)).toEqual([
+      "Comment",
+      "LocalVariableDeclaration",
+      "IfElse",
+      "Comment",
+    ]);
+  });
+
+  it("normalizes same-list moves that target later indices", () => {
+    const editor = new CodeEditor(createMethod());
+
+    editor.moveStatement({ list: editor.rootList, index: 0 }, { list: editor.rootList, index: 2 });
+
+    expect(editor.rootList.list().map((statement) => statement.type)).toEqual([
+      "IfElse",
+      "LocalVariableDeclaration",
+    ]);
+  });
+
+  it("returns null for detached statements and throws for unknown list paths", () => {
+    const editor = new CodeEditor(createMethod());
+    const detached = new CommentStatement("detached");
+
+    expect(editor.findStatementLocation(detached)).toBeNull();
+    expect(() => editor.findStatementList(["body", "missing:list"])).toThrow(/unknown statement list path/);
+  });
+
+  it("rejects replacing nested statements with constructor invocations", () => {
+    const editor = new CodeEditor(createMethod());
+    const conditional = editor.rootList.at(1) as ConditionalStatement;
+    const ifList = editor.getStatementLists().find((list) => list.parentStatement === conditional && list.role === "if")!;
+
+    expect(() => editor.replaceStatement({ list: ifList, index: 0 }, new ThisConstructorInvocationStatement(null))).toThrow(/constructor headers/);
+    expect(ifList.at(0)).toBeInstanceOf(ExpressionStatement);
+  });
+
+  const insertionCases = [
+    { label: "clamps oversized insertStatement indices to the end", index: 99, expected: ["LocalVariableDeclaration", "IfElse", "Comment"] },
+    { label: "clamps negative insertStatement indices to the start", index: -3, expected: ["Comment", "LocalVariableDeclaration", "IfElse"] },
+    { label: "inserts into the middle when the target index is in bounds", index: 1, expected: ["LocalVariableDeclaration", "Comment", "IfElse"] },
+  ] as const;
+
+  for (const testCase of insertionCases) {
+    it(testCase.label, () => {
+      const editor = new CodeEditor(createMethod());
+      editor.insertStatement({ list: editor.rootList, index: testCase.index }, new CommentStatement("inserted"));
+      expect(editor.rootList.list().map((statement) => statement.type)).toEqual(testCase.expected);
+    });
+  }
+
+  const reorderCases = [
+    { label: "reorders forward within the root list", from: 0, to: 2, expected: ["IfElse", "LocalVariableDeclaration"] },
+    { label: "reorders backward within the root list", from: 1, to: 0, expected: ["IfElse", "LocalVariableDeclaration"] },
+    { label: "keeps order stable when reordering to the same index", from: 1, to: 1, expected: ["LocalVariableDeclaration", "IfElse"] },
+  ] as const;
+
+  for (const testCase of reorderCases) {
+    it(testCase.label, () => {
+      const editor = new CodeEditor(createMethod());
+      editor.rootList.reorder(testCase.from, testCase.to);
+      expect(editor.rootList.list().map((statement) => statement.type)).toEqual(testCase.expected);
+    });
+  }
+
+  const descriptorCases = [
+    { path: ["body"] as const, role: "body", length: 2 },
+    { path: ["body", "1:if"] as const, role: "if", length: 1 },
+    { path: ["body", "1:else"] as const, role: "else", length: 1 },
+  ];
+
+  for (const testCase of descriptorCases) {
+    it(`describes statement list ${testCase.path.join(">")}`, () => {
+      const editor = new CodeEditor(createMethod());
+      const descriptor = editor.findStatementList(testCase.path).describe();
+      expect(descriptor.role).toBe(testCase.role);
+      expect(descriptor.length).toBe(testCase.length);
+      expect(descriptor.path).toEqual([...testCase.path]);
+    });
+  }
+
+  const enabledCases = [
+    { label: "disables the first root statement", index: 0, enabled: false },
+    { label: "re-enables the first root statement", index: 0, enabled: true },
+    { label: "disables the conditional statement", index: 1, enabled: false },
+  ] as const;
+
+  for (const testCase of enabledCases) {
+    it(testCase.label, () => {
+      const editor = new CodeEditor(createMethod());
+      if (testCase.enabled) {
+        editor.setStatementEnabled({ list: editor.rootList, index: testCase.index }, false);
+      }
+      expect(editor.setStatementEnabled({ list: editor.rootList, index: testCase.index }, testCase.enabled)).toBe(testCase.enabled);
+      expect(editor.rootList.at(testCase.index).isEnabled).toBe(testCase.enabled);
+    });
+  }
+
+  it("creates nested drop targets after moving a statement into the if body", () => {
+    const editor = new CodeEditor(createMethod());
+    const conditional = editor.rootList.at(1) as ConditionalStatement;
+    const ifList = editor.getStatementLists().find((list) => list.parentStatement === conditional && list.role === "if")!;
+
+    editor.moveStatement({ list: editor.rootList, index: 0 }, { list: ifList, index: 1 });
+
+    expect(editor.getDropTargets().map((target) => target.label)).toEqual([
+      "body@0",
+      "body@1",
+      "if@0",
+      "if@1",
+      "if@2",
+      "else@0",
+      "else@1",
+    ]);
+  });
 });
