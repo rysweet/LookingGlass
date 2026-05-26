@@ -52,6 +52,7 @@ export * as ProjectValidation from "./project-validation";
 export * as Refactoring from "./refactoring";
 export * as RenderAnimation from "./render-animation";
 export * as RenderMesh from "./render-mesh";
+export * as RenderPicking from "./render-picking";
 export * as RenderText from "./render-text";
 export * as ResourceManager from "./resource-manager";
 export * as RunSystem from "./run-system";
