@@ -5,6 +5,8 @@ import { ExpressionEvaluator } from "../src/expression-evaluator.js";
 import { ArithmeticExpression } from "../src/expression-types.js";
 import { StatementExecutor } from "../src/statement-executor.js";
 import { SColor } from "../src/standard-classes.js";
+import { UserTypeDeclaration } from "../src/type-declarations.js";
+import { ResourceManager } from "../src/resource-system.js";
 import { VirtualMachine } from "../src/virtual-machine.js";
 import * as SceneRenderer from "../src/scene-renderer.js";
 import * as RenderAnimation from "../src/render-animation.js";
@@ -17,6 +19,8 @@ describe("index barrel", () => {
     expect(PublicApi.ExpressionTypes.ArithmeticExpression).toBe(ArithmeticExpression);
     expect(PublicApi.StatementExecutor.StatementExecutor).toBe(StatementExecutor);
     expect(PublicApi.StandardClasses.SColor).toBe(SColor);
+    expect(PublicApi.TypeDeclarations.UserTypeDeclaration).toBe(UserTypeDeclaration);
+    expect(PublicApi.ResourceSystem.ResourceManager).toBe(ResourceManager);
     expect(PublicApi.VirtualMachine.VirtualMachine).toBe(VirtualMachine);
     expect(PublicApi.SceneRenderer.renderSceneToPng).toBe(SceneRenderer.renderSceneToPng);
     expect(PublicApi.RenderAnimation.AnimationStateMachine).toBe(RenderAnimation.AnimationStateMachine);
@@ -30,6 +34,8 @@ describe("index barrel", () => {
     expect(Object.keys(PublicApi.ControlFlow)).toContain("DoInOrderExecutor");
     expect(Object.keys(PublicApi.ExpressionTypes)).toContain("ArithmeticExpression");
     expect(Object.keys(PublicApi.StandardClasses)).toContain("SColor");
+    expect(Object.keys(PublicApi.TypeDeclarations)).toContain("UserTypeDeclaration");
+    expect(Object.keys(PublicApi.ResourceSystem)).toContain("ResourceManager");
     expect(Object.keys(PublicApi.RenderAnimation)).toContain("renderAnimationFrame");
     expect(Object.keys(PublicApi.RenderAnimation)).toContain("sampleAnimationMarkers");
     expect(Object.keys(PublicApi.RenderMesh)).toContain("createBoxMesh");
