@@ -1,0 +1,112 @@
+import type JSZip from "jszip";
+import type { BoundingBox, JointNode } from "../story-api/types";
+
+export interface AliceObject {
+  name: string;
+  typeName: string;
+  resourceType: string | null;
+  position: { x: number; y: number; z: number } | null;
+  orientation: { x: number; y: number; z: number; w: number } | null;
+  size: { width: number; height: number; depth: number } | null;
+  constructorArgs?: string[];
+}
+
+export interface AliceStatement {
+  kind: string;
+  object?: string;
+  method?: string;
+  arguments?: string[];
+  count?: number;
+  countExpression?: string;
+  body?: AliceStatement[];
+  itemType?: string;
+  itemName?: string;
+  collection?: string;
+  condition?: string;
+  ifBody?: AliceStatement[];
+  elseBody?: AliceStatement[];
+  tryBody?: AliceStatement[];
+  catchBody?: AliceStatement[];
+  catchType?: string;
+  catchVariable?: string;
+  cases?: Array<{ value: string; body: AliceStatement[] }>;
+  defaultCase?: AliceStatement[] | null;
+  event?: string;
+  expression?: string;
+  name?: string;
+  varType?: string;
+  value?: string;
+}
+
+export interface AliceMethod {
+  name: string;
+  isFunction: boolean;
+  returnType: string;
+  parameters: Array<{ name: string; type: string }>;
+  statements: AliceStatement[];
+}
+
+export interface AliceFieldDefinition {
+  name: string;
+  typeName?: string | null;
+  resourceType?: string | null;
+  initializer?: string | null;
+}
+
+export interface AliceTypeDefinition {
+  name: string;
+  superTypeName?: string | null;
+  methods?: AliceMethod[];
+  constructors?: AliceMethod[];
+  fields?: AliceFieldDefinition[];
+}
+
+export interface AliceProject {
+  version: string;
+  projectName: string;
+  sceneObjects: AliceObject[];
+  methods: AliceMethod[];
+  types?: AliceTypeDefinition[];
+  jointHierarchy?: JointNode[];
+  boundingBoxes?: Record<string, BoundingBox>;
+  textureRefs?: string[];
+}
+
+export interface A3PSourceMetadata {
+  zip: JSZip | null;
+  xmlEntryName: string;
+  xmlText: string;
+  snapshot: string;
+}
+
+export const DEFAULT_A3P_XML_ENTRY = "programType.xml";
+export const LEGACY_A3P_XML_ENTRY = "program.xml";
+
+const A3P_SOURCE = Symbol("a3p-source");
+type AliceProjectWithSource = AliceProject & { [A3P_SOURCE]?: A3PSourceMetadata };
+
+export function getA3PSource(project: AliceProject): A3PSourceMetadata | null {
+  return (project as AliceProjectWithSource)[A3P_SOURCE] ?? null;
+}
+
+export function snapshotAliceProject(project: AliceProject): string {
+  return JSON.stringify({
+    version: project.version,
+    projectName: project.projectName,
+    sceneObjects: project.sceneObjects,
+    methods: project.methods,
+    types: project.types ?? [],
+    jointHierarchy: project.jointHierarchy ?? [],
+    boundingBoxes: project.boundingBoxes ?? {},
+    textureRefs: project.textureRefs ?? [],
+  });
+}
+
+export function attachA3PSource(project: AliceProject, source: A3PSourceMetadata): void {
+  Object.defineProperty(project, A3P_SOURCE, {
+    value: source,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
+}
