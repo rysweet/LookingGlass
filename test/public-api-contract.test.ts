@@ -128,6 +128,9 @@ function buildFactoryCases() {
     ["StoryApi.createSpeechBubbleState", () => PublicApi.StoryApi.createSpeechBubbleState("say", "Hello")],
     ["StoryApi.createTextBubbleEntity", () => PublicApi.StoryApi.createTextBubbleEntity("bubble-1", "think", "Hmm")],
     ["StoryApi.createDefaultTransform", () => PublicApi.StoryApi.createDefaultTransform()],
+    ["StoryApiProperties.createColorPaint", () => PublicApi.StoryApiProperties.createColorPaint("#336699")],
+    ["StoryApiProperties.createTexturePaint", () => PublicApi.StoryApiProperties.createTexturePaint("brick", 0.5, "#ffffff")],
+    ["StoryApiProperties.createTextValue", () => PublicApi.StoryApiProperties.createTextValue("Hello", "Arial", 18, "#112233")],
     ["StoryResources.createResourceAssetPaths", () => PublicApi.StoryResources.createResourceAssetPaths("Bunny")],
     ["TweedleRuntime.createClassRegistry", () => PublicApi.TweedleRuntime.createClassRegistry()],
     ["TweedleRuntime.createMethodTable", () => PublicApi.TweedleRuntime.createMethodTable(contractProject.methods)],
@@ -273,6 +276,15 @@ function assertFactoryResult(key: string, value: unknown): void {
       return;
     case "StoryApi.createDefaultTransform":
       expectKeys(value, ["position", "orientation", "size"]);
+      return;
+    case "StoryApiProperties.createColorPaint":
+      expect(value).toEqual({ kind: "color", color: "#336699" });
+      return;
+    case "StoryApiProperties.createTexturePaint":
+      expect(value).toEqual({ kind: "texture", texture: "brick", mix: 0.5, tint: "#ffffff" });
+      return;
+    case "StoryApiProperties.createTextValue":
+      expect(value).toEqual({ text: "Hello", fontFamily: "Arial", fontSize: 18, color: "#112233" });
       return;
     case "StoryApi.createEntityForType":
       expect(value).toBeInstanceOf(PublicApi.StoryApi.SThing);

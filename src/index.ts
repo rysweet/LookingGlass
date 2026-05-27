@@ -1,6 +1,7 @@
 export * as A3pParser from "./a3p-parser";
 export * as A3pWriter from "./a3p-writer";
 export * as Accessibility from "./accessibility";
+export * as AliceProgram from "./alice-program";
 export * as Analytics from "./analytics";
 export * as Animation from "./animation";
 export * as AnimationImplementations from "./animation-implementations";
@@ -111,8 +112,10 @@ export * as StandaloneProject from "./standalone-project";
 export * as StatementExecutor from "./statement-executor";
 export * as StatementSystem from "./statement-system";
 export * as StoryApi from "./story-api";
+export * as StoryApiAnimations from "./story-api-animations";
 export * as StoryApiEvents from "./story-api-events";
 export * as StoryApiMethods from "./story-api-methods";
+export * as StoryApiProperties from "./story-api-properties";
 export * as StoryResources from "./story-resources";
 export * as SpeechBubble from "./speech-bubble";
 export * as TestingFramework from "./testing-framework";
