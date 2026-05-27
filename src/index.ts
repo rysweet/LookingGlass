@@ -92,6 +92,7 @@ export * as RenderText from "./render-text";
 export * as ResourceManager from "./resource-manager";
 export * as ResourceLoading from "./resource-loading";
 export * as RunSystem from "./run-system";
+export * as RuntimeEnvironment from "./runtime-environment";
 export * as SceneBuilder from "./scene-builder";
 export * as SceneEditor from "./scene-editor";
 export * as SceneGraph from "./scene-graph";
