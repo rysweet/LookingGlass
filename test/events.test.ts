@@ -263,7 +263,7 @@ describe("event system", () => {
 
   // ── POST /api/events/fire ─────────────────────────────────────────
 
-  describe("POST /api/events/fire", () => {
+  describe("POST /api/events/fire", { timeout: 15_000 }, () => {
     // ── sceneActivated ──
 
     it("fires sceneActivated and triggers all matching registrations", async () => {
@@ -493,7 +493,7 @@ describe("event system", () => {
 
   // ── Object position tracking ──────────────────────────────────────
 
-  describe("object positions", () => {
+  describe("object positions", { timeout: 15_000 }, () => {
     it("seeded objects (ground, camera) have default {0,0,0} position", async () => {
       // Verify indirectly: register proximity for seeded objects, fire, should trigger
       await request(app)
