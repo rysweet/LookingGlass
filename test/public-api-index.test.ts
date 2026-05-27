@@ -13,10 +13,12 @@ import * as ResourceSystem from "../src/resource-system.js";
 const EXPECTED_NAMESPACES = [
   "A3pParser",
   "AliceIdeState",
+  "AliceStringResources",
   "CroquetOperations",
   "ProjectIo",
   "SceneBuilder",
   "StoryApi",
+  "TransformUtilities",
   "TweedleParser",
   "TweedleVm",
   "Server",
@@ -48,9 +50,11 @@ describe("public API index", () => {
     expect(new Set(names).size).toBe(names.length);
     expect(typeof PublicApi.A3pParser.parseA3P).toBe("function");
     expect(typeof PublicApi.AliceIdeState.IdeState).toBe("function");
+    expect(typeof PublicApi.AliceStringResources.StringResourceBundle).toBe("function");
     expect(typeof PublicApi.CroquetOperations.OperationHistory).toBe("function");
     expect(typeof PublicApi.StoryApi.buildStoryWorld).toBe("function");
     expect(typeof PublicApi.ProjectIo.readProject).toBe("function");
+    expect(typeof PublicApi.TransformUtilities.TransformStack).toBe("function");
     expect(typeof PublicApi.TweedleVm.TweedleVM).toBe("function");
     expect(typeof PublicApi.Server.createServer).toBe("function");
   });
