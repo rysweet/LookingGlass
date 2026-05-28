@@ -28,7 +28,7 @@ npm run serve
 
 ## What's implemented
 
-**175 source modules, 68,500+ lines, 2,500+ tests.**
+**336 source modules, 73188 lines, 2,500+ tests.**
 
 ### Tweedle Language
 
