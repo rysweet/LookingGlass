@@ -1,0 +1,42 @@
+site_name: Alice Web Prototype
+site_description: TypeScript web port of Alice 3
+repo_url: https://github.com/rysweet/alice-web-prototype
+docs_dir: docs
+strict: true
+theme:
+  name: material
+  palette:
+    primary: blue
+nav:
+  - "Home": "index.md"
+  - "Tutorials":
+    - "Getting started": "getting-started.md"
+  - "How-to guides":
+    - "Testing": "testing.md"
+    - "IDE operations": "ide-operations.md"
+    - "Gadugi test scenarios": "gadugi-test-scenarios.md"
+  - "Reference":
+    - "API reference": "api-reference.md"
+    - "Animation system": "animation.md"
+    - "Audio": "audio.md"
+    - "Collision detection": "collision-detection.md"
+    - "Event system": "event-system.md"
+    - "Grading pipeline": "grading-pipeline.md"
+    - "Image editor": "image-editor.md"
+    - "Model resources": "model-resources.md"
+    - "Project IO": "project-io.md"
+    - "Resource manager": "resource-manager.md"
+    - "Scene graph": "scene-graph.md"
+    - "Scene manager": "scene-manager.md"
+    - "Scene rendering": "scene-rendering.md"
+    - "Serialization": "serialization.md"
+    - "Statement execution": "statement-execution.md"
+    - "Story API": "story-api.md"
+    - "Tweedle code generation": "tweedle-codegen.md"
+    - "Tweedle parser": "tweedle-parser.md"
+    - "Tweedle standard library": "tweedle-stdlib.md"
+    - "Tweedle type system": "tweedle-type-system.md"
+    - "Tweedle typechecker": "tweedle-typechecker.md"
+    - "VM scoping and functions": "vm-scoping-and-functions.md"
+  - "Explanation":
+    - "Architecture": "architecture.md"
