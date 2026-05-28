@@ -260,7 +260,9 @@ export class PluginSettingsManager {
           this._values.set(pluginId, cloneSettingsRecord(values));
         }
       }
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[PluginSettings] corrupt plugin settings removed (${this._storageKey}): ${msg}`);
       this._storage?.removeItem(this._storageKey);
     }
   }

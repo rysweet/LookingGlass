@@ -266,7 +266,9 @@ export class StatementListDropReceptor implements DropReceptor {
     try {
       const statement = model.source ? model.source.list.at(model.source.index) : model.node;
       return wouldCreateDescendantDrop(statement, this.target.list);
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[DragDrop] drop validation failed (treating as invalid): ${msg}`);
       return true;
     }
   }

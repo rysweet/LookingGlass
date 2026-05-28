@@ -186,7 +186,9 @@ export class Preferences {
           this._emit(key, previous, next, "load");
         }
       }
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[Preferences] failed to parse stored preferences (resetting to defaults): ${msg}`);
       this._data = createSnapshot(this._defaults);
     }
 
