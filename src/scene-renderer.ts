@@ -2,16 +2,7 @@
  * Headless scene renderer using Three.js + node-canvas.
  * Produces a PNG screenshot of the Alice scene without a browser.
  */
-import * as THREE from "three";
 import type { AliceProject, AliceObject } from "./a3p-parser";
-
-const TYPE_COLORS: Record<string, number> = {
-  "org.lgna.story.SGround": 0x4a7c3f,
-  "org.lgna.story.SCamera": 0x666666,
-};
-const PROP_COLOR = 0xb5651d;
-const MODEL_COLOR = 0xcc7722;
-const DEFAULT_COLOR = 0x8888cc;
 
 export interface RenderOptions {
   width: number;
