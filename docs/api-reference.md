@@ -20,6 +20,8 @@ Base URL examples below use `http://127.0.0.1:3099`.
 | --- | --- | --- |
 | `/api/health` | `GET` | Check that the server is alive |
 | `/api/launch` | `POST` | Start or reset a project session |
+| `/api/project/templates` | `GET` | List available project templates |
+| `/api/project/new` | `POST` | Create a new project from a template |
 | `/api/scene/add-object` | `POST` | Add one object to the scene |
 | `/api/code/edit-procedure` | `POST` | Append a procedure edit proof |
 | `/api/project/save` | `POST` | Save the current project and proof artifact |
@@ -79,6 +81,90 @@ Error response:
 { "error": "project path must be an .a3p file" }
 ```
 
+## `GET /api/project/templates`
+
+List all available project templates.
+
+```bash
+curl http://127.0.0.1:3099/api/project/templates
+```
+
+Example response:
+
+```json
+{
+  "templates": [
+    {
+      "id": "blank",
+      "name": "Blank",
+      "description": "Minimal starter scene with a camera and ground."
+    },
+    {
+      "id": "snow",
+      "name": "Snow",
+      "description": "Snowy starter world with a camera, snowperson, and pine tree."
+    },
+    {
+      "id": "sea-floor",
+      "name": "Sea Floor",
+      "description": "Underwater starter scene with fish, coral, and treasure."
+    },
+    {
+      "id": "moon",
+      "name": "Moon",
+      "description": "Low-gravity moon scene with a rover and astronaut."
+    }
+  ]
+}
+```
+
+The template list can be extended at runtime by registering custom
+templates built from existing projects.
+
+## `POST /api/project/new`
+
+Create a new project from a template. This resets the server's active
+session to the new project.
+
+```bash
+curl -X POST http://127.0.0.1:3099/api/project/new \
+  -H 'Content-Type: application/json' \
+  -d '{"templateId": "snow", "projectName": "WinterStory"}'
+```
+
+Request body:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `templateId` | `string` | no | Template to use; defaults to `blank` |
+| `projectName` | `string` | no | Project name; defaults to `<TemplateName> Project` |
+
+Example response:
+
+```json
+{
+  "schema_version": "eatme.alice-project-new-result/v1",
+  "status": "created",
+  "templateId": "snow",
+  "projectName": "WinterStory",
+  "projectPath": "evidence/project-new/WinterStory.a3p",
+  "sceneObjectCount": 4,
+  "a3pSizeBytes": 1284
+}
+```
+
+Error response when template is not found:
+
+```json
+{
+  "error": "Unknown template: forest",
+  "availableTemplates": ["blank", "snow", "sea-floor", "moon"]
+}
+```
+
+Creating a project also sets `launched = true`, so you do not need to
+call `POST /api/launch` separately when using this endpoint.
+
 ## `POST /api/scene/add-object`
 
 ```bash
@@ -130,6 +216,13 @@ Example response:
   "procedure_selector": "scene.myFirstMethod",
   "edited_project_artifact": "edited-project.a3p",
   "action_proof": "first-lesson-code-editor-action-proof.json",
+  "doesNotClaim": [
+    "first-lesson completion",
+    "grading",
+    "creative assessment",
+    "visible rendering correctness",
+    "broad UI automation"
+  ],
   "evidenceArtifact": "evidence/first-lesson-code-editor-action-proof.json"
 }
 ```
@@ -183,6 +276,10 @@ Example response:
   "execution_log": [],
   "run_duration_ms": 7,
   "errors": [],
+  "doesNotClaim": [
+    "visible rendering correctness",
+    "desktop run-button proof"
+  ],
   "evidenceArtifact": "evidence/run-world-result.json"
 }
 ```
@@ -226,7 +323,7 @@ Request body:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `eventType` | `string` | yes | Event name such as `sceneActivated`, `keyPress`, `keyPressed`, `keyReleased`, `keyTyped`, or `proximity` |
+| `eventType` | `string` | yes | Event name — one of: `sceneActivated`, `keyPress`, `keyPressed`, `keyReleased`, `keyTyped`, `collision`, `collisionStart`, `collisionEnd`, `mouseClicked`, `mousePressed`, `mouseReleased`, `mouseEntered`, `mouseExited`, `mouseMoved`, `mouseDragged`, `mouseWheel`, `proximity`, `proximityEnter`, `proximityExit`, `occlusion`, `viewEnter`, `viewExit`, `transformChanged` |
 | `handlerName` | `string` | yes | Handler label stored in the registration |
 | `key` | `string` | conditional | Required for keyboard events: `keyPress`, `keyPressed`, `keyReleased`, and `keyTyped` |
 | `target` | `string` | no | Optional target object name for target-scoped listeners; if provided it must name a known object |
