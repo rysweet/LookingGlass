@@ -62,6 +62,8 @@ The key field is `"launched": false` — the server is up but no project
 session is active yet. The `pid` and `uptime` values will differ on your
 machine.
 
+![API health JSON response](screenshots/04-api-health-json.png)
+
 ## Step 2 — Browse project templates
 
 Before creating a project, see what starter templates are available:
@@ -653,6 +655,28 @@ node -e "require('canvas')"
 ```
 
 If this throws an error, reinstall with `npm rebuild canvas`.
+
+## Appendix — Web Viewer UI
+
+In addition to the API, you can explore your project visually using the
+Vite-powered web viewer. Start it in a separate terminal:
+
+```bash
+npm run dev
+```
+
+Then open **http://localhost:5173** in your browser.
+
+![Web Viewer landing page](screenshots/02-web-viewer-landing.png)
+
+The viewer shows:
+- A sidebar with project info and scene object list
+- A full 3D viewport rendered with Three.js
+- A file input to load `.a3p` archives directly
+
+![Templates list in browser](screenshots/06-templates-list.png)
+
+![Server-rendered scene](screenshots/08-scene-render.png)
 
 ## Next steps
 
