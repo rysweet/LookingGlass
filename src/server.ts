@@ -35,6 +35,11 @@ interface SceneObject {
 
 const DEFAULT_POSITION: Position = { x: 0, y: 0, z: 0 };
 
+/** Strip path separators and traversal sequences from a user-supplied name. */
+function sanitizeFilename(name: string): string {
+  return name.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
+}
+
 /** Build an AliceProject from the current server state (or return the cached parse). */
 function buildCurrentProject(state: ServerState): AliceProject {
   return state.parsedProject ?? {
@@ -297,7 +302,7 @@ export function createServer(options: ServerOptions): express.Express {
     // Write the new project as a proper A3P archive
     const newDir = path.join(options.evidenceDir, "project-new");
     await fs.promises.mkdir(newDir, { recursive: true });
-    const newProjectPath = path.join(newDir, `${project.projectName}.a3p`);
+    const newProjectPath = path.join(newDir, `${sanitizeFilename(project.projectName)}.a3p`);
     const a3pBytes = await writeA3P(project);
     await fs.promises.writeFile(newProjectPath, a3pBytes);
 
@@ -477,6 +482,12 @@ export function createServer(options: ServerOptions): express.Express {
       }
       throw error;
     }
+  });
+
+  // Global error handler — suppress stack traces in responses
+  app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error("Unhandled error:", err);
+    res.status(500).json({ error: "Internal server error" });
   });
 
   return app;
