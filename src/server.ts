@@ -41,6 +41,7 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
 }
 
+/** Matches percent-encoded dot (%2e), forward-slash (%2f), or backslash (%5c) — common path-traversal evasion. */
 const ENCODED_TRAVERSAL_RE = /%(2e|2f|5c)/i;
 
 const resolvedDirCache = new WeakMap<readonly string[], string[]>();
@@ -54,6 +55,12 @@ function getResolvedDirs(allowedProjectDirs: readonly string[]): string[] {
   return resolved;
 }
 
+/**
+ * Validate that a project path is safe to open.
+ *
+ * Rejects null bytes, percent-encoded traversal characters, non-`.a3p` extensions,
+ * and paths that resolve outside `allowedProjectDirs`.
+ */
 export function validateProjectPath(
   projectPath: string,
   allowedProjectDirs: readonly string[],
@@ -148,7 +155,6 @@ export function createServer(options: ServerOptions): express.Express {
   app.post("/api/launch", async (req, res) => {
     const projectFile = req.body?.project ?? options.projectPath ?? null;
     let resolvedProjectFile: string | null = null;
-    state.launched = true;
 
     if (projectFile !== null) {
       if (typeof projectFile !== "string") {
@@ -165,6 +171,7 @@ export function createServer(options: ServerOptions): express.Express {
       resolvedProjectFile = validation.resolvedPath;
     }
 
+    state.launched = true;
     state.projectPath = resolvedProjectFile;
 
     if (resolvedProjectFile && fs.existsSync(resolvedProjectFile)) {

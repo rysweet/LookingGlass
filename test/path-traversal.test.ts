@@ -60,6 +60,11 @@ describe("validateProjectPath", () => {
     expect(validateProjectPath("/workspace/alice/test.a3p", dirs).valid).toBe(true);
     expect(validateProjectPath("/var/evil.a3p", dirs).valid).toBe(false);
   });
+
+  it("rejects empty string input", () => {
+    const result = validateProjectPath("", allowedDirs);
+    expect(result.valid).toBe(false);
+  });
 });
 
 describe("POST /api/launch — path traversal protection", () => {
@@ -72,7 +77,7 @@ describe("POST /api/launch — path traversal protection", () => {
         .post("/api/launch")
         .send({ project: "/safe/../../etc/passwd.a3p" });
       expect(res.status).toBe(400);
-      expect(res.body.error).toBeDefined();
+      expect(res.body.error).toContain("outside allowed");
     } finally {
       fs.rmSync(evidenceDir, { recursive: true, force: true });
     }
@@ -87,6 +92,57 @@ describe("POST /api/launch — path traversal protection", () => {
         .post("/api/launch")
         .send({ project: "/safe/myProject.a3p" });
       expect(res.status).toBe(200);
+    } finally {
+      fs.rmSync(evidenceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects non-string project input via API", async () => {
+    const evidenceDir = path.resolve(__dirname, `../.test-path-traversal3-${Date.now()}`);
+    fs.mkdirSync(evidenceDir, { recursive: true });
+    try {
+      const app = createServer({ port: 0, evidenceDir, allowedProjectDirs: ["/safe"] });
+      const res = await request(app)
+        .post("/api/launch")
+        .send({ project: 12345 });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain("string");
+    } finally {
+      fs.rmSync(evidenceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not set launched state on rejected path", async () => {
+    const evidenceDir = path.resolve(__dirname, `../.test-path-traversal4-${Date.now()}`);
+    fs.mkdirSync(evidenceDir, { recursive: true });
+    try {
+      const app = createServer({ port: 0, evidenceDir, allowedProjectDirs: ["/safe"] });
+      // Attempt launch with traversal path — should be rejected
+      await request(app)
+        .post("/api/launch")
+        .send({ project: "/safe/../../etc/passwd.a3p" });
+      // Verify server does not consider itself launched
+      const healthRes = await request(app).get("/api/health");
+      expect(healthRes.body.launched).toBe(false);
+    } finally {
+      fs.rmSync(evidenceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("validates options.projectPath fallback against allowed dirs", async () => {
+    const evidenceDir = path.resolve(__dirname, `../.test-path-traversal5-${Date.now()}`);
+    fs.mkdirSync(evidenceDir, { recursive: true });
+    try {
+      const app = createServer({
+        port: 0,
+        evidenceDir,
+        projectPath: "/outside/dir/project.a3p",
+        allowedProjectDirs: ["/safe"],
+      });
+      // Launch without body.project — falls back to options.projectPath
+      const res = await request(app).post("/api/launch").send({});
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain("outside allowed");
     } finally {
       fs.rmSync(evidenceDir, { recursive: true, force: true });
     }
