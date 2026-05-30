@@ -250,11 +250,12 @@ export function createServer(options: ServerOptions): express.Express {
     if (!Array.isArray(raw)) return { ok: true, params: [] };
     const params: MethodParam[] = [];
     for (const p of raw) {
-      if (!p || typeof p !== "object" || !p.name || typeof p.name !== "string") {
-        return { ok: false, error: "Each parameter must have a name" };
+      if (!p || typeof p !== "object" || !p.name || typeof p.name !== "string" || !p.name.trim()) {
+        return { ok: false, error: "Each parameter must have a non-empty name" };
       }
+      const trimmedName = p.name.trim();
       params.push({
-        name: p.name,
+        name: trimmedName,
         type: p.type ?? "Object",
         ...(p.defaultValue !== undefined ? { defaultValue: p.defaultValue } : {}),
       });
