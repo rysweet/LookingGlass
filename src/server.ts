@@ -202,7 +202,6 @@ export function createServer(options: ServerOptions): express.Express {
     );
     try {
       const sourcePath = state.projectPath ?? "";
-      await fs.promises.access(sourcePath);
       await fs.promises.copyFile(sourcePath, editedProjectPath);
     } catch {
       await fs.promises.writeFile(editedProjectPath, MINIMAL_A3P_BUFFER);

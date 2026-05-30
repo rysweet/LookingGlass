@@ -9,10 +9,10 @@ Build and run the server:
 
 ```bash
 npm run build:server
-node dist-server/cli.js serve --port 3099 --evidence-dir ./evidence
+node dist-server/cli.js serve --evidence-dir ./evidence
 ```
 
-Base URL examples below use `http://127.0.0.1:3099`.
+Base URL examples below use `http://127.0.0.1:3000`.
 
 ## Endpoint summary
 
@@ -33,7 +33,7 @@ Base URL examples below use `http://127.0.0.1:3099`.
 ## `GET /api/health`
 
 ```bash
-curl http://127.0.0.1:3099/api/health
+curl http://127.0.0.1:3000/api/health
 ```
 
 Example response:
@@ -53,7 +53,7 @@ Example response:
 Start a session with an `.a3p` file.
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/launch \
+curl -X POST http://127.0.0.1:3000/api/launch \
   -H 'Content-Type: application/json' \
   -d '{"project":"./fixtures/starter.a3p"}'
 ```
@@ -86,7 +86,7 @@ Error response:
 List all available project templates.
 
 ```bash
-curl http://127.0.0.1:3099/api/project/templates
+curl http://127.0.0.1:3000/api/project/templates
 ```
 
 Example response:
@@ -127,7 +127,7 @@ Create a new project from a template. This resets the server's active
 session to the new project.
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/project/new \
+curl -X POST http://127.0.0.1:3000/api/project/new \
   -H 'Content-Type: application/json' \
   -d '{"templateId": "snow", "projectName": "WinterStory"}'
 ```
@@ -168,7 +168,7 @@ call `POST /api/launch` separately when using this endpoint.
 ## `POST /api/scene/add-object`
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/scene/add-object \
+curl -X POST http://127.0.0.1:3000/api/scene/add-object \
   -H 'Content-Type: application/json' \
   -d '{"className":"org.lgna.story.SBiped","name":"bunny"}'
 ```
@@ -195,7 +195,7 @@ Example response:
 ## `POST /api/code/edit-procedure`
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/code/edit-procedure \
+curl -X POST http://127.0.0.1:3000/api/code/edit-procedure \
   -H 'Content-Type: application/json' \
   -d '{"procedureSelector":"scene.myFirstMethod","editSpec":"append-comment:move bunny forward"}'
 ```
@@ -230,7 +230,7 @@ Example response:
 ## `POST /api/project/save`
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/project/save \
+curl -X POST http://127.0.0.1:3000/api/project/save \
   -H 'Content-Type: application/json' \
   -d '{"saveSelector":"scene.myFirstMethod","targetPath":"./evidence/saved-project.a3p"}'
 ```
@@ -260,7 +260,7 @@ Example response:
 Run the current project through the Tweedle VM.
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/world/run -H 'Content-Type: application/json' -d '{}'
+curl -X POST http://127.0.0.1:3000/api/world/run -H 'Content-Type: application/json' -d '{}'
 ```
 
 Example response:
@@ -293,7 +293,7 @@ Error response when nothing has been launched yet:
 ## `GET /api/screenshot`
 
 ```bash
-curl http://127.0.0.1:3099/api/screenshot
+curl http://127.0.0.1:3000/api/screenshot
 ```
 
 Example response:
@@ -314,7 +314,7 @@ response that explains that fallback.
 ## `POST /api/events/register`
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/events/register \
+curl -X POST http://127.0.0.1:3000/api/events/register \
   -H 'Content-Type: application/json' \
   -d '{"eventType":"sceneActivated","handlerName":"setupScene"}'
 ```
@@ -351,7 +351,7 @@ Example response:
 ## `POST /api/events/fire`
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/events/fire \
+curl -X POST http://127.0.0.1:3000/api/events/fire \
   -H 'Content-Type: application/json' \
   -d '{"eventType":"sceneActivated","payload":{}}'
 ```

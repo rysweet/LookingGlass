@@ -9,6 +9,13 @@ from the command line.
 Every request and response shown below was captured from a live server
 session. You can reproduce them exactly by following the steps in order.
 
+> **Note on screenshots:** The scene renderer currently produces the same
+> base rendering regardless of scene state — scene-graph mutations (adding
+> objects, editing code) are tracked in the API model but not yet reflected
+> in the Three.js render pass. Screenshots at different tutorial stages may
+> therefore look identical. This will improve as the renderer gains full
+> scene-graph integration.
+
 ## Prerequisites
 
 | Requirement | Version |
