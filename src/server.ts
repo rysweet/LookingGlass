@@ -314,6 +314,88 @@ export function createServer(options: ServerOptions): express.Express {
     });
   });
 
+  // ── Shared helper for create-procedure / create-function ────────
+  type MethodParam = { name: string; type: string; defaultValue?: string };
+
+  function parseMethodParams(
+    raw: unknown,
+  ): { ok: true; params: MethodParam[] } | { ok: false; error: string } {
+    if (!Array.isArray(raw)) return { ok: true, params: [] };
+    const params: MethodParam[] = [];
+    for (const p of raw) {
+      if (!p || typeof p !== "object" || !p.name || typeof p.name !== "string" || !p.name.trim()) {
+        return { ok: false, error: "Each parameter must have a non-empty name" };
+      }
+      const trimmedName = p.name.trim();
+      params.push({
+        name: trimmedName,
+        type: p.type ?? "Object",
+        ...(p.defaultValue !== undefined ? { defaultValue: p.defaultValue } : {}),
+      });
+    }
+    return { ok: true, params };
+  }
+
+  function registerMethod(
+    methodName: string,
+    isFunction: boolean,
+    returnType: string,
+    params: MethodParam[],
+  ): void {
+    state.procedures.set(methodName, []);
+    if (state.parsedProject) {
+      state.parsedProject.methods.push({
+        name: methodName,
+        isFunction,
+        returnType,
+        parameters: params,
+        statements: [],
+      });
+    }
+  }
+
+  // ── POST /api/code/create-procedure ─────────────────────────────
+  app.post("/api/code/create-procedure", (req, res) => {
+    const { name, parameters } = req.body ?? {};
+    if (!name || typeof name !== "string" || !name.trim()) {
+      res.status(400).json({ error: "name is required and must be a non-empty string" });
+      return;
+    }
+    const methodName = name.trim();
+    if (state.procedures.has(methodName)) {
+      res.status(400).json({ error: `Procedure "${methodName}" already exists` });
+      return;
+    }
+    const parsed = parseMethodParams(parameters);
+    if (!parsed.ok) { res.status(400).json({ error: parsed.error }); return; }
+
+    registerMethod(methodName, false, "void", parsed.params);
+    res.json({ status: "created", name: methodName, kind: "procedure", parameters: parsed.params, totalProcedures: state.procedures.size });
+  });
+
+  // ── POST /api/code/create-function ──────────────────────────────
+  app.post("/api/code/create-function", (req, res) => {
+    const { name, returnType, parameters } = req.body ?? {};
+    if (!name || typeof name !== "string" || !name.trim()) {
+      res.status(400).json({ error: "name is required and must be a non-empty string" });
+      return;
+    }
+    if (!returnType || typeof returnType !== "string" || !returnType.trim()) {
+      res.status(400).json({ error: "returnType is required for functions" });
+      return;
+    }
+    const methodName = name.trim();
+    if (state.procedures.has(methodName)) {
+      res.status(400).json({ error: `Method "${methodName}" already exists` });
+      return;
+    }
+    const parsed = parseMethodParams(parameters);
+    if (!parsed.ok) { res.status(400).json({ error: parsed.error }); return; }
+
+    registerMethod(methodName, true, returnType.trim(), parsed.params);
+    res.json({ status: "created", name: methodName, kind: "function", returnType: returnType.trim(), parameters: parsed.params, totalProcedures: state.procedures.size });
+  });
+
   // ── POST /api/project/save ─────────────────────────────────────────
   app.post("/api/project/save", async (req, res) => {
     const {
