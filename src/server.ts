@@ -19,6 +19,7 @@ export interface ServerOptions {
   port: number;
   evidenceDir: string;
   projectPath?: string;
+  allowedProjectDirs?: readonly string[];
 }
 
 interface Position {
@@ -38,6 +39,64 @@ const DEFAULT_POSITION: Position = { x: 0, y: 0, z: 0 };
 /** Strip path separators and traversal sequences from a user-supplied name. */
 function sanitizeFilename(name: string): string {
   return name.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
+}
+
+/** Matches percent-encoded dot (%2e), forward-slash (%2f), or backslash (%5c) — common path-traversal evasion. */
+const ENCODED_TRAVERSAL_RE = /%(2e|2f|5c)/i;
+
+const resolvedDirCache = new WeakMap<readonly string[], string[]>();
+
+function getResolvedDirs(allowedProjectDirs: readonly string[]): string[] {
+  let resolved = resolvedDirCache.get(allowedProjectDirs);
+  if (!resolved) {
+    resolved = allowedProjectDirs.map((dir) => path.resolve(dir));
+    resolvedDirCache.set(allowedProjectDirs, resolved);
+  }
+  return resolved;
+}
+
+/**
+ * Validate that a project path is safe to open.
+ *
+ * Rejects null bytes, percent-encoded traversal characters, non-`.a3p` extensions,
+ * and paths that resolve outside `allowedProjectDirs`.
+ */
+export function validateProjectPath(
+  projectPath: string,
+  allowedProjectDirs: readonly string[],
+): { valid: true; resolvedPath: string } | { valid: false; error: string } {
+  if (projectPath.includes("\0")) {
+    return { valid: false, error: "project path contains a null byte" };
+  }
+
+  if (ENCODED_TRAVERSAL_RE.test(projectPath)) {
+    return {
+      valid: false,
+      error: "project path contains encoded traversal characters",
+    };
+  }
+
+  const resolvedPath = path.resolve(projectPath);
+
+  if (!resolvedPath.endsWith(".a3p")) {
+    return { valid: false, error: "project path must be an .a3p file" };
+  }
+
+  const resolvedAllowedDirs = getResolvedDirs(allowedProjectDirs);
+  const isWithinAllowedDir = resolvedAllowedDirs.some(
+    (allowedDir) =>
+      resolvedPath === allowedDir ||
+      resolvedPath.startsWith(`${allowedDir}${path.sep}`),
+  );
+
+  if (!isWithinAllowedDir) {
+    return {
+      valid: false,
+      error: "project path is outside allowed directories",
+    };
+  }
+
+  return { valid: true, resolvedPath };
 }
 
 /** Build an AliceProject from the current server state (or return the cached parse). */
@@ -89,22 +148,36 @@ export function createServer(options: ServerOptions): express.Express {
   // Ensure evidence dir exists
   fs.mkdirSync(options.evidenceDir, { recursive: true });
 
+  // Hoist default so the WeakMap cache sees the same reference across requests
+  const allowedProjectDirs = options.allowedProjectDirs ?? [process.cwd()];
+
   // ── POST /api/launch ───────────────────────────────────────────────
   app.post("/api/launch", async (req, res) => {
     const projectFile = req.body?.project ?? options.projectPath ?? null;
-    state.launched = true;
+    let resolvedProjectFile: string | null = null;
 
-    // Validate project path: must end with .a3p to prevent arbitrary file reads
-    if (projectFile && typeof projectFile === "string" && !projectFile.endsWith(".a3p")) {
-      res.status(400).json({ error: "project path must be an .a3p file" });
-      return;
+    if (projectFile !== null) {
+      if (typeof projectFile !== "string") {
+        res.status(400).json({ error: "project path must be a string" });
+        return;
+      }
+
+      const validation = validateProjectPath(projectFile, allowedProjectDirs);
+      if (!validation.valid) {
+        res.status(400).json({ error: validation.error });
+        return;
+      }
+
+      resolvedProjectFile = validation.resolvedPath;
     }
-    state.projectPath = projectFile;
 
-    if (projectFile && fs.existsSync(projectFile)) {
-      state.projectName = path.basename(projectFile, ".a3p");
+    state.launched = true;
+    state.projectPath = resolvedProjectFile;
+
+    if (resolvedProjectFile && fs.existsSync(resolvedProjectFile)) {
+      state.projectName = path.basename(resolvedProjectFile, ".a3p");
       try {
-        const data = fs.readFileSync(projectFile);
+        const data = fs.readFileSync(resolvedProjectFile);
         state.parsedProject = await parseA3P(data);
         state.projectName = state.parsedProject.projectName || state.projectName;
       } catch (err) {
