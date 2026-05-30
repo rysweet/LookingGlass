@@ -152,6 +152,7 @@ export class TweedleDiagnosticCollector {
     this.add({ severity: "warning", message, location, ...options });
   }
 
+  /** Returns a live read-only view of the internal diagnostics array. Copy with .slice() if you need a stable snapshot. */
   get diagnostics(): readonly TweedleDiagnostic[] {
     return this._diagnostics;
   }
@@ -166,6 +167,10 @@ export class TweedleDiagnosticCollector {
 
   get hasErrors(): boolean {
     return this._errorCount > 0;
+  }
+
+  get hasWarnings(): boolean {
+    return this._warningCount > 0;
   }
 
   clear(): void {
