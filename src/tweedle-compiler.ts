@@ -53,7 +53,7 @@ export function compileTweedleSource(source: string): CompilationResult {
     return {
       classes,
       typeEnvironment: null,
-      diagnostics: [...collector.diagnostics],
+      diagnostics: collector.diagnostics.slice(),
       success: false,
     };
   }
@@ -69,7 +69,7 @@ export function compileTweedleSource(source: string): CompilationResult {
   return {
     classes,
     typeEnvironment,
-    diagnostics: [...collector.diagnostics],
+    diagnostics: collector.diagnostics.slice(),
     success: !collector.hasErrors,
   };
 }

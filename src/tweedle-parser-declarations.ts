@@ -127,9 +127,13 @@ export interface TweedleDiagnostic {
 
 export class TweedleDiagnosticCollector {
   private readonly _diagnostics: TweedleDiagnostic[] = [];
+  private _errorCount = 0;
+  private _warningCount = 0;
 
   add(diagnostic: TweedleDiagnostic): void {
     this._diagnostics.push(diagnostic);
+    if (diagnostic.severity === "error") this._errorCount++;
+    else if (diagnostic.severity === "warning") this._warningCount++;
   }
 
   error(
@@ -149,7 +153,7 @@ export class TweedleDiagnosticCollector {
   }
 
   get diagnostics(): readonly TweedleDiagnostic[] {
-    return [...this._diagnostics];
+    return this._diagnostics;
   }
 
   get errors(): readonly TweedleDiagnostic[] {
@@ -161,11 +165,13 @@ export class TweedleDiagnosticCollector {
   }
 
   get hasErrors(): boolean {
-    return this._diagnostics.some((diagnostic) => diagnostic.severity === "error");
+    return this._errorCount > 0;
   }
 
   clear(): void {
     this._diagnostics.length = 0;
+    this._errorCount = 0;
+    this._warningCount = 0;
   }
 }
 
