@@ -272,6 +272,9 @@ export abstract class SceneGraphNode {
   }
 }
 
+const AXIS_Y: Vec3 = Object.freeze({ x: 0, y: 1, z: 0 });
+const AXIS_X: Vec3 = Object.freeze({ x: 1, y: 0, z: 0 });
+
 export abstract class Transformable extends SceneGraphNode {
   /** Translate position by delta vector. */
   translate(delta: Vec3): void {
@@ -363,8 +366,8 @@ export abstract class Transformable extends SceneGraphNode {
 
     const yaw = Math.atan2(dx, dz);
     const pitch = -Math.asin(dy / len);
-    const yawQ = quaternionFromAxisAngle({ x: 0, y: 1, z: 0 }, yaw);
-    const pitchQ = quaternionFromAxisAngle({ x: 1, y: 0, z: 0 }, pitch);
+    const yawQ = quaternionFromAxisAngle(AXIS_Y, yaw);
+    const pitchQ = quaternionFromAxisAngle(AXIS_X, pitch);
     const combined = quaternionMultiply(yawQ, pitchQ);
 
     const current = this.localTransform;
