@@ -262,13 +262,127 @@ export abstract class SceneGraphNode {
     });
     return result;
   }
+
+  getTransformation(): Transform {
+    return {
+      position: { ...this.localTransform.position },
+      orientation: { ...this.localTransform.orientation },
+      scale: { ...this.localTransform.scale },
+    };
+  }
+}
+
+const AXIS_Y: Vec3 = Object.freeze({ x: 0, y: 1, z: 0 });
+const AXIS_X: Vec3 = Object.freeze({ x: 1, y: 0, z: 0 });
+
+export abstract class Transformable extends SceneGraphNode {
+  /** Translate position by delta vector. */
+  translate(delta: Vec3): void {
+    const current = this.localTransform;
+    this.localTransform = {
+      ...current,
+      position: {
+        x: current.position.x + delta.x,
+        y: current.position.y + delta.y,
+        z: current.position.z + delta.z,
+      },
+    };
+  }
+
+  /** Rotate by axis-angle (angle in radians). */
+  rotate(axis: Vec3, angle: number): void {
+    const current = this.localTransform;
+    const rot = quaternionFromAxisAngle(axis, angle);
+    this.localTransform = {
+      ...current,
+      orientation: quaternionMultiply(current.orientation, rot),
+    };
+  }
+
+  /** Scale by factor vector. */
+  scaleBy(factor: Vec3): void {
+    const current = this.localTransform;
+    this.localTransform = {
+      ...current,
+      scale: {
+        x: current.scale.x * factor.x,
+        y: current.scale.y * factor.y,
+        z: current.scale.z * factor.z,
+      },
+    };
+  }
+
+  /** Get the computed world transform (convenience alias). */
+  getWorldTransform(): Transform {
+    return this.worldTransform;
+  }
+
+  /** Transform a local-space point to world-space. */
+  localToWorld(localPoint: Vec3): Vec3 {
+    const wt = this.worldTransform;
+    const scaled: Vec3 = {
+      x: wt.scale.x * localPoint.x,
+      y: wt.scale.y * localPoint.y,
+      z: wt.scale.z * localPoint.z,
+    };
+    const rotated = rotateVec3ByQuaternion(scaled, wt.orientation);
+    return {
+      x: wt.position.x + rotated.x,
+      y: wt.position.y + rotated.y,
+      z: wt.position.z + rotated.z,
+    };
+  }
+
+  /** Transform a world-space point to local-space. */
+  worldToLocal(worldPoint: Vec3): Vec3 {
+    const wt = this.worldTransform;
+    const offset: Vec3 = {
+      x: worldPoint.x - wt.position.x,
+      y: worldPoint.y - wt.position.y,
+      z: worldPoint.z - wt.position.z,
+    };
+    const invOri: Orientation = {
+      x: -wt.orientation.x,
+      y: -wt.orientation.y,
+      z: -wt.orientation.z,
+      w: wt.orientation.w,
+    };
+    const unrotated = rotateVec3ByQuaternion(offset, invOri);
+    return {
+      x: wt.scale.x !== 0 ? unrotated.x / wt.scale.x : 0,
+      y: wt.scale.y !== 0 ? unrotated.y / wt.scale.y : 0,
+      z: wt.scale.z !== 0 ? unrotated.z / wt.scale.z : 0,
+    };
+  }
+
+  /** Look at a world-space target point (simple Y-up). */
+  lookAt(target: Vec3): void {
+    const wt = this.worldTransform;
+    const dx = target.x - wt.position.x;
+    const dy = target.y - wt.position.y;
+    const dz = target.z - wt.position.z;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-10) return;
+
+    const yaw = Math.atan2(dx, dz);
+    const pitch = -Math.asin(dy / len);
+    const yawQ = quaternionFromAxisAngle(AXIS_Y, yaw);
+    const pitchQ = quaternionFromAxisAngle(AXIS_X, pitch);
+    const combined = quaternionMultiply(yawQ, pitchQ);
+
+    const current = this.localTransform;
+    this.localTransform = {
+      ...current,
+      orientation: combined,
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
 // GroupNode — non-visual container
 // ---------------------------------------------------------------------------
 
-export class GroupNode extends SceneGraphNode {
+export class GroupNode extends Transformable {
   constructor(name: string) {
     super(name);
   }
@@ -278,7 +392,7 @@ export class GroupNode extends SceneGraphNode {
 // VisualNode — renderable mesh
 // ---------------------------------------------------------------------------
 
-export class VisualNode extends SceneGraphNode {
+export class VisualNode extends Transformable {
   private _meshRef: string | null = null;
   private _color: Color3 = { r: 1, g: 1, b: 1 };
   private _opacity = 1.0;
@@ -322,7 +436,7 @@ export class VisualNode extends SceneGraphNode {
 // CameraNode — camera parameters
 // ---------------------------------------------------------------------------
 
-export class CameraNode extends SceneGraphNode {
+export class CameraNode extends Transformable {
   private _fov = 60;
   private _near = 0.1;
   private _far = 1000;
@@ -369,7 +483,7 @@ export class CameraNode extends SceneGraphNode {
 // LightNode — light parameters
 // ---------------------------------------------------------------------------
 
-export class LightNode extends SceneGraphNode {
+export class LightNode extends Transformable {
   readonly lightType: LightType;
   private _color: Color3 = { r: 1, g: 1, b: 1 };
   private _intensity = 1.0;
