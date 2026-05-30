@@ -2,16 +2,7 @@
  * Headless scene renderer using Three.js + node-canvas.
  * Produces a PNG screenshot of the Alice scene without a browser.
  */
-import * as THREE from "three";
 import type { AliceProject, AliceObject } from "./a3p-parser";
-
-const TYPE_COLORS: Record<string, number> = {
-  "org.lgna.story.SGround": 0x4a7c3f,
-  "org.lgna.story.SCamera": 0x666666,
-};
-const PROP_COLOR = 0xb5651d;
-const MODEL_COLOR = 0xcc7722;
-const DEFAULT_COLOR = 0x8888cc;
 
 export interface RenderOptions {
   width: number;
@@ -24,6 +15,8 @@ export interface RenderResult {
   sceneDescription: string;
 }
 
+let cachedCreateCanvas: typeof import("canvas")["createCanvas"] | null = null;
+
 /**
  * Render the Alice scene to a PNG buffer using software rasterization.
  * This is a simplified 2D top-down projection — not full 3D — suitable
@@ -33,8 +26,11 @@ export async function renderSceneToPng(
   project: AliceProject,
   options: RenderOptions = { width: 640, height: 480 },
 ): Promise<RenderResult> {
-  const { createCanvas } = await import("canvas");
-  const canvas = createCanvas(options.width, options.height);
+  if (!cachedCreateCanvas) {
+    const canvasModule = await import("canvas");
+    cachedCreateCanvas = canvasModule.createCanvas;
+  }
+  const canvas = cachedCreateCanvas(options.width, options.height);
   const ctx = canvas.getContext("2d");
 
   // Sky background

@@ -9,10 +9,10 @@ Build and run the server:
 
 ```bash
 npm run build:server
-node dist-server/cli.js serve --port 3099 --evidence-dir ./evidence
+node dist-server/cli.js serve --evidence-dir ./evidence
 ```
 
-Base URL examples below use `http://127.0.0.1:3099`.
+Base URL examples below use `http://127.0.0.1:3000`.
 
 ## Endpoint summary
 
@@ -20,6 +20,8 @@ Base URL examples below use `http://127.0.0.1:3099`.
 | --- | --- | --- |
 | `/api/health` | `GET` | Check that the server is alive |
 | `/api/launch` | `POST` | Start or reset a project session |
+| `/api/project/templates` | `GET` | List available project templates |
+| `/api/project/new` | `POST` | Create a new project from a template |
 | `/api/scene/add-object` | `POST` | Add one object to the scene |
 | `/api/code/edit-procedure` | `POST` | Append a procedure edit proof |
 | `/api/project/save` | `POST` | Save the current project and proof artifact |
@@ -31,7 +33,7 @@ Base URL examples below use `http://127.0.0.1:3099`.
 ## `GET /api/health`
 
 ```bash
-curl http://127.0.0.1:3099/api/health
+curl http://127.0.0.1:3000/api/health
 ```
 
 Example response:
@@ -51,7 +53,7 @@ Example response:
 Start a session with an `.a3p` file.
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/launch \
+curl -X POST http://127.0.0.1:3000/api/launch \
   -H 'Content-Type: application/json' \
   -d '{"project":"./fixtures/starter.a3p"}'
 ```
@@ -79,10 +81,94 @@ Error response:
 { "error": "project path must be an .a3p file" }
 ```
 
+## `GET /api/project/templates`
+
+List all available project templates.
+
+```bash
+curl http://127.0.0.1:3000/api/project/templates
+```
+
+Example response:
+
+```json
+{
+  "templates": [
+    {
+      "id": "blank",
+      "name": "Blank",
+      "description": "Minimal starter scene with a camera and ground."
+    },
+    {
+      "id": "snow",
+      "name": "Snow",
+      "description": "Snowy starter world with a camera, snowperson, and pine tree."
+    },
+    {
+      "id": "sea-floor",
+      "name": "Sea Floor",
+      "description": "Underwater starter scene with fish, coral, and treasure."
+    },
+    {
+      "id": "moon",
+      "name": "Moon",
+      "description": "Low-gravity moon scene with a rover and astronaut."
+    }
+  ]
+}
+```
+
+The template list can be extended at runtime by registering custom
+templates built from existing projects.
+
+## `POST /api/project/new`
+
+Create a new project from a template. This resets the server's active
+session to the new project.
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/project/new \
+  -H 'Content-Type: application/json' \
+  -d '{"templateId": "snow", "projectName": "WinterStory"}'
+```
+
+Request body:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `templateId` | `string` | no | Template to use; defaults to `blank` |
+| `projectName` | `string` | no | Project name; defaults to `<TemplateName> Project` |
+
+Example response:
+
+```json
+{
+  "schema_version": "eatme.alice-project-new-result/v1",
+  "status": "created",
+  "templateId": "snow",
+  "projectName": "WinterStory",
+  "projectPath": "evidence/project-new/WinterStory.a3p",
+  "sceneObjectCount": 4,
+  "a3pSizeBytes": 1284
+}
+```
+
+Error response when template is not found:
+
+```json
+{
+  "error": "Unknown template: forest",
+  "availableTemplates": ["blank", "snow", "sea-floor", "moon"]
+}
+```
+
+Creating a project also sets `launched = true`, so you do not need to
+call `POST /api/launch` separately when using this endpoint.
+
 ## `POST /api/scene/add-object`
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/scene/add-object \
+curl -X POST http://127.0.0.1:3000/api/scene/add-object \
   -H 'Content-Type: application/json' \
   -d '{"className":"org.lgna.story.SBiped","name":"bunny"}'
 ```
@@ -109,7 +195,7 @@ Example response:
 ## `POST /api/code/edit-procedure`
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/code/edit-procedure \
+curl -X POST http://127.0.0.1:3000/api/code/edit-procedure \
   -H 'Content-Type: application/json' \
   -d '{"procedureSelector":"scene.myFirstMethod","editSpec":"append-comment:move bunny forward"}'
 ```
@@ -130,6 +216,13 @@ Example response:
   "procedure_selector": "scene.myFirstMethod",
   "edited_project_artifact": "edited-project.a3p",
   "action_proof": "first-lesson-code-editor-action-proof.json",
+  "doesNotClaim": [
+    "first-lesson completion",
+    "grading",
+    "creative assessment",
+    "visible rendering correctness",
+    "broad UI automation"
+  ],
   "evidenceArtifact": "evidence/first-lesson-code-editor-action-proof.json"
 }
 ```
@@ -137,7 +230,7 @@ Example response:
 ## `POST /api/project/save`
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/project/save \
+curl -X POST http://127.0.0.1:3000/api/project/save \
   -H 'Content-Type: application/json' \
   -d '{"saveSelector":"scene.myFirstMethod","targetPath":"./evidence/saved-project.a3p"}'
 ```
@@ -167,7 +260,7 @@ Example response:
 Run the current project through the Tweedle VM.
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/world/run -H 'Content-Type: application/json' -d '{}'
+curl -X POST http://127.0.0.1:3000/api/world/run -H 'Content-Type: application/json' -d '{}'
 ```
 
 Example response:
@@ -183,6 +276,10 @@ Example response:
   "execution_log": [],
   "run_duration_ms": 7,
   "errors": [],
+  "doesNotClaim": [
+    "visible rendering correctness",
+    "desktop run-button proof"
+  ],
   "evidenceArtifact": "evidence/run-world-result.json"
 }
 ```
@@ -196,7 +293,7 @@ Error response when nothing has been launched yet:
 ## `GET /api/screenshot`
 
 ```bash
-curl http://127.0.0.1:3099/api/screenshot
+curl http://127.0.0.1:3000/api/screenshot
 ```
 
 Example response:
@@ -217,7 +314,7 @@ response that explains that fallback.
 ## `POST /api/events/register`
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/events/register \
+curl -X POST http://127.0.0.1:3000/api/events/register \
   -H 'Content-Type: application/json' \
   -d '{"eventType":"sceneActivated","handlerName":"setupScene"}'
 ```
@@ -226,7 +323,7 @@ Request body:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `eventType` | `string` | yes | Event name such as `sceneActivated`, `keyPress`, `keyPressed`, `keyReleased`, `keyTyped`, or `proximity` |
+| `eventType` | `string` | yes | Event name — one of: `sceneActivated`, `keyPress`, `keyPressed`, `keyReleased`, `keyTyped`, `collision`, `collisionStart`, `collisionEnd`, `mouseClicked`, `mousePressed`, `mouseReleased`, `mouseEntered`, `mouseExited`, `mouseMoved`, `mouseDragged`, `mouseWheel`, `proximity`, `proximityEnter`, `proximityExit`, `occlusion`, `viewEnter`, `viewExit`, `transformChanged` |
 | `handlerName` | `string` | yes | Handler label stored in the registration |
 | `key` | `string` | conditional | Required for keyboard events: `keyPress`, `keyPressed`, `keyReleased`, and `keyTyped` |
 | `target` | `string` | no | Optional target object name for target-scoped listeners; if provided it must name a known object |
@@ -254,7 +351,7 @@ Example response:
 ## `POST /api/events/fire`
 
 ```bash
-curl -X POST http://127.0.0.1:3099/api/events/fire \
+curl -X POST http://127.0.0.1:3000/api/events/fire \
   -H 'Content-Type: application/json' \
   -d '{"eventType":"sceneActivated","payload":{}}'
 ```
