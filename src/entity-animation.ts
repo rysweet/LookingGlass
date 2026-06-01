@@ -1,6 +1,7 @@
 import {
   DEFAULT_STYLE,
   PropertyAnimation,
+  clamp01,
   lerpScalar,
   lerpSize,
   lerpVec3,
@@ -391,10 +392,6 @@ export interface SayOutLoudOptions {
   volume?: number;
 }
 
-function clampUnit(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
-
 export class SayOutLoudAnimation implements AnimationClip {
   readonly text: string;
   readonly durationMs: number;
@@ -420,7 +417,7 @@ export class SayOutLoudAnimation implements AnimationClip {
       text: options.text,
       rate,
       pitch,
-      volume: clampUnit(Number.isFinite(volume) ? volume : 1),
+      volume: clamp01(Number.isFinite(volume) ? volume : 1),
     };
     this._complete = this.durationMs === 0;
   }
