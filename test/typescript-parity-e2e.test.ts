@@ -533,9 +533,9 @@ describe("Issue #61: cross-issue E2E integration", () => {
     // StoryApi namespace should re-export entity types
     expect(api.StoryApi).toBeDefined();
 
-    // Entity type registry should be accessible
+    // Entity type registry should be accessible as a namespace module
     expect(api.EntityTypeRegistry).toBeDefined();
-    const registry = api.EntityTypeRegistry.getInstance();
+    const registry = api.EntityTypeRegistry.EntityTypeRegistry.getInstance();
     expect(registry.get("STransport")).not.toBeNull();
   });
 
