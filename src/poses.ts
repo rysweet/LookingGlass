@@ -232,7 +232,7 @@ export function createQuadrupedTrotCycle(): PoseDefinition[] {
   return [QUADRUPED_STAND_POSE, QUADRUPED_TROT_STRIDE_POSE, QUADRUPED_TROT_PASS_POSE, QUADRUPED_TROT_STRIDE_MIRROR_POSE];
 }
 
-// --- Slitherer poses (raw joint strings: NECK, SPINE_BASE, SPINE_MIDDLE, SPINE_UPPER) ---
+// --- Slitherer poses (SlithererJoints: NECK, SPINE_BASE, SPINE_MIDDLE, SPINE_UPPER) ---
 
 export const SLITHERER_STRAIGHT_POSE: PoseDefinition = Object.freeze({
   name: "slitherer_straight",
@@ -268,7 +268,7 @@ export function createSlithererCycle(): PoseDefinition[] {
   return [SLITHERER_STRAIGHT_POSE, SLITHERER_S_CURVE_LEFT_POSE, SLITHERER_STRAIGHT_POSE, SLITHERER_S_CURVE_RIGHT_POSE];
 }
 
-// --- Swimmer poses (raw joint strings: TAIL, NECK) ---
+// --- Swimmer poses (SwimmerJoints: TAIL, NECK) ---
 
 export const SWIMMER_IDLE_POSE: PoseDefinition = Object.freeze({
   name: "swimmer_idle",

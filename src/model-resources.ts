@@ -46,4 +46,5 @@ export {
   SwimmerResource,
   TrainResource,
   WatercraftResource,
+  type IndividualModelResource,
 } from "./model-resources/individual-resources.js";
