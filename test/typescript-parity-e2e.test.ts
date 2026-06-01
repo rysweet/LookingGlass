@@ -430,7 +430,7 @@ describe("Issue #57: animation system expansion", () => {
     // At 50% progress with linear style, each joint should be halfway
     for (const [joint, target] of Object.entries(poses.SIT_POSE.jointRotations)) {
       if (joint in entity.jointRotations) {
-        expect(entity.jointRotations[joint]).toBeCloseTo(target * 0.5, 1);
+        expect((entity.jointRotations as Record<string, number>)[joint]).toBeCloseTo(target * 0.5, 1);
       }
     }
     animation.update(250);

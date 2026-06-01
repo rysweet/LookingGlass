@@ -186,6 +186,7 @@ export class CompoundAnimation extends DurationAnimation {
     return this.snapshot();
   }
 
+  // No-op: CompoundAnimation delegates to child animations
   protected apply(): void {
   }
 
@@ -215,6 +216,7 @@ export class CompoundAnimation extends DurationAnimation {
 }
 
 export class DelayAnimation extends DurationAnimation {
+  // No-op: DelayAnimation only tracks elapsed time
   protected apply(): void {
   }
 }

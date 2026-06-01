@@ -15,29 +15,38 @@ import { VisibilityQuery } from "../entity-queries";
 
 const visibilityQuery = new VisibilityQuery();
 
-export class OcclusionListener {
+abstract class OcclusionListenerBase {
   readonly events: OcclusionEvent[] = [];
-  readonly #occluded = new Map<string, SThing | null>();
-  readonly #onEvent?: (event: OcclusionEvent) => void;
+  protected readonly occluded = new Map<string, SThing | null>();
+  protected readonly onEventCb?: (event: OcclusionEvent) => void;
 
-  constructor(onEvent?: (event: OcclusionEvent) => void) { this.#onEvent = onEvent; }
+  constructor(onEvent?: (event: OcclusionEvent) => void) { this.onEventCb = onEvent; }
+
+  protected abstract check(
+    previous: SThing | null, current: SThing | null,
+    camera: SCamera, target: SThing,
+  ): OcclusionEvent[];
 
   update(camera: SCamera, targets: readonly SThing[], occluders: readonly SThing[]): OcclusionEvent[] {
     const events: OcclusionEvent[] = [];
     for (const target of targets) {
       const key = entityKey(target);
-      const previous = this.#occluded.get(key) ?? null;
+      const previous = this.occluded.get(key) ?? null;
       const current = findOccluder(camera, target, occluders);
-      if (!previous && current) {
-        const event: OcclusionEvent = { type: "occluded", camera, target, occluder: current };
-        this.events.push(event); this.#onEvent?.(event); events.push(event);
-      } else if (previous && !current) {
-        const event: OcclusionEvent = { type: "revealed", camera, target, occluder: null };
-        this.events.push(event); this.#onEvent?.(event); events.push(event);
+      for (const event of this.check(previous, current, camera, target)) {
+        this.events.push(event); this.onEventCb?.(event); events.push(event);
       }
-      this.#occluded.set(key, current);
+      this.occluded.set(key, current);
     }
     return events;
+  }
+}
+
+export class OcclusionListener extends OcclusionListenerBase {
+  protected check(previous: SThing | null, current: SThing | null, camera: SCamera, target: SThing): OcclusionEvent[] {
+    if (!previous && current) return [{ type: "occluded", camera, target, occluder: current }];
+    if (previous && !current) return [{ type: "revealed", camera, target, occluder: null }];
+    return [];
   }
 }
 
@@ -148,71 +157,23 @@ export class WhileInViewListener extends ViewListenerBase {
   }
 }
 
-export class OcclusionStartListener {
-  readonly events: OcclusionEvent[] = [];
-  readonly #occluded = new Map<string, SThing | null>();
-  readonly #onEvent?: (event: OcclusionEvent) => void;
-
-  constructor(onEvent?: (event: OcclusionEvent) => void) { this.#onEvent = onEvent; }
-
-  update(camera: SCamera, targets: readonly SThing[], occluders: readonly SThing[]): OcclusionEvent[] {
-    const events: OcclusionEvent[] = [];
-    for (const target of targets) {
-      const key = entityKey(target);
-      const previous = this.#occluded.get(key) ?? null;
-      const current = findOccluder(camera, target, occluders);
-      if (!previous && current) {
-        const event: OcclusionEvent = { type: "occlusion-start", camera, target, occluder: current };
-        this.events.push(event); this.#onEvent?.(event); events.push(event);
-      }
-      this.#occluded.set(key, current);
-    }
-    return events;
+export class OcclusionStartListener extends OcclusionListenerBase {
+  protected check(previous: SThing | null, current: SThing | null, camera: SCamera, target: SThing): OcclusionEvent[] {
+    if (!previous && current) return [{ type: "occlusion-start", camera, target, occluder: current }];
+    return [];
   }
 }
 
-export class OcclusionEndListener {
-  readonly events: OcclusionEvent[] = [];
-  readonly #occluded = new Map<string, SThing | null>();
-  readonly #onEvent?: (event: OcclusionEvent) => void;
-
-  constructor(onEvent?: (event: OcclusionEvent) => void) { this.#onEvent = onEvent; }
-
-  update(camera: SCamera, targets: readonly SThing[], occluders: readonly SThing[]): OcclusionEvent[] {
-    const events: OcclusionEvent[] = [];
-    for (const target of targets) {
-      const key = entityKey(target);
-      const previous = this.#occluded.get(key) ?? null;
-      const current = findOccluder(camera, target, occluders);
-      if (previous && !current) {
-        const event: OcclusionEvent = { type: "occlusion-end", camera, target, occluder: null };
-        this.events.push(event); this.#onEvent?.(event); events.push(event);
-      }
-      this.#occluded.set(key, current);
-    }
-    return events;
+export class OcclusionEndListener extends OcclusionListenerBase {
+  protected check(previous: SThing | null, current: SThing | null, camera: SCamera, target: SThing): OcclusionEvent[] {
+    if (previous && !current) return [{ type: "occlusion-end", camera, target, occluder: null }];
+    return [];
   }
 }
 
-export class WhileOcclusionListener {
-  readonly events: OcclusionEvent[] = [];
-  readonly #occluded = new Map<string, SThing | null>();
-  readonly #onEvent?: (event: OcclusionEvent) => void;
-
-  constructor(onEvent?: (event: OcclusionEvent) => void) { this.#onEvent = onEvent; }
-
-  update(camera: SCamera, targets: readonly SThing[], occluders: readonly SThing[]): OcclusionEvent[] {
-    const events: OcclusionEvent[] = [];
-    for (const target of targets) {
-      const key = entityKey(target);
-      const previous = this.#occluded.get(key) ?? null;
-      const current = findOccluder(camera, target, occluders);
-      if (previous && current) {
-        const event: OcclusionEvent = { type: "while-occlusion", camera, target, occluder: current };
-        this.events.push(event); this.#onEvent?.(event); events.push(event);
-      }
-      this.#occluded.set(key, current);
-    }
-    return events;
+export class WhileOcclusionListener extends OcclusionListenerBase {
+  protected check(previous: SThing | null, current: SThing | null, camera: SCamera, target: SThing): OcclusionEvent[] {
+    if (previous && current) return [{ type: "while-occlusion", camera, target, occluder: current }];
+    return [];
   }
 }

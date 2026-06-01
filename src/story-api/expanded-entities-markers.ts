@@ -413,12 +413,6 @@ export class SVRUser extends SMovableTurnable {
   }
 }
 
-export class SAxes extends SMovableTurnable {
-  constructor(name?: string | null) {
-    super(name);
-  }
-}
-
 export const STORY_API_DEFAULTS = {
   position: ZERO_POSITION,
   orientation: IDENTITY_ORIENTATION,
