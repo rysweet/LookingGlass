@@ -67,16 +67,17 @@ export class MouseClickOnObjectListener {
   }
 
   mouseDown(point: { x: number; y: number; z: number }, targets: readonly SThing[]): string | null {
-    this.#targets = this.#mapTargets(targets);
-    return this.#handler.mouseDown(point, this.#toMouseHitTargets(targets));
+    const { map, hitTargets } = this.#buildTargetData(targets);
+    this.#targets = map;
+    return this.#handler.mouseDown(point, hitTargets);
   }
 
   mouseUp(point: { x: number; y: number; z: number }, timeMs: number, targets: readonly SThing[]): MouseClickOnObjectEvent | null {
-    const targetMap = this.#mapTargets(targets);
-    for (const [key, entity] of targetMap) {
+    const { map, hitTargets } = this.#buildTargetData(targets);
+    for (const [key, entity] of map) {
       this.#targets.set(key, entity);
     }
-    const interaction = this.#handler.mouseUp(point, timeMs, this.#toMouseHitTargets(targets));
+    const interaction = this.#handler.mouseUp(point, timeMs, hitTargets);
     if (!interaction) {
       return null;
     }
@@ -93,15 +94,16 @@ export class MouseClickOnObjectListener {
     return event;
   }
 
-  #mapTargets(targets: readonly SThing[]): Map<string, SThing> {
-    return new Map(targets.map((target) => [entityKey(target), target]));
-  }
-
-  #toMouseHitTargets(targets: readonly SThing[]) {
-    return targets.flatMap((target) => {
+  #buildTargetData(targets: readonly SThing[]): { map: Map<string, SThing>; hitTargets: Array<{ id: string; bounds: NonNullable<ReturnType<typeof getEntityBoundingBox>> }> } {
+    const map = new Map<string, SThing>();
+    const hitTargets: Array<{ id: string; bounds: NonNullable<ReturnType<typeof getEntityBoundingBox>> }> = [];
+    for (const target of targets) {
+      const key = entityKey(target);
+      map.set(key, target);
       const bounds = getEntityBoundingBox(target);
-      return bounds ? [{ id: entityKey(target), bounds }] : [];
-    });
+      if (bounds) hitTargets.push({ id: key, bounds });
+    }
+    return { map, hitTargets };
   }
 }
 

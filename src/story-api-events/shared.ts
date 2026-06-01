@@ -125,15 +125,15 @@ export function cloneTransformValue(value: Position | Orientation | Size): Posit
 }
 
 export function entityKey(entity: SThing): string {
+  let key = entityIds.get(entity);
+  if (key) return key;
   const named = entity.getName();
   if (named && named.trim().length > 0) {
-    return `name:${named}`;
-  }
-  let key = entityIds.get(entity);
-  if (!key) {
+    key = `name:${named}`;
+  } else {
     key = `entity:${nextEntityId++}`;
-    entityIds.set(entity, key);
   }
+  entityIds.set(entity, key);
   return key;
 }
 

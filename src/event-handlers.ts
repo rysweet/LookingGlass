@@ -100,13 +100,19 @@ export class MouseClickHandler {
   ) {}
 
   hitTest(point: Position, targets: readonly MouseHitTarget[]): string | null {
-    const matches = targets.filter((target) =>
-      point.x >= target.bounds.min.x
-      && point.x <= target.bounds.max.x
-      && point.y >= target.bounds.min.y
-      && point.y <= target.bounds.max.y,
-    );
-    return matches.sort((left, right) => right.bounds.max.z - left.bounds.max.z)[0]?.id ?? null;
+    let best: MouseHitTarget | null = null;
+    for (const target of targets) {
+      if (
+        point.x >= target.bounds.min.x
+        && point.x <= target.bounds.max.x
+        && point.y >= target.bounds.min.y
+        && point.y <= target.bounds.max.y
+        && (!best || target.bounds.max.z > best.bounds.max.z)
+      ) {
+        best = target;
+      }
+    }
+    return best?.id ?? null;
   }
 
   mouseDown(point: Position, targets: readonly MouseHitTarget[] = []): string | null {

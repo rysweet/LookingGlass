@@ -24,6 +24,7 @@ export class ModelResourceCatalog {
   readonly #definitions = new Map<string, ModelResourceDefinition>();
   readonly #loaded = new Map<string, LoadedModelResource>();
   readonly #pending = new Map<string, Promise<LoadedModelResource>>();
+  readonly #summaryCache = new Map<string, ModelResourceSummary>();
 
   constructor(seed: readonly ModelResourceDefinition[] = []) {
     for (const definition of seed) {
@@ -53,18 +54,20 @@ export class ModelResourceCatalog {
       ...(definition.thumbnail ? { thumbnail: new Uint8Array(definition.thumbnail) } : {}),
       ...(definition.classInfo ? { classInfo: cloneClassInfoSource(definition.classInfo) } : {}),
     });
+    this.#summaryCache.delete(id);
   }
 
   remove(id: string): boolean {
     const removed = this.#definitions.delete(id);
     this.#loaded.delete(id);
     this.#pending.delete(id);
+    this.#summaryCache.delete(id);
     return removed;
   }
 
   get(id: string): ModelResourceSummary | null {
     const definition = this.#definitions.get(id);
-    return definition ? this.#summaryFromDefinition(definition) : null;
+    return definition ? this.#cachedSummary(definition) : null;
   }
 
   list(): ModelResourceSummary[] {
@@ -72,7 +75,11 @@ export class ModelResourceCatalog {
   }
 
   categories(): string[] {
-    return [...new Set(this.list().map((resource) => resource.category))].sort((left, right) => left.localeCompare(right));
+    const cats = new Set<string>();
+    for (const definition of this.#definitions.values()) {
+      cats.add(definition.category);
+    }
+    return [...cats].sort((left, right) => left.localeCompare(right));
   }
 
   byCategory(category: string): ModelResourceSummary[] {
@@ -82,17 +89,21 @@ export class ModelResourceCatalog {
   discover(options: ModelDiscoveryOptions = {}): ModelResourceSummary[] {
     const normalizedCategory = options.category?.trim().toLowerCase();
     const query = options.query?.trim().toLowerCase() ?? "";
-    const requiredTags = new Set((options.tags ?? []).map((tag) => tag.toLowerCase()));
+    const rawTags = options.tags ?? [];
+    const requiredTags = rawTags.map((tag) => tag.toLowerCase());
 
     return [...this.#definitions.values()]
-      .map((definition) => this.#summaryFromDefinition(definition))
+      .map((definition) => this.#cachedSummary(definition))
       .filter((resource) => {
         if (normalizedCategory && resource.category.toLowerCase() !== normalizedCategory) {
           return false;
         }
-        for (const tag of requiredTags) {
-          if (!resource.tags.some((resourceTag) => resourceTag.toLowerCase() === tag)) {
-            return false;
+        if (requiredTags.length > 0) {
+          const lowerTags = resource.tags.map((tag) => tag.toLowerCase());
+          for (const tag of requiredTags) {
+            if (!lowerTags.includes(tag)) {
+              return false;
+            }
           }
         }
         if (!query) {
@@ -130,7 +141,7 @@ export class ModelResourceCatalog {
       throw new Error(`Unknown model resource '${id}'`);
     }
 
-    const summary = this.#summaryFromDefinition(definition);
+    const summary = this.#cachedSummary(definition);
     const promise = (async () => {
       const loaded = definition.loader ? await definition.loader(summary) : {};
       const geometry = loaded.geometry ?? definition.geometry;
@@ -227,8 +238,10 @@ export class ModelResourceCatalog {
     return sortChildren(root);
   }
 
-  #summaryFromDefinition(definition: ModelResourceDefinition): ModelResourceSummary {
-    return cloneSummary({
+  #cachedSummary(definition: ModelResourceDefinition): ModelResourceSummary {
+    const cached = this.#summaryCache.get(definition.id);
+    if (cached) return cached;
+    const summary = cloneSummary({
       id: definition.id,
       name: definition.name,
       modelName: definition.modelName,
@@ -237,5 +250,7 @@ export class ModelResourceCatalog {
       treePath: normalizeTreePath(definition),
       modelClass: resolveModelClass(definition.modelClass),
     });
+    this.#summaryCache.set(definition.id, summary);
+    return summary;
   }
 }
