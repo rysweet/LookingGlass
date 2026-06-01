@@ -1,19 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
+  ArrowKeyPressListener,
   CollisionEndListener,
   CollisionStartListener,
   KeyListener,
   MouseClickOnObjectListener,
+  MouseClickOnScreenListener,
+  NumberKeyPressListener,
   OcclusionListener,
+  PointOfViewChangeListener,
   ProximityEnterListener,
   ProximityExitListener,
   SceneActivationListener,
+  TimeListener,
   TransformationListener,
   ViewEnterListener,
   ViewExitListener,
   WhileCollisionListener,
   WhileProximityListener,
+  type ArrowKeyEvent,
+  type MoveDirection,
+  type MouseClickOnScreenEvent,
+  type NumberKeyEvent,
+  type PointOfViewChangeEvent,
+  type TimeEvent,
 } from "../src/story-api-events.js";
+import { ViewEventHandler } from "../src/event-handlers.js";
 import { SCamera, SBox, SScene } from "../src/story-api/index.js";
 
 describe("story-api-events", () => {
@@ -144,5 +156,177 @@ describe("story-api-events", () => {
     expect(exit.update(camera, [target])).toEqual([
       expect.objectContaining({ type: "view-exit", target }),
     ]);
+  });
+
+  it("emits time events with elapsed and delta seconds via TimeListener", () => {
+    const viewHandler = new ViewEventHandler();
+    const collected: TimeEvent[] = [];
+    const listener = new TimeListener((event) => {
+      collected.push(event);
+    });
+
+    viewHandler.startScene("testScene");
+
+    // First frame: 16ms
+    listener.feed(viewHandler.advanceFrame(0.016));
+    expect(listener.events).toHaveLength(1);
+    expect(listener.events[0].type).toBe("time");
+    expect(listener.events[0].deltaSeconds).toBeCloseTo(0.016, 6);
+    expect(listener.events[0].elapsedSeconds).toBeCloseTo(0.016, 6);
+    expect(listener.events[0].frameIndex).toBe(1);
+
+    // Second frame: another 16ms
+    listener.feed(viewHandler.advanceFrame(0.016));
+    expect(listener.events).toHaveLength(2);
+    expect(listener.events[1].deltaSeconds).toBeCloseTo(0.016, 6);
+    expect(listener.events[1].elapsedSeconds).toBeCloseTo(0.032, 6);
+    expect(listener.events[1].frameIndex).toBe(2);
+
+    // Callback was invoked for each event
+    expect(collected).toHaveLength(2);
+    expect(collected[0].deltaSeconds).toBeCloseTo(0.016, 6);
+
+    // Non-time events in the array are ignored (advanceFrame returns [frame, time])
+    // Only "time" type ViewEvents should produce TimeEvents
+  });
+
+  it("fires screen click events without entity targeting via MouseClickOnScreenListener", () => {
+    const collected: MouseClickOnScreenEvent[] = [];
+    const listener = new MouseClickOnScreenListener((event) => {
+      collected.push(event);
+    });
+
+    // Click at screen coordinates
+    listener.mouseDown({ x: 100, y: 200, z: 0 });
+    const event = listener.mouseUp({ x: 100, y: 200, z: 0 }, Date.now());
+
+    expect(event).not.toBeNull();
+    expect(event!.type).toBe("click");
+    expect(event!.screenX).toBe(100);
+    expect(event!.screenY).toBe(200);
+    expect(event!.point).toEqual({ x: 100, y: 200, z: 0 });
+    expect(listener.events).toHaveLength(1);
+    expect(collected).toHaveLength(1);
+
+    // Second click at different position
+    listener.mouseDown({ x: 50, y: 75, z: 0 });
+    const event2 = listener.mouseUp({ x: 50, y: 75, z: 0 }, Date.now());
+    expect(event2!.screenX).toBe(50);
+    expect(event2!.screenY).toBe(75);
+    expect(listener.events).toHaveLength(2);
+  });
+
+  it("filters only arrow keys and maps to MoveDirection via ArrowKeyPressListener", () => {
+    const collected: ArrowKeyEvent[] = [];
+    const listener = new ArrowKeyPressListener((event) => {
+      collected.push(event);
+    });
+
+    // Arrow keys should produce events
+    const up = listener.keyDown("ArrowUp");
+    expect(up).not.toBeNull();
+    expect(up!.type).toBe("key-press");
+    expect(up!.key).toBe("ArrowUp");
+    expect(up!.direction).toBe("FORWARD" as MoveDirection);
+
+    const down = listener.keyDown("ArrowDown");
+    expect(down!.direction).toBe("BACKWARD" as MoveDirection);
+
+    const left = listener.keyDown("ArrowLeft");
+    expect(left!.direction).toBe("LEFT" as MoveDirection);
+
+    const right = listener.keyDown("ArrowRight");
+    expect(right!.direction).toBe("RIGHT" as MoveDirection);
+
+    // Non-arrow keys should return null and not be pushed to events
+    const letterA = listener.keyDown("a");
+    expect(letterA).toBeNull();
+
+    const space = listener.keyDown("Space");
+    expect(space).toBeNull();
+
+    const enter = listener.keyDown("Enter");
+    expect(enter).toBeNull();
+
+    // Only 4 arrow key events in the events array
+    expect(listener.events).toHaveLength(4);
+    expect(collected).toHaveLength(4);
+
+    // Modifiers are preserved
+    const upWithShift = listener.keyDown("ArrowUp", { shift: true });
+    expect(upWithShift!.modifiers.shift).toBe(true);
+  });
+
+  it("filters only digit keys 0-9 and parses number via NumberKeyPressListener", () => {
+    const collected: NumberKeyEvent[] = [];
+    const listener = new NumberKeyPressListener((event) => {
+      collected.push(event);
+    });
+
+    // Digit keys should produce events
+    const five = listener.keyDown("5");
+    expect(five).not.toBeNull();
+    expect(five!.type).toBe("key-press");
+    expect(five!.key).toBe("5");
+    expect(five!.number).toBe(5);
+
+    const zero = listener.keyDown("0");
+    expect(zero!.number).toBe(0);
+
+    const nine = listener.keyDown("9");
+    expect(nine!.number).toBe(9);
+
+    // Non-digit keys should return null
+    expect(listener.keyDown("a")).toBeNull();
+    expect(listener.keyDown("Enter")).toBeNull();
+    expect(listener.keyDown("ArrowUp")).toBeNull();
+    expect(listener.keyDown("Numpad1")).toBeNull();
+
+    // Only 3 digit events
+    expect(listener.events).toHaveLength(3);
+    expect(collected).toHaveLength(3);
+    expect(listener.events.map((e) => e.number)).toEqual([5, 0, 9]);
+  });
+
+  it("detects camera point-of-view changes via PointOfViewChangeListener", () => {
+    const camera = new SCamera();
+    camera.position = { x: 0, y: 0, z: 0 };
+    camera.orientation = { x: 0, y: 0, z: 0, w: 1 };
+    camera.setFieldOfView(Math.PI / 4);
+
+    const collected: PointOfViewChangeEvent[] = [];
+    const listener = new PointOfViewChangeListener(camera, (event) => {
+      collected.push(event);
+    });
+
+    // No change — check should not fire
+    listener.check();
+    expect(listener.events).toHaveLength(0);
+
+    // Move camera position
+    camera.position = { x: 5, y: 0, z: 0 };
+    listener.check();
+    expect(listener.events).toHaveLength(1);
+    expect(listener.events[0].type).toBe("pov-change");
+    expect(listener.events[0].camera).toBe(camera);
+    expect(listener.events[0].previous.position.x).toBe(0);
+    expect(listener.events[0].current.position.x).toBe(5);
+
+    // Change field of view
+    camera.setFieldOfView(1.2);
+    listener.check();
+    expect(listener.events).toHaveLength(2);
+
+    // No change — check again should not fire
+    listener.check();
+    expect(listener.events).toHaveLength(2);
+
+    // Change orientation
+    camera.orientation = { x: 0, y: 0.707, z: 0, w: 0.707 };
+    listener.check();
+    expect(listener.events).toHaveLength(3);
+
+    // Callback was invoked for each change
+    expect(collected).toHaveLength(3);
   });
 });

@@ -5,6 +5,7 @@ import {
   MouseClickHandler,
   type ModifierState,
 } from "../event-handlers";
+import type { ViewEvent as FrameViewEvent } from "../event-handlers";
 import { VisibilityQuery } from "../entity-queries";
 import {
   SCamera,
@@ -18,6 +19,7 @@ import {
   getEntityBoundingBox,
 } from "../story-api";
 import { distanceBetween, normalizeVec3, subtractVec3 } from "../story-api/expanded-math";
+import { PointOfView } from "../camera-system";
 
 export interface SceneActivationEvent {
   readonly type: "scene-start" | "scene-end";
@@ -239,5 +241,42 @@ export function createKeyPressedHandler(): KeyPressedHandler {
   return new KeyPressedHandler();
 }
 
-export { SCamera, SScene, SThing };
-export type { ModifierState, Property };
+export type MoveDirection = "FORWARD" | "BACKWARD" | "LEFT" | "RIGHT";
+
+export interface TimeEvent {
+  readonly type: "time";
+  readonly elapsedSeconds: number;
+  readonly deltaSeconds: number;
+  readonly frameIndex: number;
+}
+
+export interface MouseClickOnScreenEvent {
+  readonly type: "click" | "double-click" | "drag";
+  readonly screenX: number;
+  readonly screenY: number;
+  readonly point: Position;
+}
+
+export interface ArrowKeyEvent {
+  readonly type: "key-press";
+  readonly key: string;
+  readonly direction: MoveDirection;
+  readonly modifiers: ModifierState;
+}
+
+export interface NumberKeyEvent {
+  readonly type: "key-press";
+  readonly key: string;
+  readonly number: number;
+  readonly modifiers: ModifierState;
+}
+
+export interface PointOfViewChangeEvent {
+  readonly type: "pov-change";
+  readonly previous: PointOfView;
+  readonly current: PointOfView;
+  readonly camera: SCamera;
+}
+
+export { SCamera, SScene, SThing, PointOfView };
+export type { ModifierState, Property, FrameViewEvent };
