@@ -1,6 +1,7 @@
 import { easeIn, easeInOut, easeOut, lerpScalar, linear } from "./animation";
 import type { PoseableEntity } from "./poses";
-import type { Size } from "./story-api/types";
+import type { Size, Position, Orientation } from "./story-api/types";
+import { IDENTITY_ORIENTATION } from "./story-api/expanded-math";
 
 export const AnimationStyle = Object.freeze({
   BEGIN_GENTLY: "BEGIN_GENTLY",
@@ -66,6 +67,7 @@ function resolveStyle(style: AnimationStyle): (portion: number) => number {
 export abstract class DurationAnimation {
   protected elapsedMsInternal = 0;
   protected completeInternal = false;
+  private readonly easingFn: (portion: number) => number;
 
   constructor(
     public readonly durationMs: number,
@@ -74,6 +76,7 @@ export abstract class DurationAnimation {
     if (!Number.isFinite(durationMs) || durationMs < 0) {
       throw new TypeError(`durationMs must be a finite non-negative number, got ${durationMs}`);
     }
+    this.easingFn = resolveStyle(style);
   }
 
   get elapsedMs(): number {
@@ -113,7 +116,7 @@ export abstract class DurationAnimation {
       ? this.durationMs
       : Math.min(this.elapsedMsInternal + sanitizeDelta(deltaMs), this.durationMs);
     this.elapsedMsInternal = nextElapsed;
-    this.apply(resolveStyle(this.style)(this.progress));
+    this.apply(this.easingFn(this.progress));
     if (this.elapsedMsInternal >= this.durationMs) {
       this.completeInternal = true;
       this.finish();
@@ -328,5 +331,242 @@ export class StrikePoseAnimation extends DurationAnimation {
       ...this.target.jointRotations,
       ...this.pose,
     };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Named story-specific animation classes (Alice3 parity)
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface PositionedEntity {
+  position: Position;
+}
+
+interface OrientedEntity extends PositionedEntity {
+  orientation: Orientation;
+}
+
+interface JointedEntity {
+  jointRotations: Record<string, number>;
+}
+
+interface WingedEntity extends JointedEntity {
+  readonly wingJointNames?: readonly string[];
+}
+
+function lerpPosition(from: Position, to: Position, portion: number): Position {
+  return {
+    x: lerpScalar(from.x, to.x, portion),
+    y: lerpScalar(from.y, to.y, portion),
+    z: lerpScalar(from.z, to.z, portion),
+  };
+}
+
+function lerpOrientation(from: Orientation, to: Orientation, portion: number): Orientation {
+  const result = {
+    x: lerpScalar(from.x, to.x, portion),
+    y: lerpScalar(from.y, to.y, portion),
+    z: lerpScalar(from.z, to.z, portion),
+    w: lerpScalar(from.w, to.w, portion),
+  };
+  const len = Math.sqrt(result.x * result.x + result.y * result.y + result.z * result.z + result.w * result.w) || 1;
+  return { x: result.x / len, y: result.y / len, z: result.z / len, w: result.w / len };
+}
+
+function lookAtOrientation(from: Position, to: Position): Orientation {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const mag = Math.sqrt(dx * dx + dz * dz);
+  if (mag === 0) return IDENTITY_ORIENTATION;
+  const yaw = Math.atan2(-dx, -dz);
+  const halfYaw = yaw / 2;
+  return { x: 0, y: Math.sin(halfYaw), z: 0, w: Math.cos(halfYaw) };
+}
+
+function pointAtOrientation(from: Position, to: Position): Orientation {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dz = to.z - from.z;
+  const mag = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (mag === 0) return IDENTITY_ORIENTATION;
+  const yaw = Math.atan2(-dx, -dz);
+  const pitch = Math.asin(dy / mag);
+  const cy = Math.cos(yaw / 2);
+  const sy = Math.sin(yaw / 2);
+  const cp = Math.cos(pitch / 2);
+  const sp = Math.sin(pitch / 2);
+  return {
+    x: cy * sp,
+    y: sy * cp,
+    z: -sy * sp,
+    w: cy * cp,
+  };
+}
+
+export class MoveToAnimation extends DurationAnimation {
+  private readonly startPos: Position;
+
+  constructor(
+    private readonly entity: PositionedEntity,
+    private readonly target: Position,
+    durationMs: number,
+    style: AnimationStyle = AnimationStyle.BEGIN_AND_END_GENTLY,
+  ) {
+    super(durationMs, style);
+    this.startPos = { ...entity.position };
+  }
+
+  protected apply(portion: number): void {
+    this.entity.position = lerpPosition(this.startPos, this.target, portion);
+  }
+}
+
+export class MoveTowardAnimation extends DurationAnimation {
+  private readonly startPos: Position;
+  private readonly targetPos: Position;
+
+  constructor(
+    private readonly entity: PositionedEntity,
+    target: Position,
+    amount: number,
+    durationMs: number,
+    style: AnimationStyle = AnimationStyle.BEGIN_AND_END_GENTLY,
+  ) {
+    super(durationMs, style);
+    this.startPos = { ...entity.position };
+    const dx = target.x - this.startPos.x;
+    const dy = target.y - this.startPos.y;
+    const dz = target.z - this.startPos.z;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    const scale = amount / dist;
+    this.targetPos = {
+      x: this.startPos.x + dx * scale,
+      y: this.startPos.y + dy * scale,
+      z: this.startPos.z + dz * scale,
+    };
+  }
+
+  protected apply(portion: number): void {
+    this.entity.position = lerpPosition(this.startPos, this.targetPos, portion);
+  }
+}
+
+export class OrientToAnimation extends DurationAnimation {
+  private readonly startOrientation: Orientation;
+  private readonly targetOrientation: Orientation;
+
+  constructor(
+    private readonly entity: OrientedEntity,
+    target: Position,
+    durationMs: number,
+    style: AnimationStyle = AnimationStyle.BEGIN_AND_END_GENTLY,
+  ) {
+    super(durationMs, style);
+    this.startOrientation = { ...entity.orientation };
+    this.targetOrientation = pointAtOrientation(entity.position, target);
+  }
+
+  protected apply(portion: number): void {
+    this.entity.orientation = lerpOrientation(this.startOrientation, this.targetOrientation, portion);
+  }
+}
+
+// PointAt is semantically identical to OrientTo (full 3D facing toward target)
+export class PointAtAnimation extends OrientToAnimation {}
+
+export class TurnToFaceAnimation extends DurationAnimation {
+  private readonly startOrientation: Orientation;
+  private readonly targetOrientation: Orientation;
+
+  constructor(
+    private readonly entity: OrientedEntity,
+    target: Position,
+    durationMs: number,
+    style: AnimationStyle = AnimationStyle.BEGIN_AND_END_GENTLY,
+  ) {
+    super(durationMs, style);
+    this.startOrientation = { ...entity.orientation };
+    this.targetOrientation = lookAtOrientation(entity.position, target);
+  }
+
+  protected apply(portion: number): void {
+    this.entity.orientation = lerpOrientation(this.startOrientation, this.targetOrientation, portion);
+  }
+}
+
+export class PlaceAnimation extends DurationAnimation {
+  private readonly startPos: Position;
+
+  constructor(
+    private readonly entity: PositionedEntity,
+    private readonly target: Position,
+    durationMs = 0,
+    style: AnimationStyle = AnimationStyle.NONE,
+  ) {
+    super(durationMs, style);
+    this.startPos = { ...entity.position };
+  }
+
+  protected apply(portion: number): void {
+    this.entity.position = portion >= 1 ? { ...this.target } : lerpPosition(this.startPos, this.target, portion);
+  }
+}
+
+export class StraightenOutJointsAnimation extends DurationAnimation {
+  private readonly startRotations: Record<string, number>;
+  private readonly jointKeys: string[];
+  private readonly output: Record<string, number>;
+
+  constructor(
+    private readonly target: JointedEntity,
+    durationMs: number,
+    style: AnimationStyle = AnimationStyle.BEGIN_AND_END_GENTLY,
+  ) {
+    super(durationMs, style);
+    this.startRotations = { ...target.jointRotations };
+    this.jointKeys = Object.keys(this.startRotations);
+    this.output = Object.create(null) as Record<string, number>;
+  }
+
+  protected apply(portion: number): void {
+    const { output, startRotations, jointKeys } = this;
+    for (let i = 0; i < jointKeys.length; i++) {
+      const key = jointKeys[i];
+      output[key] = lerpScalar(startRotations[key], 0, portion);
+    }
+    this.target.jointRotations = output;
+  }
+}
+
+export class FoldWingsAnimation extends DurationAnimation {
+  private readonly wingStartRotations: Record<string, number>;
+  private readonly wingJoints: readonly string[];
+  private static readonly DEFAULT_WING_JOINTS = [
+    "LEFT_WING_SHOULDER", "LEFT_WING_ELBOW", "LEFT_WING_WRIST", "LEFT_WING_TIP",
+    "RIGHT_WING_SHOULDER", "RIGHT_WING_ELBOW", "RIGHT_WING_WRIST", "RIGHT_WING_TIP",
+  ] as const;
+
+  constructor(
+    private readonly target: WingedEntity,
+    durationMs: number,
+    private readonly foldAngle = 90,
+    style: AnimationStyle = AnimationStyle.BEGIN_AND_END_GENTLY,
+  ) {
+    super(durationMs, style);
+    this.wingJoints = target.wingJointNames ?? FoldWingsAnimation.DEFAULT_WING_JOINTS;
+    // Only snapshot the wing joints we'll actually animate
+    const starts: Record<string, number> = Object.create(null) as Record<string, number>;
+    for (const joint of this.wingJoints) {
+      starts[joint] = target.jointRotations[joint] ?? 0;
+    }
+    this.wingStartRotations = starts;
+  }
+
+  protected apply(portion: number): void {
+    const rotations = this.target.jointRotations;
+    for (const joint of this.wingJoints) {
+      rotations[joint] = lerpScalar(this.wingStartRotations[joint], this.foldAngle, portion);
+    }
+    this.target.jointRotations = rotations;
   }
 }

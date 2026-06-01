@@ -191,6 +191,12 @@ export class SJoint extends SMovableTurnable {
   get width(): number { return this.jointImp.size.value.width; }
   get height(): number { return this.jointImp.size.value.height; }
   get depth(): number { return this.jointImp.size.value.depth; }
+
+  getWidth(): number { return this.width; }
+  getHeight(): number { return this.height; }
+  getDepth(): number { return this.depth; }
+  getPivotVisible(): boolean { return this.isPivotVisible; }
+  setPivotVisible(value: boolean): void { this.isPivotVisible = value; }
 }
 
 export class SJointedModel extends SModel {
@@ -297,6 +303,22 @@ export class SBiped extends SJointedModel {
   getRightWrist(): SJoint | undefined { return this.joint("RIGHT_WRIST"); }
   getLeftHand(): SJoint | undefined { return this.joint("LEFT_HAND"); }
   getRightHand(): SJoint | undefined { return this.joint("RIGHT_HAND"); }
+  getRightThumb(): SJoint | undefined { return this.joint("RIGHT_THUMB"); }
+  getRightThumbKnuckle(): SJoint | undefined { return this.joint("RIGHT_THUMB_KNUCKLE"); }
+  getRightIndexFinger(): SJoint | undefined { return this.joint("RIGHT_INDEX_FINGER"); }
+  getRightIndexFingerKnuckle(): SJoint | undefined { return this.joint("RIGHT_INDEX_FINGER_KNUCKLE"); }
+  getRightMiddleFinger(): SJoint | undefined { return this.joint("RIGHT_MIDDLE_FINGER"); }
+  getRightMiddleFingerKnuckle(): SJoint | undefined { return this.joint("RIGHT_MIDDLE_FINGER_KNUCKLE"); }
+  getRightPinkyFinger(): SJoint | undefined { return this.joint("RIGHT_PINKY_FINGER"); }
+  getRightPinkyFingerKnuckle(): SJoint | undefined { return this.joint("RIGHT_PINKY_FINGER_KNUCKLE"); }
+  getLeftThumb(): SJoint | undefined { return this.joint("LEFT_THUMB"); }
+  getLeftThumbKnuckle(): SJoint | undefined { return this.joint("LEFT_THUMB_KNUCKLE"); }
+  getLeftIndexFinger(): SJoint | undefined { return this.joint("LEFT_INDEX_FINGER"); }
+  getLeftIndexFingerKnuckle(): SJoint | undefined { return this.joint("LEFT_INDEX_FINGER_KNUCKLE"); }
+  getLeftMiddleFinger(): SJoint | undefined { return this.joint("LEFT_MIDDLE_FINGER"); }
+  getLeftMiddleFingerKnuckle(): SJoint | undefined { return this.joint("LEFT_MIDDLE_FINGER_KNUCKLE"); }
+  getLeftPinkyFinger(): SJoint | undefined { return this.joint("LEFT_PINKY_FINGER"); }
+  getLeftPinkyFingerKnuckle(): SJoint | undefined { return this.joint("LEFT_PINKY_FINGER_KNUCKLE"); }
 }
 
 export class SFlyer extends SJointedModel {
@@ -326,6 +348,17 @@ export class SFlyer extends SJointedModel {
   getTail(): SJoint | undefined { return this.joint("TAIL_0"); }
   getLeftHip(): SJoint | undefined { return this.joint("LEFT_HIP"); }
   getRightHip(): SJoint | undefined { return this.joint("RIGHT_HIP"); }
+  getNeck1(): SJoint | undefined { return this.joint("NECK_1"); }
+  getLowerLip(): SJoint | undefined { return this.joint("LOWER_LIP"); }
+  getPelvis(): SJoint | undefined { return this.joint("PELVIS_LOWER_BODY"); }
+  getTail1(): SJoint | undefined { return this.joint("TAIL_1"); }
+  getTail2(): SJoint | undefined { return this.joint("TAIL_2"); }
+  getLeftKnee(): SJoint | undefined { return this.joint("LEFT_KNEE"); }
+  getLeftAnkle(): SJoint | undefined { return this.joint("LEFT_ANKLE"); }
+  getLeftFoot(): SJoint | undefined { return this.joint("LEFT_FOOT"); }
+  getRightKnee(): SJoint | undefined { return this.joint("RIGHT_KNEE"); }
+  getRightAnkle(): SJoint | undefined { return this.joint("RIGHT_ANKLE"); }
+  getRightFoot(): SJoint | undefined { return this.joint("RIGHT_FOOT"); }
 }
 
 export class SQuadruped extends SJointedModel {
@@ -359,11 +392,61 @@ export class SQuadruped extends SJointedModel {
   getTail(): SJoint | undefined { return this.joint("TAIL_0"); }
   getBackLeftHip(): SJoint | undefined { return this.joint("BACK_LEFT_HIP"); }
   getBackRightHip(): SJoint | undefined { return this.joint("BACK_RIGHT_HIP"); }
+  getLeftEyelid(): SJoint | undefined { return this.joint("LEFT_EYELID"); }
+  getRightEyelid(): SJoint | undefined { return this.joint("RIGHT_EYELID"); }
+  getPelvis(): SJoint | undefined { return this.joint("PELVIS_LOWER_BODY"); }
+  getTail1(): SJoint | undefined { return this.joint("TAIL_1"); }
+  getTail2(): SJoint | undefined { return this.joint("TAIL_2"); }
+  getTail3(): SJoint | undefined { return this.joint("TAIL_3"); }
+  getBackLeftKnee(): SJoint | undefined { return this.joint("BACK_LEFT_KNEE"); }
+  getBackLeftHock(): SJoint | undefined { return this.joint("BACK_LEFT_HOCK"); }
+  getBackLeftAnkle(): SJoint | undefined { return this.joint("BACK_LEFT_ANKLE"); }
+  getBackLeftFoot(): SJoint | undefined { return this.joint("BACK_LEFT_FOOT"); }
+  getBackLeftToe(): SJoint | undefined { return this.joint("BACK_LEFT_TOE"); }
+  getBackRightKnee(): SJoint | undefined { return this.joint("BACK_RIGHT_KNEE"); }
+  getBackRightHock(): SJoint | undefined { return this.joint("BACK_RIGHT_HOCK"); }
+  getBackRightAnkle(): SJoint | undefined { return this.joint("BACK_RIGHT_ANKLE"); }
+  getBackRightFoot(): SJoint | undefined { return this.joint("BACK_RIGHT_FOOT"); }
+  getBackRightToe(): SJoint | undefined { return this.joint("BACK_RIGHT_TOE"); }
 }
 
 export class SProp extends SJointedModel { constructor(name?: string | null) { super(name, PROP_JOINTS); } }
-export class SSlitherer extends SJointedModel { constructor(name?: string | null) { super(name, SLITHERER_JOINTS); } get head(): SJoint | undefined { return this.getJointEntity("HEAD"); } get tail(): SJoint | undefined { return this.getJointEntity("TAIL"); } }
-export class SSwimmer extends SJointedModel { constructor(name?: string | null) { super(name, SWIMMER_JOINTS); } swimTo(entity: SThing): void { this.moveAndOrientTo(entity); } get tail(): SJoint | undefined { return this.getJointEntity("TAIL"); } }
+export class SSlitherer extends SJointedModel {
+  constructor(name?: string | null) { super(name, SLITHERER_JOINTS); }
+  get head(): SJoint | undefined { return this.getJointEntity("HEAD"); }
+  get tail(): SJoint | undefined { return this.getJointEntity("TAIL"); }
+  getRoot(): SJoint | undefined { return this.joint("ROOT"); }
+  getNeck(): SJoint | undefined { return this.joint("NECK"); }
+  getHead(): SJoint | undefined { return this.joint("HEAD"); }
+  getMouth(): SJoint | undefined { return this.joint("MOUTH"); }
+  getLeftEye(): SJoint | undefined { return this.joint("LEFT_EYE"); }
+  getLeftEyelid(): SJoint | undefined { return this.joint("LEFT_EYELID"); }
+  getRightEye(): SJoint | undefined { return this.joint("RIGHT_EYE"); }
+  getRightEyelid(): SJoint | undefined { return this.joint("RIGHT_EYELID"); }
+  getSpineBase(): SJoint | undefined { return this.joint("SPINE_BASE"); }
+  getSpineMiddle(): SJoint | undefined { return this.joint("SPINE_MIDDLE"); }
+  getSpineUpper(): SJoint | undefined { return this.joint("SPINE_UPPER"); }
+  getTail(): SJoint | undefined { return this.joint("TAIL"); }
+}
+
+export class SSwimmer extends SJointedModel {
+  constructor(name?: string | null) { super(name, SWIMMER_JOINTS); }
+  swimTo(entity: SThing): void { this.moveAndOrientTo(entity); }
+  get tail(): SJoint | undefined { return this.getJointEntity("TAIL"); }
+  getRoot(): SJoint | undefined { return this.joint("ROOT"); }
+  getNeck(): SJoint | undefined { return this.joint("NECK"); }
+  getHead(): SJoint | undefined { return this.joint("HEAD"); }
+  getMouth(): SJoint | undefined { return this.joint("MOUTH"); }
+  getLeftEye(): SJoint | undefined { return this.joint("LEFT_EYE"); }
+  getLeftEyelid(): SJoint | undefined { return this.joint("LEFT_EYELID"); }
+  getRightEye(): SJoint | undefined { return this.joint("RIGHT_EYE"); }
+  getRightEyelid(): SJoint | undefined { return this.joint("RIGHT_EYELID"); }
+  getFrontLeftFin(): SJoint | undefined { return this.joint("FRONT_LEFT_FIN"); }
+  getFrontRightFin(): SJoint | undefined { return this.joint("FRONT_RIGHT_FIN"); }
+  getSpineBase(): SJoint | undefined { return this.joint("SPINE_BASE"); }
+  getSpineMiddle(): SJoint | undefined { return this.joint("SPINE_MIDDLE"); }
+  getTail(): SJoint | undefined { return this.joint("TAIL"); }
+}
 
 export class SProgram {
   #imp = new ProgramImp();

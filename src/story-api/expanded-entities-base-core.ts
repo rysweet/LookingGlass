@@ -14,6 +14,7 @@ import type {
   SpatialRelation,
   TurnDirection,
   Vec3,
+  BoundingBox,
 } from "./expanded-types";
 
 const nonEmptyString = (value: string): boolean => typeof value === "string" && value.trim().length > 0;
@@ -104,6 +105,18 @@ export class SThing implements ImplementableEntity {
   toString(): string {
     return this.name ?? `unnamed ${this.constructor.name}`;
   }
+
+  getVehicle(): SThing | null {
+    return (this.imp.vehicle?.owner as SThing | undefined) ?? null;
+  }
+
+  getVantagePoint(): Position {
+    return this.imp.getAbsolutePosition();
+  }
+
+  getCollisionHull(): BoundingBox | null {
+    return this.imp.getBoundingBox();
+  }
 }
 
 export class SGround extends SThing {
@@ -121,6 +134,10 @@ export class SGround extends SThing {
 
   set opacity(value: number) {
     this.groundImp.opacity.value = value;
+  }
+
+  setVehicle(vehicle: SThing | null): void {
+    this.imp.setVehicle(vehicle?.imp ?? null);
   }
 }
 
@@ -227,6 +244,25 @@ export class SScene extends SThing {
 
   removeSceneActivationListener(listener: (isActive: boolean, activationCount: number) => void): void {
     this.sceneImp.removeSceneActivationListener(listener);
+  }
+
+  readonly #objectAdditionListeners = new Set<(entity: SThing) => void>();
+  readonly #timeListeners = new Set<(time: number) => void>();
+
+  addObjectAdditionListener(listener: (entity: SThing) => void): void {
+    this.#objectAdditionListeners.add(listener);
+  }
+
+  removeObjectAdditionListener(listener: (entity: SThing) => void): void {
+    this.#objectAdditionListeners.delete(listener);
+  }
+
+  addTimeListener(listener: (time: number) => void): void {
+    this.#timeListeners.add(listener);
+  }
+
+  removeTimeListener(listener: (time: number) => void): void {
+    this.#timeListeners.delete(listener);
   }
 }
 

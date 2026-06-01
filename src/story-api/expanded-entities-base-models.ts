@@ -7,6 +7,7 @@ import {
   SMovableTurnable,
   SThing,
 } from "./expanded-entities-base-core";
+import type { SVRHand } from "./expanded-entities-markers";
 
 const nonEmptyString = (value: string): boolean => typeof value === "string" && value.trim().length > 0;
 
@@ -99,6 +100,9 @@ export class SCamera extends SMovableTurnable {
     this.verticalViewingAngle = value;
     this.horizontalViewingAngle = value;
   }
+
+  getLeftHand(): SVRHand | null { return null; }
+  getRightHand(): SVRHand | null { return null; }
 }
 
 export class SModel extends SMovableTurnable {
