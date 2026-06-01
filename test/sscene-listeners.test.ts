@@ -319,7 +319,7 @@ describe("SScene entity-bound listener convenience methods", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
-// 3. PROXIMITY LISTENERS — Map<SThing, Set<{distance, listener}>>
+// 3. PROXIMITY LISTENERS — Map<SThing, Map<callback, distance>>
 // ═══════════════════════════════════════════════════════════════════════
 
 describe("SScene proximity listener convenience methods", () => {
