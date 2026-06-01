@@ -31,8 +31,15 @@ export class Color {
   static readonly BLACK = new Color(0, 0, 0, 1);
   static readonly BLUE = new Color(0, 0, 1, 1);
   static readonly CYAN = new Color(0, 1, 1, 1);
+  static readonly DARK_GRAY = new Color(64 / 255, 64 / 255, 64 / 255, 1);
+  static readonly GRAY = new Color(128 / 255, 128 / 255, 128 / 255, 1);
   static readonly GREEN = new Color(0, 1, 0, 1);
+  static readonly LIGHT_GRAY = new Color(192 / 255, 192 / 255, 192 / 255, 1);
+  static readonly LIME = new Color(0.5, 1, 0, 1);
   static readonly MAGENTA = new Color(1, 0, 1, 1);
+  static readonly ORANGE = new Color(1, 200 / 255, 0, 1);
+  static readonly PINK = new Color(1, 175 / 255, 175 / 255, 1);
+  static readonly PURPLE = new Color(0.5, 0, 0.5, 1);
   static readonly RED = new Color(1, 0, 0, 1);
   static readonly WHITE = new Color(1, 1, 1, 1);
   static readonly YELLOW = new Color(1, 1, 0, 1);
@@ -290,9 +297,19 @@ export class PaintPalette {
   static readonly BASIC = new PaintPalette("basic", {
     black: Color.BLACK,
     blue: Color.BLUE,
+    cyan: Color.CYAN,
+    dark_gray: Color.DARK_GRAY,
+    gray: Color.GRAY,
     green: Color.GREEN,
+    light_gray: Color.LIGHT_GRAY,
+    lime: Color.LIME,
+    magenta: Color.MAGENTA,
+    orange: Color.ORANGE,
+    pink: Color.PINK,
+    purple: Color.PURPLE,
     red: Color.RED,
     white: Color.WHITE,
+    yellow: Color.YELLOW,
   });
 
   static readonly OCEAN = new PaintPalette("ocean", {

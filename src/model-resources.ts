@@ -33,3 +33,19 @@ export {
   makeEnumName,
 } from "./model-resources/helpers.js";
 export { ModelResourceCatalog } from "./model-resources/catalog.js";
+export {
+  AircraftResource,
+  AutomobileResource,
+  BipedResource,
+  FishResource,
+  FlyerResource,
+  MarineMammalResource,
+  PropResource,
+  QuadrupedResource,
+  SlithererResource,
+  SwimmerResource,
+  TrainResource,
+  VehicleResource,
+  WatercraftResource,
+  type IndividualModelResource,
+} from "./model-resources/individual-resources.js";

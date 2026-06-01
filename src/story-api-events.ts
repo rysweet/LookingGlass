@@ -2,14 +2,29 @@ export {
   type CollisionTransitionEvent,
   type KeyListenerEvent,
   type MouseClickOnObjectEvent,
+  type MouseClickOnScreenEvent,
   type OcclusionEvent,
   type ProximityTransitionEvent,
   type ProximityWatch,
   type SceneActivationEvent,
   type TransformationEvent,
   type ViewEvent,
+  type TimeEvent,
+  type ArrowKeyEvent,
+  type NumberKeyEvent,
+  type PointOfViewChangeEvent,
+  type MoveDirection,
 } from "./story-api-events/shared.js";
-export { KeyListener, MouseClickOnObjectListener, SceneActivationListener } from "./story-api-events/basic-listeners.js";
+export {
+  KeyListener,
+  MouseClickOnObjectListener,
+  MouseClickOnScreenListener,
+  SceneActivationListener,
+  TimeListener,
+  ArrowKeyPressListener,
+  NumberKeyPressListener,
+  PointOfViewChangeListener,
+} from "./story-api-events/basic-listeners.js";
 export {
   CollisionEndListener,
   CollisionStartListener,

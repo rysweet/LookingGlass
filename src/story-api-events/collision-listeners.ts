@@ -58,9 +58,13 @@ export class WhileCollisionListener {
   constructor(onEvent?: (event: CollisionTransitionEvent) => void) { this.#onEvent = onEvent; }
 
   update(entities: readonly SThing[]): CollisionTransitionEvent[] {
-    const events = [...collectCollisionPairs(entities).values()].map((pair) => ({ type: "while-collision" as const, ...pair }));
-    this.events.push(...events);
-    events.forEach((event) => this.#onEvent?.(event));
+    const events: CollisionTransitionEvent[] = [];
+    for (const pair of collectCollisionPairs(entities).values()) {
+      const event: CollisionTransitionEvent = { type: "while-collision", ...pair };
+      this.events.push(event);
+      this.#onEvent?.(event);
+      events.push(event);
+    }
     return events;
   }
 }
@@ -106,9 +110,10 @@ export class ProximityExitListener extends ProximityListenerBase {
 
 export class WhileProximityListener extends ProximityListenerBase {
   update(watches: readonly ProximityWatch[]): ProximityTransitionEvent[] {
-    const events = [...collectProximityPairs(watches).values()].map((proximity) => ({ type: "while-proximity" as const, ...proximity }));
-    this.events.push(...events);
-    events.forEach((event) => this.onEvent?.(event));
+    const events: ProximityTransitionEvent[] = [];
+    for (const proximity of collectProximityPairs(watches).values()) {
+      this.emit({ type: "while-proximity", ...proximity }, events);
+    }
     return events;
   }
 }

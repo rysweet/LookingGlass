@@ -3,10 +3,18 @@ import {
   createMouseClickHandler,
   clonePosition,
   entityKey,
+  type ArrowKeyEvent,
+  type FrameViewEvent,
   type KeyListenerEvent,
   type ModifierState,
   type MouseClickOnObjectEvent,
+  type MouseClickOnScreenEvent,
+  type MoveDirection,
+  type NumberKeyEvent,
+  type PointOfViewChangeEvent,
   type SceneActivationEvent,
+  type TimeEvent,
+  PointOfView,
   SCamera,
   SScene,
   SThing,
@@ -59,16 +67,17 @@ export class MouseClickOnObjectListener {
   }
 
   mouseDown(point: { x: number; y: number; z: number }, targets: readonly SThing[]): string | null {
-    this.#targets = this.#mapTargets(targets);
-    return this.#handler.mouseDown(point, this.#toMouseHitTargets(targets));
+    const { map, hitTargets } = this.#buildTargetData(targets);
+    this.#targets = map;
+    return this.#handler.mouseDown(point, hitTargets);
   }
 
   mouseUp(point: { x: number; y: number; z: number }, timeMs: number, targets: readonly SThing[]): MouseClickOnObjectEvent | null {
-    const targetMap = this.#mapTargets(targets);
-    for (const [key, entity] of targetMap) {
+    const { map, hitTargets } = this.#buildTargetData(targets);
+    for (const [key, entity] of map) {
       this.#targets.set(key, entity);
     }
-    const interaction = this.#handler.mouseUp(point, timeMs, this.#toMouseHitTargets(targets));
+    const interaction = this.#handler.mouseUp(point, timeMs, hitTargets);
     if (!interaction) {
       return null;
     }
@@ -85,15 +94,16 @@ export class MouseClickOnObjectListener {
     return event;
   }
 
-  #mapTargets(targets: readonly SThing[]): Map<string, SThing> {
-    return new Map(targets.map((target) => [entityKey(target), target]));
-  }
-
-  #toMouseHitTargets(targets: readonly SThing[]) {
-    return targets.flatMap((target) => {
+  #buildTargetData(targets: readonly SThing[]): { map: Map<string, SThing>; hitTargets: Array<{ id: string; bounds: NonNullable<ReturnType<typeof getEntityBoundingBox>> }> } {
+    const map = new Map<string, SThing>();
+    const hitTargets: Array<{ id: string; bounds: NonNullable<ReturnType<typeof getEntityBoundingBox>> }> = [];
+    for (const target of targets) {
+      const key = entityKey(target);
+      map.set(key, target);
       const bounds = getEntityBoundingBox(target);
-      return bounds ? [{ id: entityKey(target), bounds }] : [];
-    });
+      if (bounds) hitTargets.push({ id: key, bounds });
+    }
+    return { map, hitTargets };
   }
 }
 
@@ -140,5 +150,159 @@ export class KeyListener {
 
   isPressed(key: string): boolean {
     return this.#handler.isPressed(key);
+  }
+}
+
+const ARROW_KEY_DIRECTION_MAP: Readonly<Record<string, MoveDirection>> = {
+  ArrowUp: "FORWARD",
+  ArrowDown: "BACKWARD",
+  ArrowLeft: "LEFT",
+  ArrowRight: "RIGHT",
+};
+
+const DIGIT_KEYS = new Set(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
+
+export class TimeListener {
+  readonly events: TimeEvent[] = [];
+  readonly #onEvent?: (event: TimeEvent) => void;
+  #previousElapsed = 0;
+
+  constructor(onEvent?: (event: TimeEvent) => void) {
+    this.#onEvent = onEvent;
+  }
+
+  feed(viewEvents: readonly FrameViewEvent[]): void {
+    for (const ve of viewEvents) {
+      if (ve.type !== "time") continue;
+      const delta = ve.timeSeconds - this.#previousElapsed;
+      const event: TimeEvent = {
+        type: "time",
+        elapsedSeconds: ve.timeSeconds,
+        deltaSeconds: delta,
+        frameIndex: ve.frameIndex,
+      };
+      this.#previousElapsed = ve.timeSeconds;
+      this.events.push(event);
+      this.#onEvent?.(event);
+    }
+  }
+}
+
+export class MouseClickOnScreenListener {
+  readonly events: MouseClickOnScreenEvent[] = [];
+  readonly #handler;
+  readonly #onEvent?: (event: MouseClickOnScreenEvent) => void;
+
+  constructor(onEvent?: (event: MouseClickOnScreenEvent) => void, options: { doubleClickWindowMs?: number; dragThreshold?: number } = {}) {
+    this.#onEvent = onEvent;
+    this.#handler = createMouseClickHandler(options);
+  }
+
+  mouseDown(point: { x: number; y: number; z: number }): void {
+    this.#handler.mouseDown(point);
+  }
+
+  mouseUp(point: { x: number; y: number; z: number }, timeMs: number): MouseClickOnScreenEvent | null {
+    const interaction = this.#handler.mouseUp(point, timeMs);
+    if (!interaction) return null;
+    const event: MouseClickOnScreenEvent = {
+      type: interaction.type,
+      screenX: point.x,
+      screenY: point.y,
+      point: clonePosition(point),
+    };
+    this.events.push(event);
+    this.#onEvent?.(event);
+    return event;
+  }
+}
+
+export class ArrowKeyPressListener {
+  readonly events: ArrowKeyEvent[] = [];
+  readonly #handler = createKeyPressedHandler();
+  readonly #onEvent?: (event: ArrowKeyEvent) => void;
+
+  constructor(onEvent?: (event: ArrowKeyEvent) => void) {
+    this.#onEvent = onEvent;
+  }
+
+  keyDown(key: string, modifiers: Partial<ModifierState> = {}): ArrowKeyEvent | null {
+    const direction = ARROW_KEY_DIRECTION_MAP[key];
+    if (!direction) return null;
+    this.#handler.keyDown(key, modifiers);
+    const event: ArrowKeyEvent = {
+      type: "key-press",
+      key,
+      direction,
+      modifiers: this.#handler.modifiers,
+    };
+    this.events.push(event);
+    this.#onEvent?.(event);
+    return event;
+  }
+}
+
+export class NumberKeyPressListener {
+  readonly events: NumberKeyEvent[] = [];
+  readonly #handler = createKeyPressedHandler();
+  readonly #onEvent?: (event: NumberKeyEvent) => void;
+
+  constructor(onEvent?: (event: NumberKeyEvent) => void) {
+    this.#onEvent = onEvent;
+  }
+
+  keyDown(key: string, modifiers: Partial<ModifierState> = {}): NumberKeyEvent | null {
+    if (!DIGIT_KEYS.has(key)) return null;
+    this.#handler.keyDown(key, modifiers);
+    const event: NumberKeyEvent = {
+      type: "key-press",
+      key,
+      number: Number.parseInt(key, 10),
+      modifiers: this.#handler.modifiers,
+    };
+    this.events.push(event);
+    this.#onEvent?.(event);
+    return event;
+  }
+}
+
+export class PointOfViewChangeListener {
+  readonly events: PointOfViewChangeEvent[] = [];
+  readonly #camera: SCamera;
+  readonly #onEvent?: (event: PointOfViewChangeEvent) => void;
+  #previous: PointOfView;
+
+  constructor(camera: SCamera, onEvent?: (event: PointOfViewChangeEvent) => void) {
+    this.#camera = camera;
+    this.#onEvent = onEvent;
+    this.#previous = PointOfView.capture(camera);
+  }
+
+  check(): void {
+    const current = PointOfView.capture(this.#camera);
+    if (this.#povEquals(this.#previous, current)) return;
+    const event: PointOfViewChangeEvent = {
+      type: "pov-change",
+      previous: this.#previous,
+      current,
+      camera: this.#camera,
+    };
+    this.#previous = current;
+    this.events.push(event);
+    this.#onEvent?.(event);
+  }
+
+  #povEquals(a: PointOfView, b: PointOfView): boolean {
+    const eps = 1e-9;
+    return (
+      Math.abs(a.position.x - b.position.x) <= eps
+      && Math.abs(a.position.y - b.position.y) <= eps
+      && Math.abs(a.position.z - b.position.z) <= eps
+      && Math.abs(a.orientation.x - b.orientation.x) <= eps
+      && Math.abs(a.orientation.y - b.orientation.y) <= eps
+      && Math.abs(a.orientation.z - b.orientation.z) <= eps
+      && Math.abs(a.orientation.w - b.orientation.w) <= eps
+      && Math.abs(a.fieldOfView - b.fieldOfView) <= eps
+    );
   }
 }
