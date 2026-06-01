@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SScene } from "../src/story-api/index.js";
+import { SScene, SBox } from "../src/story-api/index.js";
 
 /**
  * Step 16b Outside-In Scenarios — testing SScene listener API
@@ -47,28 +47,33 @@ describe("Step 16b: Outside-In Scenario 2 (Edge - Listener Lifecycle)", () => {
 
   it("full lifecycle for all proximity/occlusion listeners", () => {
     const scene = new SScene();
+    const entity = new SBox();
     const noop = () => {};
-    const pairs = [
-      ["addProximityEnterListener", "removeProximityEnterListener"],
-      ["addProximityExitListener", "removeProximityExitListener"],
+    const entityBound = [
       ["addOcclusionStartListener", "removeOcclusionStartListener"],
       ["addOcclusionEndListener", "removeOcclusionEndListener"],
       ["addWhileInViewListener", "removeWhileInViewListener"],
       ["addWhileOcclusionListener", "removeWhileOcclusionListener"],
     ] as const;
-    for (const [add, remove] of pairs) {
-      (scene as any)[add](noop);
-      (scene as any)[remove](noop);
+    for (const [add, remove] of entityBound) {
+      (scene as any)[add](entity, noop);
+      (scene as any)[remove](entity, noop);
     }
+    // Proximity methods require (entity, distance, listener)
+    scene.addProximityEnterListener(entity, 5, noop);
+    scene.removeProximityEnterListener(entity, noop);
+    scene.addProximityExitListener(entity, 5, noop);
+    scene.removeProximityExitListener(entity, noop);
   });
 
   it("collision start/end listener lifecycle", () => {
     const scene = new SScene();
+    const entity = new SBox();
     const noop = () => {};
-    scene.addCollisionStartListener(noop);
-    scene.addCollisionEndListener(noop);
-    scene.removeCollisionStartListener(noop);
-    scene.removeCollisionEndListener(noop);
+    scene.addCollisionStartListener(entity, noop);
+    scene.addCollisionEndListener(entity, noop);
+    scene.removeCollisionStartListener(entity, noop);
+    scene.removeCollisionEndListener(entity, noop);
   });
 
   it("PointOfView, Arrow key, and Number key listener lifecycle", () => {

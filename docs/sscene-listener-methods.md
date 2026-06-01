@@ -16,7 +16,7 @@ counterparts fall into three categories based on their signatures:
 |----------|---------|-----------|---------|
 | **Simple** | Mouse click on screen, mouse click on object, key press, arrow key, number key, point-of-view change | `(listener)` → `void` | `Set<callback>` |
 | **Entity-bound** | Collision start/end, occlusion start/end, while-in-view, while-occlusion | `(entity, listener)` → `void` | `Map<SThing, Set<callback>>` |
-| **Proximity** | Proximity enter, proximity exit | `(entity, distance, listener)` → `void` | `Map<SThing, Set<{distance, listener}>>` |
+| **Proximity** | Proximity enter, proximity exit | `(entity, distance, listener)` → `void` | `Map<SThing, Map<callback, distance>>` |
 
 ## Quick Start
 
@@ -377,7 +377,7 @@ scene.addWhileOcclusionListener(bunny, (event) => {
 
 Proximity listeners take a target entity and a distance threshold. The
 listener fires when any other entity enters or exits the threshold distance
-from the target. Internally stored as `Map<SThing, Set<{distance, listener}>>`.
+from the target. Internally stored as `Map<SThing, Map<callback, distance>>`.
 
 ### addProximityEnterListener / removeProximityEnterListener
 
