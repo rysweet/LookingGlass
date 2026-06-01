@@ -24,7 +24,7 @@ so the `eatme` test suite can drive real curriculum workflows.
 | --- | --- | --- |
 | Tweedle | Parses, checks, and runs Alice code | [Tweedle parser](./tweedle-parser.md), [Tweedle type system](./tweedle-type-system.md), [Tweedle typechecker](./tweedle-typechecker.md), [VM scoping and functions](./vm-scoping-and-functions.md) |
 | AST and serialization | Stores program structure and converts it to and from files | [Serialization](./serialization.md), [Tweedle code generation](./tweedle-codegen.md) |
-| Story API and scene model | Represents scenes, entities, events, and runtime behavior | [Story API](./story-api.md), [Event system](./event-system.md), [Collision detection](./collision-detection.md) |
+| Story API and scene model | Represents scenes, entities, events, and runtime behavior | [Story API](./story-api.md), [SScene listener methods](./sscene-listener-methods.md), [Event system](./event-system.md), [Collision detection](./collision-detection.md) |
 | Rendering | Builds and draws 3D scenes in the browser | [Scene graph](./scene-graph.md), [Scene rendering](./scene-rendering.md), [Scene manager](./scene-manager.md) |
 | IDE workflows | Supports editing, running, and curriculum tasks | [IDE operations](./ide-operations.md), [Grading pipeline](./grading-pipeline.md) |
 | Assets and resources | Loads models, images, audio, and project files | [Model resources](./model-resources.md), [Resource manager](./resource-manager.md), [Project IO](./project-io.md), [Image editor](./image-editor.md), [Audio](./audio.md) |
@@ -59,6 +59,7 @@ so the `eatme` test suite can drive real curriculum workflows.
 - [Scene rendering](./scene-rendering.md)
 - [Serialization](./serialization.md)
 - [Statement execution](./statement-execution.md)
+- [SScene listener methods](./sscene-listener-methods.md)
 - [Story API](./story-api.md)
 - [Tweedle code generation](./tweedle-codegen.md)
 - [Tweedle parser](./tweedle-parser.md)
