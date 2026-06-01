@@ -154,27 +154,31 @@ export class GalleryCatalog {
     const queryText = query.trim().toLowerCase();
     const requiredTags = new Set((options.tags ?? []).map((tag) => tag.toLowerCase()));
     const category = options.category?.trim().toLowerCase();
+    const results: GalleryModel[] = [];
 
-    return this.list().filter((model) => {
+    for (const model of this.models.values()) {
       if (category && model.category.toLowerCase() !== category) {
-        return false;
+        continue;
       }
-      const modelTags = new Set(model.tags.map((tag) => tag.toLowerCase()));
-      for (const tag of requiredTags) {
-        if (!modelTags.has(tag)) {
-          return false;
+      if (requiredTags.size > 0) {
+        const modelTags = new Set(model.tags.map((tag) => tag.toLowerCase()));
+        let allMatch = true;
+        for (const tag of requiredTags) {
+          if (!modelTags.has(tag)) { allMatch = false; break; }
         }
+        if (!allMatch) continue;
       }
-      if (!queryText) {
-        return true;
-      }
-      return (
+      if (queryText && !(
         model.id.toLowerCase().includes(queryText) ||
         model.name.toLowerCase().includes(queryText) ||
         model.className.toLowerCase().includes(queryText) ||
         model.tags.some((tag) => tag.toLowerCase().includes(queryText))
-      );
-    });
+      )) {
+        continue;
+      }
+      results.push(cloneModel(model));
+    }
+    return results;
   }
 }
 

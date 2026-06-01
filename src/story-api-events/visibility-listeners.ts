@@ -92,7 +92,7 @@ export class TransformationListener {
 
 abstract class ViewListenerBase {
   readonly events: ViewEvent[] = [];
-  protected readonly visible = new Set<string>();
+  protected visible = new Set<string>();
   constructor(protected readonly onEvent?: (event: ViewEvent) => void) {}
 }
 
@@ -108,8 +108,7 @@ export class ViewEnterListener extends ViewListenerBase {
       const event: ViewEvent = { type: "view-enter", camera, target };
       this.events.push(event); this.onEvent?.(event); events.push(event);
     }
-    this.visible.clear();
-    currentVisible.forEach((key) => this.visible.add(key));
+    this.visible = currentVisible;
     return events;
   }
 }
@@ -129,8 +128,7 @@ export class ViewExitListener extends ViewListenerBase {
       const event: ViewEvent = { type: "view-exit", camera, target };
       this.events.push(event); this.onEvent?.(event); events.push(event);
     }
-    this.visible.clear();
-    currentVisible.forEach((key) => this.visible.add(key));
+    this.visible = currentVisible;
     return events;
   }
 }
@@ -151,8 +149,7 @@ export class WhileInViewListener extends ViewListenerBase {
         this.events.push(event); this.onEvent?.(event); events.push(event);
       }
     }
-    this.visible.clear();
-    currentVisible.forEach((key) => this.visible.add(key));
+    this.visible = currentVisible;
     return events;
   }
 }
