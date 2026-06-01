@@ -99,8 +99,10 @@ class ImmediateAnimation implements AnimationClip {
   }
 }
 
+const HEX_COLOR_RE = /^#?([\da-f]{6})$/i;
+
 function interpolatePaint(from: string, to: string, portion: number): string {
-  const hex = /^#?([\da-f]{6})$/i;
+  const hex = HEX_COLOR_RE;
   const fromMatch = hex.exec(from.trim());
   const toMatch = hex.exec(to.trim());
   if (!fromMatch || !toMatch) {

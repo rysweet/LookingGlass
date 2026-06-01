@@ -272,9 +272,13 @@ export class ProjectManager {
   }
 
   getBackups(fileName?: string): ProjectBackup[] {
-    return this.backupHistory.filter(
-      (backup) => fileName == null || backup.fileName === fileName,
-    );
+    const result: ProjectBackup[] = [];
+    for (const backup of this._backupHistory) {
+      if (fileName == null || backup.fileName === fileName) {
+        result.push({ ...backup, data: new Uint8Array(backup.data) });
+      }
+    }
+    return result;
   }
 
   private _findLatestBackup(fileName: string): ProjectBackup | null {
@@ -287,12 +291,11 @@ export class ProjectManager {
       timestamp: Date.now(),
       data: new Uint8Array(data),
     };
-    const fileBackups = this._backupHistory.filter(
-      (entry) => entry.fileName === fileName,
-    );
-    const otherBackups = this._backupHistory.filter(
-      (entry) => entry.fileName !== fileName,
-    );
+    const fileBackups: ProjectBackup[] = [];
+    const otherBackups: ProjectBackup[] = [];
+    for (const entry of this._backupHistory) {
+      (entry.fileName === fileName ? fileBackups : otherBackups).push(entry);
+    }
     fileBackups.unshift(backup);
     this._backupHistory = [
       ...otherBackups,
