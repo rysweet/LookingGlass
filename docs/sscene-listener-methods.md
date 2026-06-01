@@ -517,8 +517,9 @@ These convenience methods complement the three listeners already on `SScene`:
 | `addObjectAdditionListener(listener)` | Local `Set<callback>` — fires when entities are added |
 | `addTimeListener(listener)` | Local `Set<callback>` — fires on time ticks |
 
-The new methods follow the same patterns: simple listeners use `Set<callback>`
-and entity-bound/proximity listeners use `Map<SThing, Set<...>>`.
+The new methods follow the same patterns: simple listeners use `Set<callback>`,
+entity-bound listeners use `Map<SThing, Set<callback>>`, and proximity
+listeners use `Map<SThing, Map<callback, distance>>`.
 
 ## Java API Parity
 
