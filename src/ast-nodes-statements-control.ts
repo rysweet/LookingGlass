@@ -32,6 +32,18 @@ export class DoInOrderStatement extends DoInOrder {}
 
 export class DoTogether extends AbstractStatementWithBody {
   readonly type = "DoTogether" as const;
+
+  getStatementCount(): number {
+    return this.body.length;
+  }
+
+  isEmpty(): boolean {
+    return this.body.length === 0;
+  }
+
+  getStatements(): readonly Statement[] {
+    return this.body;
+  }
 }
 
 export class DoTogetherStatement extends DoTogether {}
@@ -148,6 +160,22 @@ export class CountLoop extends AbstractLoop {
     this.attachNode(variable);
     this.attachNode(constant);
     this.attachNode(count);
+  }
+
+  getCountExpression(): Expression {
+    return this.count;
+  }
+
+  getLoopVariable(): UserLocal | null {
+    return this.variable;
+  }
+
+  getLoopConstant(): UserLocal | null {
+    return this.constant;
+  }
+
+  isIndexed(): boolean {
+    return this.variable !== null;
   }
 
   protected override getChildNodes(): AbstractNode[] {
