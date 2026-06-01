@@ -416,7 +416,7 @@ describe("SScene listener method existence", () => {
     "addPointOfViewChangeListener",
     "removePointOfViewChangeListener",
   ] as const)("has simple listener method: %s", (method) => {
-    expect(typeof (scene as Record<string, unknown>)[method]).toBe("function");
+    expect(typeof (scene as unknown as Record<string, unknown>)[method]).toBe("function");
   });
 
   // Entity-bound listeners (6 add + 6 remove = 12)
@@ -434,7 +434,7 @@ describe("SScene listener method existence", () => {
     "addWhileOcclusionListener",
     "removeWhileOcclusionListener",
   ] as const)("has entity-bound listener method: %s", (method) => {
-    expect(typeof (scene as Record<string, unknown>)[method]).toBe("function");
+    expect(typeof (scene as unknown as Record<string, unknown>)[method]).toBe("function");
   });
 
   // Proximity listeners (2 add + 2 remove = 4)
@@ -444,7 +444,7 @@ describe("SScene listener method existence", () => {
     "addProximityExitListener",
     "removeProximityExitListener",
   ] as const)("has proximity listener method: %s", (method) => {
-    expect(typeof (scene as Record<string, unknown>)[method]).toBe("function");
+    expect(typeof (scene as unknown as Record<string, unknown>)[method]).toBe("function");
   });
 });
 
