@@ -655,6 +655,8 @@ the Tweedle VM. A future refactor could have `scene-builder.ts` consume
 - **Visual properties not populated from `.a3p`.** `isShowing`, `paint`, `color`,
   `opacity`, and `vehicle` start at defaults and are set only by Tweedle VM
   execution. The a3p parser does not extract these values.
-- **SScene entity is a placeholder.** `SScene` extends `SThing` with no additional
-  capabilities. It exists to correctly map the `SScene` superType from the
-  parser but has no rendering or runtime behavior.
+- **SScene entity has limited runtime behavior.** `SScene` extends `SThing` and
+  provides listener registration methods for scene activation, object addition,
+  time ticks, and 14 event listener convenience methods (mouse, keyboard,
+  collision, proximity, occlusion, and view events). See
+  [SScene listener methods](./sscene-listener-methods.md) for the full API.

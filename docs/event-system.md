@@ -5,6 +5,9 @@ event listeners — scene activation, key press, and proximity detection — thr
 two HTTP endpoints. It powers interactive behaviors in the TypeScript web
 prototype, matching the event model that Java Alice exposes.
 
+> **See also:** [SScene listener convenience methods](./sscene-listener-methods.md) —
+> the programmatic TypeScript API for registering event listeners directly on `SScene`.
+
 ## Overview
 
 When you register an event via `POST /api/events/register`, the server stores
