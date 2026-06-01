@@ -5,7 +5,7 @@
  * written BEFORE implementation, so they will fail until the
  * corresponding code is in place.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 // ────────────────────────────────────────────────────────────────
 // Issue #62 — Stub barrel file cleanup
@@ -145,7 +145,7 @@ describe("Issue #56: entity type completion", () => {
     const axesType = registry.get("SAxes");
 
     expect(axesType).not.toBeNull();
-    expect(axesType!.parentName).toBe("SMovableTurnable");
+    expect(axesType!.parentName).toBe("SShape");
     expect(axesType!.category).toBe("markers");
   });
 
@@ -164,7 +164,7 @@ describe("Issue #56: entity type completion", () => {
     expect(tree.pathTo("SVRHand")).toContain("SMovableTurnable");
     expect(tree.pathTo("SVRHeadset")).toContain("SMovableTurnable");
     expect(tree.pathTo("SVRUser")).toContain("SMovableTurnable");
-    expect(tree.pathTo("SAxes")).toContain("SMovableTurnable");
+    expect(tree.pathTo("SAxes")).toContain("SShape");
   });
 });
 
@@ -276,6 +276,11 @@ describe("Issue #58: event system completion", () => {
 // Issue #59 — User input methods (getBooleanFromUser, etc.)
 // ────────────────────────────────────────────────────────────────
 describe("Issue #59: user input methods", () => {
+  afterEach(async () => {
+    const { InputManager } = await import("../src/input-system");
+    InputManager.inputHandler = null;
+  });
+
   it("UserInputHandler interface exists and is importable", async () => {
     const input = await import("../src/input-system");
     // The interface is a TS-only construct; verify the InputManager

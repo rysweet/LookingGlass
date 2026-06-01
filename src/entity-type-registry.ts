@@ -242,7 +242,7 @@ export class VRUserType extends EntityType<SVRUser> {
 
 export class AxesType extends EntityType<SAxes> {
   constructor() {
-    super({ name: "SAxes", parentName: "SMovableTurnable", ctor: SAxes, category: "markers" });
+    super({ name: "SAxes", parentName: "SShape", ctor: SAxes, category: "markers" });
   }
 }
 

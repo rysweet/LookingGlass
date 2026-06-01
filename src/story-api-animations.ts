@@ -1,4 +1,5 @@
 import { easeIn, easeInOut, easeOut, lerpScalar, linear } from "./animation";
+import type { PoseableEntity } from "./poses";
 import type { Size } from "./story-api/types";
 
 export const AnimationStyle = Object.freeze({
@@ -31,10 +32,6 @@ export interface BubbleHost {
 
 export interface ResizableEntity {
   size: Size;
-}
-
-export interface PoseableEntity {
-  jointRotations: Record<string, number>;
 }
 
 function clamp01(value: number): number {

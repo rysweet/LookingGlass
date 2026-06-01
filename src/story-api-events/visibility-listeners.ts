@@ -17,7 +17,7 @@ const visibilityQuery = new VisibilityQuery();
 
 abstract class OcclusionListenerBase {
   readonly events: OcclusionEvent[] = [];
-  protected readonly occluded = new Map<string, SThing | null>();
+  private readonly occluded = new Map<string, SThing | null>();
   protected readonly onEventCb?: (event: OcclusionEvent) => void;
 
   constructor(onEvent?: (event: OcclusionEvent) => void) { this.onEventCb = onEvent; }
