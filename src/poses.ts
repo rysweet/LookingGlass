@@ -305,3 +305,43 @@ export const SWIMMER_DIVE_POSE: PoseDefinition = Object.freeze({
 export function createSwimmerTailCycle(): PoseDefinition[] {
   return [SWIMMER_IDLE_POSE, SWIMMER_TAIL_LEFT_POSE, SWIMMER_IDLE_POSE, SWIMMER_TAIL_RIGHT_POSE];
 }
+
+/** Aggregated pose libraries per entity type, matching Java pattern. */
+export const FlyerPoseLibrary = Object.freeze({
+  REST: FLYER_REST_POSE,
+  GLIDE: FLYER_GLIDE_POSE,
+  FLAP_UP: FLYER_FLAP_UP_POSE,
+  FLAP_DOWN: FLYER_FLAP_DOWN_POSE,
+  LAND: FLYER_LAND_POSE,
+} as const);
+
+export const QuadrupedPoseLibrary = Object.freeze({
+  STAND: QUADRUPED_STAND_POSE,
+  SIT: QUADRUPED_SIT_POSE,
+  TROT_STRIDE: QUADRUPED_TROT_STRIDE_POSE,
+  TROT_PASS: QUADRUPED_TROT_PASS_POSE,
+  TROT_STRIDE_MIRROR: QUADRUPED_TROT_STRIDE_MIRROR_POSE,
+} as const);
+
+export const SlithererPoseLibrary = Object.freeze({
+  STRAIGHT: SLITHERER_STRAIGHT_POSE,
+  S_CURVE_LEFT: SLITHERER_S_CURVE_LEFT_POSE,
+  S_CURVE_RIGHT: SLITHERER_S_CURVE_RIGHT_POSE,
+} as const);
+
+export const SwimmerPoseLibrary = Object.freeze({
+  IDLE: SWIMMER_IDLE_POSE,
+  TAIL_LEFT: SWIMMER_TAIL_LEFT_POSE,
+  TAIL_RIGHT: SWIMMER_TAIL_RIGHT_POSE,
+  DIVE: SWIMMER_DIVE_POSE,
+} as const);
+
+export function getPoseCycle(entityType: string): PoseDefinition[] {
+  switch (entityType) {
+    case "flyer": return createFlyerFlapCycle();
+    case "quadruped": return createQuadrupedTrotCycle();
+    case "slitherer": return createSlithererCycle();
+    case "swimmer": return createSwimmerTailCycle();
+    default: return createWalkCycle();
+  }
+}

@@ -187,3 +187,11 @@ export const TrainResource = Object.freeze({
   PASSENGER_CAR: makeResource("PASSENGER_CAR", "Passenger Car", "PassengerCar"),
   TANK_CAR: makeResource("TANK_CAR", "Tank Car", "TankCar"),
 } as const);
+
+/** Aggregate vehicle resource combining all vehicle sub-categories. */
+export const VehicleResource = Object.freeze({
+  ...AutomobileResource,
+  ...AircraftResource,
+  ...WatercraftResource,
+  ...TrainResource,
+} as const);
