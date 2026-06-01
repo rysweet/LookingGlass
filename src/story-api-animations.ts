@@ -469,25 +469,8 @@ export class OrientToAnimation extends DurationAnimation {
   }
 }
 
-export class PointAtAnimation extends DurationAnimation {
-  private readonly startOrientation: Orientation;
-  private readonly targetOrientation: Orientation;
-
-  constructor(
-    private readonly entity: OrientedEntity,
-    target: Position,
-    durationMs: number,
-    style: AnimationStyle = AnimationStyle.BEGIN_AND_END_GENTLY,
-  ) {
-    super(durationMs, style);
-    this.startOrientation = { ...entity.orientation };
-    this.targetOrientation = pointAtOrientation(entity.position, target);
-  }
-
-  protected apply(portion: number): void {
-    this.entity.orientation = lerpOrientation(this.startOrientation, this.targetOrientation, portion);
-  }
-}
+// PointAt is semantically identical to OrientTo (full 3D facing toward target)
+export class PointAtAnimation extends OrientToAnimation {}
 
 export class TurnToFaceAnimation extends DurationAnimation {
   private readonly startOrientation: Orientation;
@@ -555,18 +538,16 @@ export class FoldWingsAnimation extends DurationAnimation {
     "LEFT_WING_SHOULDER", "LEFT_WING_ELBOW", "LEFT_WING_WRIST", "LEFT_WING_TIP",
     "RIGHT_WING_SHOULDER", "RIGHT_WING_ELBOW", "RIGHT_WING_WRIST", "RIGHT_WING_TIP",
   ] as const;
-  private readonly foldAngle: number;
 
   constructor(
     private readonly target: WingedEntity,
     durationMs: number,
-    foldAngle = 90,
+    private readonly foldAngle = 90,
     style: AnimationStyle = AnimationStyle.BEGIN_AND_END_GENTLY,
   ) {
     super(durationMs, style);
     this.startRotations = { ...target.jointRotations };
     this.wingJoints = target.wingJointNames ?? FoldWingsAnimation.DEFAULT_WING_JOINTS;
-    this.foldAngle = foldAngle;
   }
 
   protected apply(portion: number): void {
