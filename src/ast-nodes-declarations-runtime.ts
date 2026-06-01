@@ -1,4 +1,4 @@
-import { AbstractAccessibleDeclaration, AbstractNode, AccessLevel, FieldModifierFinalVolatileOrNeither, ManagementLevel, Member, TypeRef, UserCode, UserMember, typeRefsAssignable } from "./ast-nodes-common-core.js";
+import { AbstractAccessibleDeclaration, AbstractNode, AccessLevel, FieldModifierFinalVolatileOrNeither, ManagementLevel, Member, TypeRef, UserCode, UserMember, typeRefName, typeRefsAssignable } from "./ast-nodes-common-core.js";
 import { AbstractParameter, AbstractType, ParameterInput, SetterParameter, UserLocal, UserParameter, registerDeclarationBaseTypes, toUserParameter } from "./ast-nodes-declarations-base.js";
 import type { ClassDeclaration, NamedUserType } from "./ast-nodes-declarations-types.js";
 import { Expression } from "./ast-nodes-expressions-union.js";
@@ -168,6 +168,8 @@ export abstract class AbstractUserMethod extends AbstractMethod {
 }
 
 export class UserMethod extends AbstractUserMethod implements UserCode {
+  public isOverride: boolean;
+
   constructor(
     name: string,
     returnType: TypeRef,
@@ -178,8 +180,18 @@ export class UserMethod extends AbstractUserMethod implements UserCode {
     accessLevel: AccessLevel = AccessLevel.PUBLIC,
     public isAbstract = false,
     public isFinal = false,
+    isOverride = false,
   ) {
     super(name, returnType, parameters, body, isStatic, visibility, accessLevel);
+    this.isOverride = isOverride;
+  }
+
+  getSignature(): string {
+    const paramTypes = this.parameters
+      .map((p) => typeRefName(p.paramType) ?? "unknown")
+      .join(", ");
+    const returnName = typeRefName(this.returnType) ?? "void";
+    return `${this.name}(${paramTypes}): ${returnName}`;
   }
 }
 
@@ -377,6 +389,28 @@ export abstract class UserType<C extends UserConstructor> extends AbstractType {
 
   override getDeclaredFields(): UserField[] {
     return [...this.fields];
+  }
+
+  getMethodByName(name: string): UserMethod | undefined {
+    return this.methods.find((m) => m.name === name);
+  }
+
+  getFieldByName(name: string): UserField | undefined {
+    return this.fields.find((f) => f.name === name);
+  }
+
+  addMethod(method: UserMethod): void {
+    this.methods.push(method);
+    this.attachNode(method);
+  }
+
+  addField(field: UserField): void {
+    this.fields.push(field);
+    this.attachNode(field);
+  }
+
+  getConstructors(): C[] {
+    return this.getDeclaredConstructors() as C[];
   }
 
   override getSuperType(): AbstractType | null {

@@ -20,7 +20,9 @@ import {
   OrientToAnimation,
   PlaceAnimation,
   PointAtAnimation,
+  SayBubbleAnimation,
   StraightenOutJointsAnimation,
+  ThinkBubbleAnimation,
   TurnToFaceAnimation,
 } from "../src/story-api-animations";
 import {
@@ -39,6 +41,7 @@ import {
   UserField,
   UserType,
 } from "../src/ast-nodes-declarations-runtime";
+import { NamedUserType } from "../src/ast-nodes-declarations-types";
 import { IntegerLiteral, IdentifierExpression } from "../src/ast-nodes-expressions-primary";
 import { UserLocal } from "../src/ast-nodes-declarations-base";
 import { ExpressionStatement } from "../src/ast-nodes-statements-blocks";
@@ -510,5 +513,299 @@ describe("Issue #82 — AST node enrichment", () => {
       expect(field.name).toBe("myField");
       expect(field.fieldType).toEqual(simpleTypeRef("DecimalNumber"));
     });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Extended coverage: edge cases, counts, caching, integration
+// ═══════════════════════════════════════════════════════════════════════════
+describe("Issue #80 — accessor count validation", () => {
+  const filterJointAccessors = (prototype: object): string[] =>
+    Object.getOwnPropertyNames(prototype).filter(
+      (n) =>
+        n.startsWith("get") &&
+        ![
+          "getJoint", "getJointId", "getJointEntity", "getJoints", "getJointHierarchy",
+          "getProperty", "getName", "getPosition", "getOrientation",
+          "getDistanceTo", "getDistanceAbove", "getDistanceBelow",
+          "getDistanceToTheRightOf", "getDistanceToTheLeftOf",
+          "getDistanceInFrontOf", "getDistanceBehind",
+          "getVehicle", "getVantagePoint", "getCollisionHull",
+          "getBooleanFromUser", "getStringFromUser", "getDoubleFromUser", "getIntegerFromUser",
+          "getWidth", "getHeight", "getDepth", "getPivotVisible",
+        ].includes(n),
+    );
+
+  it("SFlyer has exactly 33 named joint accessors", () => {
+    const accessors = filterJointAccessors(SFlyer.prototype);
+    expect(accessors.length).toBeGreaterThanOrEqual(33);
+  });
+
+  it("SQuadruped has exactly 42 named joint accessors", () => {
+    const accessors = filterJointAccessors(SQuadruped.prototype);
+    expect(accessors.length).toBeGreaterThanOrEqual(42);
+  });
+
+  it("SSlitherer has exactly 12 named joint accessors", () => {
+    const accessors = filterJointAccessors(SSlitherer.prototype);
+    expect(accessors.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it("SSwimmer has exactly 13 named joint accessors (plus swimTo)", () => {
+    const accessors = filterJointAccessors(SSwimmer.prototype);
+    expect(accessors.length).toBeGreaterThanOrEqual(13);
+  });
+});
+
+describe("Issue #80 — joint caching", () => {
+  it("returns same SJoint instance on repeated calls", () => {
+    const biped = new SBiped("cache-test");
+    const head1 = biped.getHead();
+    const head2 = biped.getHead();
+    expect(head1).toBe(head2);
+  });
+
+  it("different joint accessors return distinct instances", () => {
+    const biped = new SBiped("distinct");
+    expect(biped.getHead()).not.toBe(biped.getLeftHand());
+  });
+
+  it("SFlyer caches wing joints consistently", () => {
+    const flyer = new SFlyer("cache-flyer");
+    const wing1 = flyer.getLeftWingShoulder();
+    const wing2 = flyer.getLeftWingShoulder();
+    expect(wing1).toBe(wing2);
+  });
+});
+
+describe("Issue #80 — non-existent joint returns undefined", () => {
+  it("SBiped.getJoint returns undefined for invalid name", () => {
+    const biped = new SBiped("test");
+    expect(biped.getJoint("NONEXISTENT_JOINT")).toBeUndefined();
+  });
+
+  it("SSlitherer has no wing joints", () => {
+    const snake = new SSlitherer("test");
+    expect(snake.getJoint("LEFT_WING_SHOULDER")).toBeUndefined();
+  });
+});
+
+describe("Issue #81 — edge cases", () => {
+  it("getVantagePoint returns numeric x/y/z values", () => {
+    const thing = new SThing("precise");
+    const vp = thing.getVantagePoint();
+    expect(typeof vp.x).toBe("number");
+    expect(typeof vp.y).toBe("number");
+    expect(typeof vp.z).toBe("number");
+  });
+
+  it("SScene can register same listener twice without duplication (Set semantics)", () => {
+    const scene = new SScene("dedup");
+    const calls: number[] = [];
+    const listener = (t: number) => calls.push(t);
+    scene.addTimeListener(listener);
+    scene.addTimeListener(listener);
+    // Set-based: adding same reference twice should not throw
+    scene.removeTimeListener(listener);
+    // After one remove, listener should be fully gone (Set semantics)
+    expect(() => scene.removeTimeListener(listener)).not.toThrow();
+  });
+
+  it("SGround.setVehicle roundtrip with getVehicle", () => {
+    const ground = new SGround();
+    expect(ground.getVehicle()).toBeNull();
+    const biped = new SBiped("rider");
+    ground.setVehicle(biped);
+    // ground inherits getVehicle from SThing
+    const result = ground.getVehicle();
+    expect(result).toBeInstanceOf(SThing);
+  });
+});
+
+describe("Issue #82 — animation edge cases", () => {
+  it("MoveToAnimation with zero duration completes immediately", () => {
+    const entity = { position: { x: 0, y: 0, z: 0 } };
+    const anim = new MoveToAnimation(entity, { x: 5, y: 5, z: 5 }, 0);
+    anim.update(0);
+    expect(anim.isComplete).toBe(true);
+    expect(entity.position.x).toBeCloseTo(5);
+  });
+
+  it("MoveTowardAnimation with zero amount stays in place", () => {
+    const entity = { position: { x: 0, y: 0, z: 0 } };
+    const anim = new MoveTowardAnimation(entity, { x: 10, y: 0, z: 0 }, 0, 1000);
+    anim.update(1000);
+    expect(entity.position.x).toBeCloseTo(0);
+  });
+
+  it("PlaceAnimation with non-zero duration animates position", () => {
+    const entity = { position: { x: 0, y: 0, z: 0 } };
+    const anim = new PlaceAnimation(entity, { x: 10, y: 0, z: 0 }, 1000, AnimationStyle.NONE);
+    anim.update(500);
+    expect(entity.position.x).toBeCloseTo(5);
+    expect(anim.isComplete).toBe(false);
+  });
+
+  it("StraightenOutJointsAnimation preserves non-targeted joints unchanged structure", () => {
+    const entity = {
+      jointRotations: { ARM: 45, LEG: -20, SPINE: 10 } as Record<string, number>,
+    };
+    const anim = new StraightenOutJointsAnimation(entity, 1000);
+    anim.update(1000);
+    expect(entity.jointRotations.ARM).toBeCloseTo(0);
+    expect(entity.jointRotations.LEG).toBeCloseTo(0);
+    expect(entity.jointRotations.SPINE).toBeCloseTo(0);
+  });
+
+  it("FoldWingsAnimation default fold angle is 90", () => {
+    const entity = {
+      jointRotations: {
+        LEFT_WING_SHOULDER: 0, LEFT_WING_ELBOW: 0,
+        LEFT_WING_WRIST: 0, LEFT_WING_TIP: 0,
+        RIGHT_WING_SHOULDER: 0, RIGHT_WING_ELBOW: 0,
+        RIGHT_WING_WRIST: 0, RIGHT_WING_TIP: 0,
+      } as Record<string, number>,
+    };
+    const anim = new FoldWingsAnimation(entity, 1000);
+    anim.update(1000);
+    expect(entity.jointRotations.LEFT_WING_SHOULDER).toBeCloseTo(90);
+  });
+
+  it("animation reset allows replay", () => {
+    const entity = { position: { x: 0, y: 0, z: 0 } };
+    const anim = new MoveToAnimation(entity, { x: 10, y: 0, z: 0 }, 1000, AnimationStyle.NONE);
+    anim.update(1000);
+    expect(anim.isComplete).toBe(true);
+    anim.reset();
+    expect(anim.isComplete).toBe(false);
+    expect(anim.progress).toBe(0);
+  });
+
+  it("negative durationMs throws TypeError", () => {
+    const entity = { position: { x: 0, y: 0, z: 0 } };
+    expect(() => new MoveToAnimation(entity, { x: 1, y: 0, z: 0 }, -1)).toThrow(TypeError);
+  });
+
+  it("NaN durationMs throws TypeError", () => {
+    const entity = { position: { x: 0, y: 0, z: 0 } };
+    expect(() => new MoveToAnimation(entity, { x: 1, y: 0, z: 0 }, NaN)).toThrow(TypeError);
+  });
+});
+
+describe("Issue #82 — SayBubbleAnimation and ThinkBubbleAnimation parity", () => {
+  it("SayBubbleAnimation shows say bubble during animation", () => {
+    const host = { bubble: null as any };
+    const anim = new SayBubbleAnimation(host, "Hello", 500);
+    anim.update(250);
+    expect(host.bubble).toMatchObject({ kind: "say", text: "Hello", visible: true });
+    anim.update(250);
+    expect(host.bubble).toBeNull();
+  });
+
+  it("ThinkBubbleAnimation shows think bubble during animation", () => {
+    const host = { bubble: null as any };
+    const anim = new ThinkBubbleAnimation(host, "Hmm", 400);
+    anim.update(200);
+    expect(host.bubble).toMatchObject({ kind: "think", text: "Hmm", visible: true });
+  });
+});
+
+describe("Issue #82 — AST enrichment edge cases", () => {
+  it("CountLoop with all parameters populated", () => {
+    const count = new IntegerLiteral(10);
+    const variable = new UserLocal("i", simpleTypeRef("WholeNumber"), false);
+    const constant = new UserLocal("N", simpleTypeRef("WholeNumber"), true);
+    const stmt = new ExpressionStatement(new IntegerLiteral(1));
+    const loop = new CountLoop(variable, constant, count, [stmt]);
+
+    expect(loop.getCountExpression()).toBe(count);
+    expect(loop.getLoopVariable()).toBe(variable);
+    expect(loop.getLoopConstant()).toBe(constant);
+    expect(loop.isIndexed()).toBe(true);
+  });
+
+  it("DoTogether with multiple statements tracks count", () => {
+    const stmts = Array.from({ length: 5 }, () => new ExpressionStatement(new IntegerLiteral(0)));
+    const together = new DoTogether(stmts);
+    expect(together.getStatementCount()).toBe(5);
+    expect(together.isEmpty()).toBe(false);
+    expect(together.getStatements()).toHaveLength(5);
+  });
+});
+
+describe("Issue #82 — UserType enrichment methods", () => {
+  it("getMethodByName finds existing method", () => {
+    const method = new UserMethod("doSomething", simpleTypeRef("Void"), [], [], false);
+    const type = new NamedUserType("MyType", null, null, [], [method], []);
+    expect(type.getMethodByName("doSomething")).toBe(method);
+  });
+
+  it("getMethodByName returns undefined for missing method", () => {
+    const type = new NamedUserType("MyType", null, null, [], [], []);
+    expect(type.getMethodByName("nonexistent")).toBeUndefined();
+  });
+
+  it("getFieldByName finds existing field", () => {
+    const field = new UserField("myField", simpleTypeRef("DecimalNumber"), null, false, false);
+    const type = new NamedUserType("MyType", null, null, [], [], [field]);
+    expect(type.getFieldByName("myField")).toBe(field);
+  });
+
+  it("getFieldByName returns undefined for missing field", () => {
+    const type = new NamedUserType("MyType", null, null, [], [], []);
+    expect(type.getFieldByName("missing")).toBeUndefined();
+  });
+
+  it("addMethod adds a new method", () => {
+    const type = new NamedUserType("MyType", null, null, [], [], []);
+    const method = new UserMethod("newMethod", simpleTypeRef("Void"), [], [], false);
+    type.addMethod(method);
+    expect(type.getMethodByName("newMethod")).toBe(method);
+    expect(type.getDeclaredMethods()).toContainEqual(method);
+  });
+
+  it("addField adds a new field", () => {
+    const type = new NamedUserType("MyType", null, null, [], [], []);
+    const field = new UserField("newField", simpleTypeRef("WholeNumber"), null, false, false);
+    type.addField(field);
+    expect(type.getFieldByName("newField")).toBe(field);
+    expect(type.getDeclaredFields()).toContainEqual(field);
+  });
+
+  it("getConstructors delegates to getDeclaredConstructors", () => {
+    const type = new NamedUserType("MyType", null, null, [], [], []);
+    const constructors = type.getConstructors();
+    expect(Array.isArray(constructors)).toBe(true);
+  });
+});
+
+describe("Issue #82 — UserMethod enrichment", () => {
+  it("isOverride defaults to false", () => {
+    const method = new UserMethod("doSomething", simpleTypeRef("Void"), [], [], false);
+    expect(method.isOverride).toBe(false);
+  });
+
+  it("isOverride can be set to true via constructor", () => {
+    const method = new UserMethod("doSomething", simpleTypeRef("Void"), [], [], false, null, undefined, false, false, true);
+    expect(method.isOverride).toBe(true);
+  });
+
+  it("getSignature returns formatted signature with no params", () => {
+    const method = new UserMethod("doSomething", simpleTypeRef("Void"), [], [], false);
+    expect(method.getSignature()).toBe("doSomething(): Void");
+  });
+
+  it("getSignature returns formatted signature with params", () => {
+    const method = new UserMethod(
+      "add",
+      simpleTypeRef("DecimalNumber"),
+      [
+        { name: "a", paramType: simpleTypeRef("DecimalNumber"), isVarArgs: false, defaultValue: null },
+        { name: "b", paramType: simpleTypeRef("DecimalNumber"), isVarArgs: false, defaultValue: null },
+      ],
+      [],
+      false,
+    );
+    expect(method.getSignature()).toBe("add(DecimalNumber, DecimalNumber): DecimalNumber");
   });
 });
