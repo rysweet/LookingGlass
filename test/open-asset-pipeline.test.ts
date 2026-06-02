@@ -324,6 +324,100 @@ describe("createModelDefinitions", () => {
     const defs = createModelDefinitions({ fallbackToProcedural: false });
     expect(defs.length).toBe(0);
   });
+
+  it("converts procedural sources into definitions with working loaders", () => {
+    const defs = createModelDefinitions({
+      sources: [{
+        type: "procedural",
+        category: "BIPED",
+        license: PROCEDURAL_LICENSE,
+        proceduralConfig: {
+          category: "BIPED",
+          id: "CUSTOM_BIPED",
+          name: "Custom Biped",
+          modelName: "CustomBiped",
+        },
+      }],
+    });
+    const provided = defs.find(d => d.id.includes("custom_biped"));
+    expect(provided).toBeDefined();
+    expect(provided!.name).toBe("Custom Biped");
+    expect(provided!.modelClass).toBe("BIPED");
+    expect(provided!.loader).toBeDefined();
+    // Loader should produce valid geometry
+    const loaded = provided!.loader!(provided as any);
+    expect((loaded as any).geometry.vertices.length).toBeGreaterThan(0);
+  });
+
+  it("does not generate procedural fallback for categories with provided sources", () => {
+    const defs = createModelDefinitions({
+      sources: [{
+        type: "procedural",
+        category: "BIPED",
+        license: PROCEDURAL_LICENSE,
+        proceduralConfig: {
+          category: "BIPED",
+          id: "CUSTOM_BIPED",
+          name: "Custom Biped",
+          modelName: "CustomBiped",
+        },
+      }],
+    });
+    const bipedDefs = defs.filter(d => d.modelClass === "BIPED");
+    expect(bipedDefs.length).toBe(1);
+    expect(bipedDefs[0]!.name).toBe("Custom Biped");
+    // Other categories should still have procedural fallbacks
+    const propDefs = defs.filter(d => d.modelClass === "PROP");
+    expect(propDefs.length).toBeGreaterThan(0);
+  });
+
+  it("converts gltf sources into metadata-only definitions", () => {
+    const defs = createModelDefinitions({
+      sources: [{
+        type: "gltf",
+        category: "QUADRUPED",
+        license: CC0_LICENSE,
+        gltfOptions: { url: "/models/horse.glb" },
+      }],
+    });
+    const gltfDef = defs.find(d => d.id.includes("gltf/horse"));
+    expect(gltfDef).toBeDefined();
+    expect(gltfDef!.tags).toContain("gltf");
+    expect(gltfDef!.modelClass).toBe("QUADRUPED");
+  });
+
+  it("converts url sources into metadata-only definitions", () => {
+    const defs = createModelDefinitions({
+      sources: [{
+        type: "url",
+        category: "PROP",
+        license: CC0_LICENSE,
+        url: "https://example.com/table.glb",
+      }],
+    });
+    const urlDef = defs.find(d => d.id.includes("url/table"));
+    expect(urlDef).toBeDefined();
+    expect(urlDef!.tags).toContain("external");
+  });
+
+  it("includes provided sources even when fallbackToProcedural=false", () => {
+    const defs = createModelDefinitions({
+      fallbackToProcedural: false,
+      sources: [{
+        type: "procedural",
+        category: "BIPED",
+        license: PROCEDURAL_LICENSE,
+        proceduralConfig: {
+          category: "BIPED",
+          id: "SOLO_BIPED",
+          name: "Solo Biped",
+          modelName: "SoloBiped",
+        },
+      }],
+    });
+    expect(defs.length).toBe(1);
+    expect(defs[0]!.name).toBe("Solo Biped");
+  });
 });
 
 describe("getOpenSourcePipelineSummary", () => {

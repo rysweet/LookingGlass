@@ -16,7 +16,6 @@ import {
   FlyerResource,
   QuadrupedResource,
   SwimmerResource,
-  FishResource,
   SlithererResource,
   PropResource,
   AutomobileResource,
@@ -97,6 +96,84 @@ function buildProceduralDefinition(
   };
 }
 
+// ── Source → Definition conversion ─────────────────────────────────
+
+function buildSourceDefinition(
+  source: ModelProviderSource,
+  index: number,
+): ModelResourceDefinition {
+  const category = source.category;
+  const modelClass = CATEGORY_TO_MODEL_CLASS[category];
+  const categoryData = MODEL_CLASS_DATA[modelClass];
+
+  switch (source.type) {
+    case "procedural": {
+      const config = source.proceduralConfig;
+      if (config) {
+        return {
+          id: `source/${category.toLowerCase()}/${config.id.toLowerCase()}`,
+          name: config.name,
+          modelName: config.modelName,
+          category: categoryData.category,
+          modelClass,
+          tags: ["open-source", "procedural", source.license.spdxId],
+          treePath: ["Open Source", category, config.name],
+          classInfo: { joints: [...getCanonicalJoints(category)] },
+          loader: () => {
+            const result = generateProceduralModel(config);
+            return {
+              geometry: result.geometry,
+              materials: result.materials,
+              classInfo: { joints: result.joints },
+            };
+          },
+        };
+      }
+      // No config — use first known resource as a fallback
+      const firstResource = Object.values(CATEGORY_RESOURCES[category])[0];
+      if (firstResource) {
+        return buildProceduralDefinition(firstResource, category, source.license);
+      }
+      return {
+        id: `source/${category.toLowerCase()}/procedural-${index}`,
+        name: `${category} (procedural)`,
+        modelName: category,
+        category: categoryData.category,
+        modelClass,
+        tags: ["open-source", "procedural", source.license.spdxId],
+        treePath: ["Open Source", category, `Procedural ${index}`],
+      };
+    }
+    case "gltf": {
+      const url = source.gltfOptions?.url ?? source.url ?? `gltf-${index}`;
+      const basename = url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? `gltf-${index}`;
+      return {
+        id: `source/${category.toLowerCase()}/gltf/${basename}`,
+        name: basename,
+        modelName: basename,
+        category: categoryData.category,
+        modelClass,
+        tags: ["open-source", "gltf", source.license.spdxId],
+        treePath: ["Open Source", category, basename],
+        classInfo: { joints: [...getCanonicalJoints(category)] },
+      };
+    }
+    case "url": {
+      const url = source.url ?? `url-${index}`;
+      const basename = url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? `url-${index}`;
+      return {
+        id: `source/${category.toLowerCase()}/url/${basename}`,
+        name: basename,
+        modelName: basename,
+        category: categoryData.category,
+        modelClass,
+        tags: ["open-source", "external", source.license.spdxId],
+        treePath: ["Open Source", category, basename],
+      };
+    }
+  }
+}
+
 // ── Public API ─────────────────────────────────────────────────────
 
 /**
@@ -138,7 +215,6 @@ export function createModelDefinitions(options: ModelProviderOptions = {}): Mode
   const definitions: ModelResourceDefinition[] = [];
 
   if (fallback) {
-    // Generate procedural definitions for all categories not covered by sources
     const allCategories: EntityCategory[] = [
       "BIPED", "QUADRUPED", "FLYER", "SWIMMER", "SLITHERER", "PROP", "VEHICLE",
     ];
@@ -146,6 +222,13 @@ export function createModelDefinitions(options: ModelProviderOptions = {}): Mode
       if (!sourcesByCategory.has(cat)) {
         definitions.push(...createProceduralDefinitions(cat));
       }
+    }
+  }
+
+  // Convert provided sources into definitions
+  for (const [, sources] of sourcesByCategory) {
+    for (let i = 0; i < sources.length; i++) {
+      definitions.push(buildSourceDefinition(sources[i]!, i));
     }
   }
 
