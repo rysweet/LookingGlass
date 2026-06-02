@@ -1,0 +1,182 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "alice-web-prototype open-asset-pipeline",
+    "copyright": "CC0-1.0 — alice-web-prototype proof-of-concept"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "BipedPlaceholder",
+      "nodes": [0]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "ROOT",
+      "children": [1, 5],
+      "mesh": 0,
+      "skin": 0
+    },
+    {
+      "name": "SPINE_BASE",
+      "children": [2],
+      "translation": [0, 0.85, 0]
+    },
+    {
+      "name": "SPINE_UPPER",
+      "children": [3, 6, 7],
+      "translation": [0, 0.4, 0]
+    },
+    {
+      "name": "NECK",
+      "children": [4],
+      "translation": [0, 0.2, 0]
+    },
+    {
+      "name": "HEAD",
+      "translation": [0, 0.15, 0]
+    },
+    {
+      "name": "PELVIS_LOWER_BODY",
+      "children": [8, 9],
+      "translation": [0, 0.8, 0]
+    },
+    {
+      "name": "LEFT_SHOULDER",
+      "children": [10],
+      "translation": [-0.25, 0.15, 0]
+    },
+    {
+      "name": "RIGHT_SHOULDER",
+      "children": [11],
+      "translation": [0.25, 0.15, 0]
+    },
+    {
+      "name": "LEFT_HIP",
+      "children": [12],
+      "translation": [-0.12, -0.05, 0]
+    },
+    {
+      "name": "RIGHT_HIP",
+      "children": [13],
+      "translation": [0.12, -0.05, 0]
+    },
+    {
+      "name": "LEFT_ELBOW",
+      "children": [14],
+      "translation": [0, -0.3, 0]
+    },
+    {
+      "name": "RIGHT_ELBOW",
+      "children": [15],
+      "translation": [0, -0.3, 0]
+    },
+    {
+      "name": "LEFT_KNEE",
+      "children": [16],
+      "translation": [0, -0.4, 0]
+    },
+    {
+      "name": "RIGHT_KNEE",
+      "children": [17],
+      "translation": [0, -0.4, 0]
+    },
+    {
+      "name": "LEFT_WRIST",
+      "translation": [0, -0.25, 0]
+    },
+    {
+      "name": "RIGHT_WRIST",
+      "translation": [0, -0.25, 0]
+    },
+    {
+      "name": "LEFT_ANKLE",
+      "translation": [0, -0.4, 0]
+    },
+    {
+      "name": "RIGHT_ANKLE",
+      "translation": [0, -0.4, 0]
+    }
+  ],
+  "meshes": [
+    {
+      "name": "BipedMesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1
+          },
+          "indices": 2,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "skins": [
+    {
+      "name": "BipedSkeleton",
+      "joints": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+      "skeleton": 0
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3",
+      "max": [0.15, 1.7, 0.1],
+      "min": [-0.15, 0.0, -0.1]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 288,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 288,
+      "byteLength": 288,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 576,
+      "byteLength": 72,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "data:application/octet-stream;base64,zczMPQAAjEAAAAAAAAAAPgAAjEAAAAAAAAAAPgAAQEAAAAAAAAAAPQAAQEAAAAAAAAAAPQAAgD8AAAAAAAAAAAAAAIC/AAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAP83MzD0AAIC/AAAAAAAAoD4AAIC/AAAAAAAAoD4AAIA/AAAAAAAAAAAAAAAAAACAP83MzD0AAIA/AAAAAAAAoD4AAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC/AAAAAJqZGT8AAIA/AAAAAJqZGT8AAIC/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAACAv0lyaKUAAIA/AAAAAAAAAAAAAAAAAAAAACXJoRUAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAACAv0lyaKUAAIA/AAAAAAAAAAAAAAAAAAAAACXJoRUAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC/AAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcA",
+      "byteLength": 648
+    }
+  ],
+  "materials": [
+    {
+      "name": "BipedMaterial",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [0.55, 0.65, 0.85, 1.0],
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.8
+      }
+    }
+  ]
+}

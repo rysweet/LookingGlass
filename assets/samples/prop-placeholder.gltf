@@ -1,0 +1,101 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "alice-web-prototype open-asset-pipeline",
+    "copyright": "CC0-1.0 — alice-web-prototype proof-of-concept"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "PropPlaceholder",
+      "nodes": [0]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "ROOT",
+      "mesh": 0,
+      "skin": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "PropMesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1
+          },
+          "indices": 2,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "skins": [
+    {
+      "name": "PropSkeleton",
+      "joints": [0],
+      "skeleton": 0
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3",
+      "max": [0.25, 0.5, 0.25],
+      "min": [-0.25, 0.0, -0.25]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 288,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 288,
+      "byteLength": 288,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 576,
+      "byteLength": 72,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "data:application/octet-stream;base64,AAAAvgAAAAAAAAC+AAAAPgAAAAAAAAC+AAAAPgAAAD8AAAC+AAAAvgAAAD8AAAC+AAAAvgAAAAAAAAA+AAAAPgAAAAAAAAA+AAAAPgAAAD8AAAA+AAAAvgAAAD8AAAA+AAAAvgAAAAAAAAC+AAAAvgAAAAAAAAA+AAAAvgAAAD8AAAA+AAAAvgAAAD8AAAC+AAAAPgAAAAAAAAA+AAAAPgAAAAAAAAC+AAAAPgAAAD8AAAC+AAAAPgAAAD8AAAA+AAAAvgAAAAAAAAC+AAAAPgAAAAAAAAC+AAAAPgAAAAAAAAA+AAAAvgAAAAAAAAA+AAAAvgAAAD8AAAC+AAAAPgAAAD8AAAC+AAAAPgAAAD8AAAA+AAAAvgAAAD8AAAA+AAAAAAAAAIC/AAAAAAAAAAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAv0lyaKUAAAAAAAAAgL9JcmilAAAAAAAAgL9JcmilAAAAAAAAgL9JcmilAAAAAAAAAAAAAIA/AAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgL8AAAAAAAAAAAAAAACAP0lyaKUAAAAAAACAPwAAAAAAAAAAAAAAgD8AAAAAJcmhFQAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAACAv0lyaKUAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcA",
+      "byteLength": 648
+    }
+  ],
+  "materials": [
+    {
+      "name": "PropMaterial",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [0.65, 0.65, 0.65, 1.0],
+        "metallicFactor": 0.1,
+        "roughnessFactor": 0.7
+      }
+    }
+  ]
+}

@@ -1,0 +1,200 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "alice-web-prototype open-asset-pipeline",
+    "copyright": "CC0-1.0 — alice-web-prototype proof-of-concept"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "QuadrupedPlaceholder",
+      "nodes": [0]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "ROOT",
+      "children": [1],
+      "mesh": 0,
+      "skin": 0
+    },
+    {
+      "name": "SPINE_BASE",
+      "children": [2, 7, 8, 9, 10],
+      "translation": [0, 0.5, 0]
+    },
+    {
+      "name": "SPINE_MIDDLE",
+      "children": [3],
+      "translation": [0, 0, 0.2]
+    },
+    {
+      "name": "SPINE_UPPER",
+      "children": [4, 11, 12],
+      "translation": [0, 0, 0.2]
+    },
+    {
+      "name": "NECK",
+      "children": [5],
+      "translation": [0, 0.1, 0.1]
+    },
+    {
+      "name": "HEAD",
+      "children": [6],
+      "translation": [0, 0.1, 0.1]
+    },
+    {
+      "name": "MOUTH",
+      "translation": [0, -0.03, 0.08]
+    },
+    {
+      "name": "BACK_LEFT_HIP",
+      "children": [13],
+      "translation": [-0.15, -0.05, -0.3]
+    },
+    {
+      "name": "BACK_RIGHT_HIP",
+      "children": [14],
+      "translation": [0.15, -0.05, -0.3]
+    },
+    {
+      "name": "TAIL_BASE",
+      "children": [15],
+      "translation": [0, 0.05, -0.35]
+    },
+    {
+      "name": "TAIL_TIP",
+      "translation": [0, 0.1, -0.15]
+    },
+    {
+      "name": "FRONT_LEFT_SHOULDER",
+      "children": [16],
+      "translation": [-0.15, -0.05, 0.15]
+    },
+    {
+      "name": "FRONT_RIGHT_SHOULDER",
+      "children": [17],
+      "translation": [0.15, -0.05, 0.15]
+    },
+    {
+      "name": "BACK_LEFT_KNEE",
+      "children": [18],
+      "translation": [0, -0.2, 0]
+    },
+    {
+      "name": "BACK_RIGHT_KNEE",
+      "children": [19],
+      "translation": [0, -0.2, 0]
+    },
+    {
+      "name": "TAIL_TIP_END",
+      "translation": [0, 0.05, -0.1]
+    },
+    {
+      "name": "FRONT_LEFT_KNEE",
+      "children": [20],
+      "translation": [0, -0.2, 0]
+    },
+    {
+      "name": "FRONT_RIGHT_KNEE",
+      "children": [21],
+      "translation": [0, -0.2, 0]
+    },
+    {
+      "name": "BACK_LEFT_FOOT",
+      "translation": [0, -0.2, 0]
+    },
+    {
+      "name": "BACK_RIGHT_FOOT",
+      "translation": [0, -0.2, 0]
+    },
+    {
+      "name": "FRONT_LEFT_FOOT",
+      "translation": [0, -0.2, 0]
+    },
+    {
+      "name": "FRONT_RIGHT_FOOT",
+      "translation": [0, -0.2, 0]
+    }
+  ],
+  "meshes": [
+    {
+      "name": "QuadrupedMesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1
+          },
+          "indices": 2,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "skins": [
+    {
+      "name": "QuadrupedSkeleton",
+      "joints": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+      "skeleton": 0
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3",
+      "max": [0.18, 0.65, 0.5],
+      "min": [-0.18, 0.0, -0.5]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 288,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 288,
+      "byteLength": 288,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 576,
+      "byteLength": 72,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "data:application/octet-stream;base64,F7g4Pg0XJUAAAAAAAACAPg0XJUAAAAAAAAAAAAAA4EAAAAAAAAAAAACAPgAA4EAAAAAAAAAAPgAAQEAAAAAAAAAAPQAAQEAAAAAAAAAAPQAAgD8AAAAAAAAAAAAAAIC/AAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAP83MzD0AAIC/AAAAAAAAoD4AAIC/AAAAAAAAoD4AAIA/AAAAAAAAAAAAAAAAAACAP83MzD0AAIA/AAAAAAAAoD4AAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC/AAAAAJqZGT8AAIA/AAAAAJqZGT8AAIC/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAACAv0lyaKUAAIA/AAAAAAAAAAAAAAAAAAAAACXJoRUAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAACAv0lyaKUAAIA/AAAAAAAAAAAAAAAAAAAAACXJoRUAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC/AAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcA",
+      "byteLength": 648
+    }
+  ],
+  "materials": [
+    {
+      "name": "QuadrupedMaterial",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [0.72, 0.58, 0.42, 1.0],
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      }
+    }
+  ]
+}
