@@ -5,6 +5,7 @@
 import type { MeshData } from "../render-mesh.js";
 import type { ModelGeometryData } from "../model-resources/definitions.js";
 
+/** Converts structured MeshData (vectors) into flat-array ModelGeometryData. */
 export function meshDataToModelGeometry(mesh: MeshData): ModelGeometryData {
   const vertices: number[] = [];
   const normals: number[] = [];
@@ -32,6 +33,7 @@ export function meshDataToModelGeometry(mesh: MeshData): ModelGeometryData {
   };
 }
 
+/** Merges multiple ModelGeometryData parts into a single geometry, adjusting index offsets. */
 export function mergeModelGeometry(parts: readonly ModelGeometryData[]): ModelGeometryData {
   if (parts.length === 0) {
     return { vertices: [], indices: [], normals: [], uvs: [], bounds: null };
@@ -55,10 +57,14 @@ export function mergeModelGeometry(parts: readonly ModelGeometryData[]): ModelGe
   const allUvs: number[] = [];
   let vertexOffset = 0;
 
+  // Only include normals/uvs if ALL parts provide them to prevent misalignment
+  const hasNormals = parts.every(p => p.normals && p.normals.length > 0);
+  const hasUvs = parts.every(p => p.uvs && p.uvs.length > 0);
+
   for (const part of parts) {
     allVertices.push(...part.vertices);
-    if (part.normals) allNormals.push(...part.normals);
-    if (part.uvs) allUvs.push(...part.uvs);
+    if (hasNormals && part.normals) allNormals.push(...part.normals);
+    if (hasUvs && part.uvs) allUvs.push(...part.uvs);
 
     for (const idx of part.indices) {
       allIndices.push(idx + vertexOffset);

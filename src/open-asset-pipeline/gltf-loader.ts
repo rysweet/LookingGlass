@@ -65,6 +65,7 @@ const DEFAULT_GLTF_TO_ALICE_JOINT_MAP: Record<string, string> = {
   "mixamorigRightToeBase": "RIGHT_FOOT",
 };
 
+/** Maps a glTF/Mixamo bone name to Alice's canonical joint name. Falls back to UPPER_SNAKE_CASE. */
 export function mapJointName(
   gltfName: string,
   customMap?: Readonly<Record<string, string>>,
@@ -89,6 +90,7 @@ export interface GltfMeshPrimitive {
   readonly normals?: Float32Array;
   readonly uvs?: Float32Array;
   readonly indices?: Uint16Array | Uint32Array;
+  /** Reserved for applying node transforms in a future phase. */
   readonly worldMatrix?: readonly number[];
 }
 
@@ -162,6 +164,7 @@ function extractGeometryFromPrimitive(
   };
 }
 
+/** Extracts ModelJointDefinition[] from a parsed glTF skeleton, mapping names via the joint map. */
 export function extractJointsFromSkeleton(
   skeleton: GltfSkeleton,
   jointNameMap?: Readonly<Record<string, string>>,
@@ -175,6 +178,7 @@ export function extractJointsFromSkeleton(
   }));
 }
 
+/** Converts glTF mesh primitives into a single ModelGeometryData, applying scale and optional Z-flip. */
 export function convertGltfPrimitives(
   primitives: readonly GltfMeshPrimitive[],
   options: Pick<GltfImportOptions, "scale" | "flipZ"> = {},

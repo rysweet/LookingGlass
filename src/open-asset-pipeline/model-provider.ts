@@ -192,6 +192,7 @@ function buildSourceDefinition(
       if (firstResource) {
         return buildProceduralDefinition(firstResource, category, source.license);
       }
+      // Defensive fallback: no config and no known resources for this category
       return {
         id: `source/${category.toLowerCase()}/procedural-${index}`,
         name: `${category} (procedural)`,
@@ -200,6 +201,20 @@ function buildSourceDefinition(
         modelClass,
         tags: ["open-source", "procedural", source.license.spdxId],
         treePath: ["Open Source", category, `Procedural ${index}`],
+        classInfo: { joints: [...getCanonicalJoints(category)] },
+        loader: () => {
+          const result = generateProceduralModel({
+            category,
+            id: `procedural-${index}`,
+            name: `${category} (procedural)`,
+            modelName: category,
+          });
+          return {
+            geometry: result.geometry,
+            materials: result.materials,
+            classInfo: { joints: result.joints },
+          };
+        },
       };
     }
     case "gltf": {

@@ -78,6 +78,17 @@ describe("mergeModelGeometry", () => {
       expect(idx).toBeLessThanOrEqual(maxVertex);
     }
   });
+
+  it("drops normals when parts have inconsistent normal data", () => {
+    const withNormals = meshDataToModelGeometry(createBoxMesh({ width: 1, height: 1, depth: 1 }));
+    const withoutNormals = { vertices: [0, 0, 0, 1, 0, 0, 0, 1, 0], indices: [0, 1, 2] };
+    const merged = mergeModelGeometry([withNormals, withoutNormals]);
+
+    // Normals should be dropped entirely to prevent misalignment
+    expect(merged.normals).toBeUndefined();
+    // Vertices and indices should still be correct
+    expect(merged.vertices.length).toBe(withNormals.vertices.length + 9);
+  });
 });
 
 // ── Canonical Joints ───────────────────────────────────────────────
@@ -294,6 +305,17 @@ describe("importGltfData", () => {
     expect(result.joints.length).toBe(2);
     expect(result.joints[0]!.name).toBe("ROOT");
   });
+
+  it("imports glTF data without skeleton (returns empty joints)", () => {
+    const primitive: GltfMeshPrimitive = {
+      positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+      indices: new Uint16Array([0, 1, 2]),
+    };
+    const result = importGltfData([primitive], null, { url: "test.glb" });
+    expect(result.geometry.vertices.length).toBe(9);
+    expect(result.joints).toEqual([]);
+    expect(result.materials).toEqual([]);
+  });
 });
 
 // ── Model Provider ─────────────────────────────────────────────────
@@ -474,6 +496,22 @@ describe("createModelDefinitions", () => {
     expect(defs.length).toBe(1);
     expect(defs[0]!.name).toBe("Solo Biped");
   });
+
+  it("procedural source without config falls back to first known resource with a loader", () => {
+    const defs = createModelDefinitions({
+      fallbackToProcedural: false,
+      sources: [{
+        type: "procedural",
+        category: "PROP",
+        license: PROCEDURAL_LICENSE,
+      }],
+    });
+    const propDef = defs.find(d => d.category === "props");
+    expect(propDef).toBeDefined();
+    expect(propDef!.loader).toBeDefined();
+    const loaded = propDef!.loader!(propDef as any);
+    expect((loaded as any).geometry.vertices.length).toBeGreaterThan(0);
+  });
 });
 
 describe("getOpenSourcePipelineSummary", () => {
@@ -533,6 +571,12 @@ describe("generateBlenderExportScript", () => {
     expect(script).toContain("ROOT");
   });
 
+  it("snapshots modifier names before applying to avoid iteration-mutation bug", () => {
+    const script = generateBlenderExportScript();
+    expect(script).toContain("mod_names = [mod.name for mod in obj.modifiers]");
+    expect(script).toContain("for mod_name in mod_names:");
+  });
+
   it("respects custom config", () => {
     const script = generateBlenderExportScript({
       outputDir: "./custom/path",
@@ -540,6 +584,16 @@ describe("generateBlenderExportScript", () => {
     });
     expect(script).toContain("./custom/path");
     expect(script).toContain("GLTF");
+  });
+
+  it("escapes special characters in outputDir to prevent injection", () => {
+    const script = generateBlenderExportScript({
+      outputDir: 'path/with"quotes\\and\\backslashes',
+      format: "glb",
+    });
+    // Should not contain an unescaped double-quote that would break the Python string
+    expect(script).toContain('path/with\\"quotes\\\\and\\\\backslashes');
+    expect(script).not.toContain('path/with"quotes');
   });
 });
 

@@ -55,6 +55,10 @@ export function getBlenderJointMap(category?: EntityCategory): Record<string, st
 
 // ── Script generation ──────────────────────────────────────────────
 
+function escapePythonString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+}
+
 export function generateBlenderExportScript(config?: BlenderExportConfig): string {
   const outputDir = config?.outputDir ?? "./assets/gltf";
   const format = config?.format ?? "glb";
@@ -84,7 +88,7 @@ import argparse
 
 # ── Configuration ───────────────────────────────────────────────────
 
-OUTPUT_DIR = "${outputDir}"
+OUTPUT_DIR = "${escapePythonString(outputDir)}"
 EXPORT_FORMAT = "${format.toUpperCase()}"
 APPLY_MODIFIERS = ${applyModifiers ? "True" : "False"}
 EXPORT_ANIMATIONS = ${exportAnimations ? "True" : "False"}
@@ -131,12 +135,14 @@ def apply_all_modifiers():
     for obj in bpy.data.objects:
         if obj.type == "MESH":
             bpy.context.view_layer.objects.active = obj
-            for mod in obj.modifiers:
+            # Snapshot modifier names to avoid skipping during iteration
+            mod_names = [mod.name for mod in obj.modifiers]
+            for mod_name in mod_names:
                 try:
-                    bpy.ops.object.modifier_apply(modifier=mod.name)
-                    print(f"  Applied modifier: {mod.name} on {obj.name}")
+                    bpy.ops.object.modifier_apply(modifier=mod_name)
+                    print(f"  Applied modifier: {mod_name} on {obj.name}")
                 except Exception as e:
-                    print(f"  Warning: Could not apply {mod.name}: {e}")
+                    print(f"  Warning: Could not apply {mod_name}: {e}")
 
 
 def export_gltf(output_path, export_format):

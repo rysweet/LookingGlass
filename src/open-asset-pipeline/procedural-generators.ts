@@ -201,6 +201,7 @@ const VEHICLE_JOINTS: readonly ModelJointDefinition[] = [
   joint("FRONT_LEFT_WHEEL", "ROOT"),
 ];
 
+/** Returns the canonical joint hierarchy for a given entity category. */
 export function getCanonicalJoints(category: EntityCategory): readonly ModelJointDefinition[] {
   switch (category) {
     case "BIPED": return BIPED_JOINTS;
@@ -389,6 +390,7 @@ function generateVehicleGeometry(scale: number) {
 
 // ── Public API ─────────────────────────────────────────────────────
 
+/** Generates procedural placeholder geometry for a given category and scale. */
 export function generateProceduralGeometry(category: EntityCategory, scale = 1.0) {
   switch (category) {
     case "BIPED": return generateBipedGeometry(scale);
@@ -401,6 +403,7 @@ export function generateProceduralGeometry(category: EntityCategory, scale = 1.0
   }
 }
 
+/** Generates a complete procedural model (geometry + joints + materials + license). */
 export function generateProceduralModel(config: ProceduralModelConfig): ProceduralModelResult {
   const scale = config.scale ?? 1.0;
   const geometry = generateProceduralGeometry(config.category, scale);

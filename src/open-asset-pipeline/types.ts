@@ -67,6 +67,7 @@ export interface GltfImportOptions {
   readonly jointNameMap?: Readonly<Record<string, string>>;
   readonly scale?: number;
   readonly flipZ?: boolean;
+  /** Reserved for provenance tracking in future phases. */
   readonly license?: AssetLicense;
 }
 
