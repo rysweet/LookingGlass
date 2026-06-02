@@ -48,6 +48,21 @@ describe("mergeModelGeometry", () => {
     expect(result.indices).toEqual([]);
   });
 
+  it("returns a defensive copy for single-element input", () => {
+    const box = meshDataToModelGeometry(createBoxMesh({ width: 1, height: 1, depth: 1 }));
+    const result = mergeModelGeometry([box]);
+
+    // Must be a distinct object, not the same reference
+    expect(result).not.toBe(box);
+    expect(result.vertices).not.toBe(box.vertices);
+    expect(result.indices).not.toBe(box.indices);
+
+    // But contents should be equal
+    expect(result.vertices).toEqual(box.vertices);
+    expect(result.indices).toEqual(box.indices);
+    expect(result.bounds).toEqual(box.bounds);
+  });
+
   it("merges multiple geometries with correct index offsets", () => {
     const box1 = meshDataToModelGeometry(createBoxMesh({ width: 1, height: 1, depth: 1 }));
     const box2 = meshDataToModelGeometry(createBoxMesh({ width: 1, height: 1, depth: 1, center: { x: 3, y: 0, z: 0 } }));
@@ -302,15 +317,56 @@ describe("createProceduralDefinitions", () => {
 });
 
 describe("createAllProceduralDefinitions", () => {
-  it("creates definitions for all categories", () => {
+  it("creates definitions for all categories including sub-model-classes", () => {
     const defs = createAllProceduralDefinitions();
     expect(defs.length).toBeGreaterThan(50);
+
+    const modelClasses = new Set(defs.map(d => d.modelClass));
+    // Base categories
+    expect(modelClasses.has("BIPED")).toBe(true);
+    expect(modelClasses.has("QUADRUPED")).toBe(true);
+    expect(modelClasses.has("PROP")).toBe(true);
+    // Sub-model-classes
+    expect(modelClasses.has("FISH")).toBe(true);
+    expect(modelClasses.has("MARINE_MAMMAL")).toBe(true);
+    expect(modelClasses.has("AIRCRAFT")).toBe(true);
+    expect(modelClasses.has("WATERCRAFT")).toBe(true);
+    expect(modelClasses.has("TRAIN")).toBe(true);
 
     const categories = new Set(defs.map(d => d.category));
     expect(categories.has("people")).toBe(true);
     expect(categories.has("animals")).toBe(true);
     expect(categories.has("props")).toBe(true);
     expect(categories.has("vehicles")).toBe(true);
+  });
+
+  it("has no duplicate IDs across all definitions", () => {
+    const defs = createAllProceduralDefinitions();
+    const ids = defs.map(d => d.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("FISH definitions have working loaders and SWIMMER-compatible joints", () => {
+    const defs = createAllProceduralDefinitions();
+    const fishDefs = defs.filter(d => d.modelClass === "FISH");
+    expect(fishDefs.length).toBe(7); // BASS, BLUEGILL, CATFISH, KOI, PIRANHA, SALMON, TROUT
+
+    const first = fishDefs[0]!;
+    expect(first.loader).toBeDefined();
+    const loaded = first.loader!(first as any);
+    expect((loaded as any).geometry.vertices.length).toBeGreaterThan(0);
+    expect(first.classInfo!.joints!.some(j => j.name === "TAIL")).toBe(true);
+  });
+
+  it("MARINE_MAMMAL definitions have working loaders", () => {
+    const defs = createAllProceduralDefinitions();
+    const mmDefs = defs.filter(d => d.modelClass === "MARINE_MAMMAL");
+    expect(mmDefs.length).toBe(5); // DOLPHIN, MANATEE, ORCA, SEALION, WALRUS
+
+    const first = mmDefs[0]!;
+    expect(first.loader).toBeDefined();
+    const loaded = first.loader!(first as any);
+    expect((loaded as any).geometry.vertices.length).toBeGreaterThan(0);
   });
 });
 

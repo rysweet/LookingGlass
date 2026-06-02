@@ -37,7 +37,16 @@ export function mergeModelGeometry(parts: readonly ModelGeometryData[]): ModelGe
     return { vertices: [], indices: [], normals: [], uvs: [], bounds: null };
   }
   if (parts.length === 1) {
-    return parts[0]!;
+    const p = parts[0]!;
+    return {
+      vertices: [...p.vertices],
+      indices: [...p.indices],
+      normals: p.normals ? [...p.normals] : undefined,
+      uvs: p.uvs ? [...p.uvs] : undefined,
+      bounds: p.bounds
+        ? { min: { ...p.bounds.min }, max: { ...p.bounds.max } }
+        : p.bounds,
+    };
   }
 
   const allVertices: number[] = [];

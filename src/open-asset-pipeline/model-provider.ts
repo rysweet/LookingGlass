@@ -16,9 +16,14 @@ import {
   FlyerResource,
   QuadrupedResource,
   SwimmerResource,
+  FishResource,
+  MarineMammalResource,
   SlithererResource,
   PropResource,
   AutomobileResource,
+  AircraftResource,
+  WatercraftResource,
+  TrainResource,
 } from "../model-resources/individual-resources.js";
 import type { IndividualModelResource } from "../model-resources/individual-resources.js";
 
@@ -45,6 +50,22 @@ const CATEGORY_RESOURCES: Record<EntityCategory, Readonly<Record<string, Individ
   PROP: PropResource,
   VEHICLE: AutomobileResource,
 };
+
+// ── Sub-model-class mappings (share parent category joints/colors) ──
+
+interface SubModelClassEntry {
+  readonly modelClass: KnownModelClassKey;
+  readonly parentCategory: EntityCategory;
+  readonly resources: Readonly<Record<string, IndividualModelResource>>;
+}
+
+const SUB_MODEL_CLASS_ENTRIES: readonly SubModelClassEntry[] = [
+  { modelClass: "FISH", parentCategory: "SWIMMER", resources: FishResource },
+  { modelClass: "MARINE_MAMMAL", parentCategory: "SWIMMER", resources: MarineMammalResource },
+  { modelClass: "AIRCRAFT", parentCategory: "VEHICLE", resources: AircraftResource },
+  { modelClass: "WATERCRAFT", parentCategory: "VEHICLE", resources: WatercraftResource },
+  { modelClass: "TRAIN", parentCategory: "VEHICLE", resources: TrainResource },
+];
 
 // ── Color palette for procedural models ────────────────────────────
 
@@ -82,6 +103,43 @@ function buildProceduralDefinition(
     loader: () => {
       const result = generateProceduralModel({
         category,
+        id: resource.id,
+        name: resource.name,
+        modelName: resource.modelName,
+        color,
+      });
+      return {
+        geometry: result.geometry,
+        materials: result.materials,
+        classInfo: { joints: result.joints },
+      };
+    },
+  };
+}
+
+function buildSubModelClassDefinition(
+  resource: IndividualModelResource,
+  entry: SubModelClassEntry,
+  license: AssetLicense,
+): ModelResourceDefinition {
+  const { modelClass, parentCategory } = entry;
+  const color = CATEGORY_COLORS[parentCategory];
+  const classLabel = modelClass.toLowerCase().replace(/_/g, "-");
+
+  return {
+    id: `open-source/${classLabel}/${resource.id}`,
+    name: resource.name,
+    modelName: resource.modelName,
+    category: MODEL_CLASS_DATA[modelClass].category,
+    modelClass,
+    tags: ["open-source", "procedural", license.spdxId],
+    treePath: ["Open Source", modelClass, resource.name],
+    classInfo: {
+      joints: [...getCanonicalJoints(parentCategory)],
+    },
+    loader: () => {
+      const result = generateProceduralModel({
+        category: parentCategory,
         id: resource.id,
         name: resource.name,
         modelName: resource.modelName,
@@ -188,14 +246,24 @@ export function createProceduralDefinitions(
 }
 
 /**
- * Creates procedural model definitions for ALL categories,
- * providing a complete set of open-source replacement models.
+ * Creates procedural model definitions for ALL categories plus sub-model-classes
+ * (FISH, MARINE_MAMMAL, AIRCRAFT, WATERCRAFT, TRAIN), providing a complete set
+ * of open-source replacement models.
  */
 export function createAllProceduralDefinitions(): ModelResourceDefinition[] {
   const categories: EntityCategory[] = [
     "BIPED", "QUADRUPED", "FLYER", "SWIMMER", "SLITHERER", "PROP", "VEHICLE",
   ];
-  return categories.flatMap(cat => createProceduralDefinitions(cat));
+  const defs = categories.flatMap(cat => createProceduralDefinitions(cat));
+
+  // Add sub-model-class definitions (FISH, MARINE_MAMMAL, vehicle subtypes)
+  for (const entry of SUB_MODEL_CLASS_ENTRIES) {
+    for (const resource of Object.values(entry.resources)) {
+      defs.push(buildSubModelClassDefinition(resource, entry, PROCEDURAL_LICENSE));
+    }
+  }
+
+  return defs;
 }
 
 /**
@@ -221,6 +289,14 @@ export function createModelDefinitions(options: ModelProviderOptions = {}): Mode
     for (const cat of allCategories) {
       if (!sourcesByCategory.has(cat)) {
         definitions.push(...createProceduralDefinitions(cat));
+      }
+    }
+    // Include sub-model-class definitions for categories without provided sources
+    for (const entry of SUB_MODEL_CLASS_ENTRIES) {
+      if (!sourcesByCategory.has(entry.parentCategory)) {
+        for (const resource of Object.values(entry.resources)) {
+          definitions.push(buildSubModelClassDefinition(resource, entry, PROCEDURAL_LICENSE));
+        }
       }
     }
   }
