@@ -523,6 +523,18 @@ describe("ide-command-operations", () => {
     expect(procs.get("myMethod")![3]).toBe("appended");
   });
 
+  it("undo removes correct instance when duplicate statements exist", () => {
+    const procs = new Map<string, string[]>();
+    procs.set("run", ["x", "say()", "y"]);
+    const manager = new UndoRedoManager();
+
+    manager.execute(new AddStatementCommand(procs, "run", "say()", 3));
+    expect(procs.get("run")).toEqual(["x", "say()", "y", "say()"]);
+
+    manager.undo();
+    expect(procs.get("run")).toEqual(["x", "say()", "y"]);
+  });
+
   // ---------- Scene Background Command ----------
 
   it("sets scene background color with undo", () => {

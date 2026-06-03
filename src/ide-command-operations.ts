@@ -890,6 +890,7 @@ export class DeleteMethodCommand implements Command {
 
 export class AddStatementCommand implements Command {
   private added = false;
+  private insertedAt: number | null = null;
 
   constructor(
     private readonly procedures: Map<string, string[]>,
@@ -909,17 +910,16 @@ export class AddStatementCommand implements Command {
       ? Math.max(0, Math.min(this.index, stmts.length))
       : stmts.length;
     stmts.splice(insertAt, 0, this.statement);
+    this.insertedAt = insertAt;
     this.added = true;
   }
 
   undo(): void {
     if (!this.added) return;
     const stmts = this.procedures.get(this.methodName);
-    if (!stmts) return;
-    const idx = stmts.indexOf(this.statement);
-    if (idx >= 0) {
-      stmts.splice(idx, 1);
-    }
+    if (!stmts || this.insertedAt === null) return;
+    stmts.splice(this.insertedAt, 1);
+    this.insertedAt = null;
     this.added = false;
   }
 }
