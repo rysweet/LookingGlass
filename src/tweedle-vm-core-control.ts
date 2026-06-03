@@ -58,6 +58,7 @@ export function execDoTogether(stmt: AliceStatement, state: VMState): void {
       currentSelf: state.currentSelf ? (branchObjectMap.get(state.currentSelf.name) ?? null) : null,
       returnValues: state.returnValues,
       listenerMap: state.listenerMap,
+      sceneBridge: state.sceneBridge,
       debugRuntime: state.debugRuntime,
     };
     runScopedStatements([branchStatement], branchState);

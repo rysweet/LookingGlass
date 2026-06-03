@@ -133,6 +133,8 @@ function buildFactoryCases() {
     ["StoryApiProperties.createTexturePaint", () => PublicApi.StoryApiProperties.createTexturePaint("brick", 0.5, "#ffffff")],
     ["StoryApiProperties.createTextValue", () => PublicApi.StoryApiProperties.createTextValue("Hello", "Arial", 18, "#112233")],
     ["StoryResources.createResourceAssetPaths", () => PublicApi.StoryResources.createResourceAssetPaths("Bunny")],
+    ["VmSceneBridge.createSceneGraphForProject", () => PublicApi.VmSceneBridge.createSceneGraphForProject(contractProject)],
+    ["VmSceneBridge.createVmSceneRuntime", () => PublicApi.VmSceneBridge.createVmSceneRuntime(contractProject)],
     ["TweedleRuntime.createClassRegistry", () => PublicApi.TweedleRuntime.createClassRegistry()],
     ["TweedleRuntime.createMethodTable", () => PublicApi.TweedleRuntime.createMethodTable(contractProject.methods)],
     ["TweedleRuntime.createTweedleRuntimeEnvironment", () => PublicApi.TweedleRuntime.createTweedleRuntimeEnvironment(contractProject)],
@@ -314,6 +316,13 @@ function assertFactoryResult(key: string, value: unknown): void {
       return;
     case "StoryResources.createResourceAssetPaths":
       expectKeys(value, ["visual", "texture", "thumbnail"]);
+      return;
+    case "VmSceneBridge.createSceneGraphForProject":
+      expectKeys(value, ["sceneGraph", "entityNodes"]);
+      return;
+    case "VmSceneBridge.createVmSceneRuntime":
+      expect(value).toBeInstanceOf(PublicApi.VmSceneBridge.VmSceneRuntime);
+      expectKeys(value, ["sceneGraph", "bridge", "animationLoop", "entityNodes"]);
       return;
     case "TweedleRuntime.createClassRegistry":
     case "TweedleRuntime.createMethodTable":

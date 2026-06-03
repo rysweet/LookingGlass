@@ -47,6 +47,11 @@ export function execMethodCall(stmt: AliceStatement, state: VMState): void {
     return;
   }
 
+  const resolvedArgs = args.map((arg) => evaluateValue(state, arg));
+  if (targetObject && state.sceneBridge?.handleMethodCall(targetObject, methodName, resolvedArgs, state)) {
+    return;
+  }
+
   if (registerListenerCall(methodName, args, state)) {
     return;
   }
