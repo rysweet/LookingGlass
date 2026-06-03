@@ -1,5 +1,5 @@
-import { dispatchMethod, resolveRuntimeMethod } from "./tweedle-vm-builtins-dispatch.js";
 import { initializeRuntimeObject } from "./tweedle-vm-builtins-runtime.js";
+import { requireDispatchMethod, requireResolveRuntimeMethod } from "./tweedle-vm-dispatch-registry.js";
 import { RuntimeObject, VMState } from "./tweedle-vm-core-types.js";
 import { scopeLookup } from "./tweedle-vm-stack-scope.js";
 
@@ -448,6 +448,9 @@ function evaluateFunctionCall(
   methodName: string,
   args: string[],
 ): unknown {
+  const dispatchMethod = requireDispatchMethod();
+  const resolveRuntimeMethod = requireResolveRuntimeMethod();
+
   // Resolve the target object
   let targetObject: RuntimeObject | null = null;
   if (objectExpr) {
