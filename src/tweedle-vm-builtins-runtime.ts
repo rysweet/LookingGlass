@@ -14,7 +14,7 @@ import {
   type TweedleRuntimeEnvironment,
 } from "./tweedle-runtime.js";
 import { dispatchMethod } from "./tweedle-vm-builtins-dispatch.js";
-import { LogEntry, RuntimeLambda, RuntimeObject, RuntimeType, VMState } from "./tweedle-vm-core-types.js";
+import { type AliceMethodBridge, LogEntry, RuntimeLambda, RuntimeObject, RuntimeType, VMState } from "./tweedle-vm-core-types.js";
 import { evaluateValue } from "./tweedle-vm-eval-core.js";
 
 export function instantiateSceneObjects(
@@ -23,6 +23,7 @@ export function instantiateSceneObjects(
   log: LogEntry[],
   returnValues: Map<string, unknown>,
   listenerMap: Map<string, RuntimeLambda[]>,
+  sceneBridge: AliceMethodBridge | null = null,
 ): Map<string, RuntimeObject> {
   const objectMap = new Map<string, RuntimeObject>();
   for (const source of project.sceneObjects) {
@@ -52,6 +53,7 @@ export function instantiateSceneObjects(
       currentSelf: runtimeObject,
       returnValues,
       listenerMap,
+      sceneBridge,
     };
     initializeRuntimeObject(runtimeObject, state, sourceArgs(runtimeObject.source));
     bootstrapStep = state.stepCounter;

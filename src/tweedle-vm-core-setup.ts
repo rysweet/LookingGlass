@@ -19,19 +19,20 @@ import { VirtualMachine } from "./virtual-machine.js";
 import { dispatchMethod, execMethodCall, resolveRuntimeMethod } from "./tweedle-vm-builtins-dispatch.js";
 import { instantiateSceneObjects } from "./tweedle-vm-builtins-runtime.js";
 import { execCountLoop, execCountUpTo, execDoInOrder, execDoTogether, execEventListener, execForEach, execIfElse, execReturn, execThrow, execTryCatch, execVariableAssignment, execVariableDeclaration, execWhileLoop } from "./tweedle-vm-core-control.js";
-import { DebugRuntime, ExecutionResult, LogEntry, MAX_DEPTH, MAX_TOTAL_STEPS, RuntimeLambda, RuntimeObject, VMEnvironment, VMState } from "./tweedle-vm-core-types.js";
+import { DebugRuntime, ExecutionResult, LogEntry, MAX_DEPTH, MAX_TOTAL_STEPS, RuntimeLambda, RuntimeObject, VMEnvironment, VMExecutionOptions, VMState } from "./tweedle-vm-core-types.js";
 import { evaluateValue } from "./tweedle-vm-eval-core.js";
 import { recordDebugEvent } from "./tweedle-vm-stack-debug.js";
 import { popScope, pushScope, scopeSet } from "./tweedle-vm-stack-scope.js";
 
 // ── Public API ─────────────────────────────────────────────────────────
 
-function createExecutionEnvironment(project: AliceProject): VMEnvironment {
+function createExecutionEnvironment(project: AliceProject, executionOptions?: unknown): VMEnvironment {
+  const options = (executionOptions as VMExecutionOptions | undefined) ?? {};
   const returnValues = new Map<string, unknown>();
   const log: LogEntry[] = [];
   const listenerMap = new Map<string, RuntimeLambda[]>();
   const runtime = createTweedleRuntimeEnvironment<RuntimeObject>(project);
-  const objectMap = instantiateSceneObjects(project, runtime, log, returnValues, listenerMap);
+  const objectMap = instantiateSceneObjects(project, runtime, log, returnValues, listenerMap, options.sceneBridge ?? null);
 
   return {
     log,
@@ -41,9 +42,11 @@ function createExecutionEnvironment(project: AliceProject): VMEnvironment {
     typeMap: runtime.classRegistry,
     objectMap,
     listenerMap,
+    sceneBridge: options.sceneBridge ?? null,
     stepCounter: 0,
   };
 }
+
 
 function createState(environment: VMEnvironment, currentSelf: RuntimeObject | null, debugRuntime?: DebugRuntime): VMState {
   return {
@@ -60,6 +63,7 @@ function createState(environment: VMEnvironment, currentSelf: RuntimeObject | nu
     currentSelf,
     returnValues: environment.returnValues,
     listenerMap: environment.listenerMap,
+    sceneBridge: environment.sceneBridge,
     debugRuntime,
   };
 }
@@ -82,8 +86,16 @@ export const virtualMachine = new VirtualMachine<AliceProject, RuntimeObject, Al
 }, expressionEvaluator, statementExecutor);
 
 /** Execute all methods in an AliceProject, returning a structured execution log. */
-export function executeProject(project: AliceProject): ExecutionResult {
-  return virtualMachine.executeProject(project);
+export function executeProject(project: AliceProject, options: VMExecutionOptions = {}): ExecutionResult {
+  return virtualMachine.executeProject(project, options);
+}
+
+export function executeEntryPoint(
+  project: AliceProject,
+  entryPointOptions: import("./virtual-machine.js").EntryPointExecutionOptions,
+  options: VMExecutionOptions = {},
+): { environment: VMEnvironment; result: ExecutionResult } {
+  return virtualMachine.executeEntryPoint(project, entryPointOptions, options);
 }
 
 // ── Statement execution ────────────────────────────────────────────────

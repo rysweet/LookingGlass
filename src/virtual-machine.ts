@@ -47,7 +47,7 @@ export interface VirtualMachineHooks<
   State extends VirtualMachineState<Receiver>,
   Environment extends VirtualMachineEnvironment<Receiver, Statement>,
 > {
-  createExecutionEnvironment: (project: Project) => Environment;
+  createExecutionEnvironment: (project: Project, executionOptions?: unknown) => Environment;
   createState: (environment: Environment, currentSelf: Receiver | null, debugRuntime?: unknown) => State;
   resolveRuntimeMethod: (state: State, typeName: string, methodName: string, argCount: number) => Method | null;
   dispatchMethod: (
@@ -81,8 +81,11 @@ export class VirtualMachine<
     private readonly statementExecutor: StatementExecutor<Statement, State>,
   ) {}
 
-  executeProject(project: Project): { execution_log: Environment["log"]; returnValues: Map<string, unknown> } {
-    const environment = this.hooks.createExecutionEnvironment(project);
+  executeProject(
+    project: Project,
+    executionOptions?: unknown,
+  ): { execution_log: Environment["log"]; returnValues: Map<string, unknown> } {
+    const environment = this.hooks.createExecutionEnvironment(project, executionOptions);
 
     for (const method of project.methods) {
       const state = this.hooks.createState(environment, null);
@@ -100,8 +103,9 @@ export class VirtualMachine<
   executeEntryPoint(
     project: Project,
     options: EntryPointExecutionOptions,
+    executionOptions?: unknown,
   ): { environment: Environment; result: { execution_log: Environment["log"]; returnValues: Map<string, unknown> } } {
-    const environment = this.hooks.createExecutionEnvironment(project);
+    const environment = this.hooks.createExecutionEnvironment(project, executionOptions);
     const receiver = environment.objectMap.get(options.receiverName) ?? null;
 
     if (!receiver || !options.entryMethod) {

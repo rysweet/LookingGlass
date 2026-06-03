@@ -78,6 +78,14 @@ export interface RuntimeLambda {
   self: RuntimeObject | null;
 }
 
+export interface AliceMethodBridge {
+  handleMethodCall(target: RuntimeObject, methodName: string, args: readonly unknown[], state: VMState): boolean;
+}
+
+export interface VMExecutionOptions {
+  sceneBridge?: AliceMethodBridge | null;
+}
+
 interface DebugCallFrameState {
   id: string;
   ownerName: string | null;
@@ -109,6 +117,7 @@ export interface VMState {
   currentSelf: RuntimeObject | null;
   returnValues: Map<string, unknown>;
   listenerMap: Map<string, RuntimeLambda[]>;
+  sceneBridge: AliceMethodBridge | null;
   debugRuntime?: DebugRuntime;
 }
 
@@ -120,5 +129,6 @@ export interface VMEnvironment {
   typeMap: Map<string, RuntimeType>;
   objectMap: Map<string, RuntimeObject>;
   listenerMap: Map<string, RuntimeLambda[]>;
+  sceneBridge: AliceMethodBridge | null;
   stepCounter: number;
 }
