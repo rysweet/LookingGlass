@@ -17,6 +17,7 @@ import { parseTweedle, type ClassDecl, type ConstructorDecl, type Expression, ty
 import { convertStatements } from "./tweedle-vm-core-compile.js";
 import { runStatements } from "./tweedle-vm-core-setup.js";
 import { RuntimeLambda, RuntimeObject, VMState } from "./tweedle-vm-core-types.js";
+import { registerTweedleVmDispatch } from "./tweedle-vm-dispatch-registry.js";
 import { evaluateValue, resolveRuntimeObjectByName } from "./tweedle-vm-eval-core.js";
 import { popScope, pushScope, scopeSet } from "./tweedle-vm-stack-scope.js";
 
@@ -190,3 +191,8 @@ export function dispatchMethod(
     }
   }
 }
+
+registerTweedleVmDispatch({
+  dispatchMethod,
+  resolveRuntimeMethod,
+});

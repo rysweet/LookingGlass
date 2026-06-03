@@ -294,11 +294,13 @@ function parseStatement(node: Element, keyMap: Map<string, Element>): AliceState
     if (!expressionNode) return null;
     if (expressionNode.getAttribute("type") === "org.lgna.project.ast.MethodInvocation") {
       const methodNode = getPropertyNode(expressionNode, "method", keyMap);
+      const callerObject = getPropertyText(expressionNode, "callerObject") ?? "this";
+      const args = extractArguments(expressionNode, keyMap);
       return {
         kind: "MethodCall",
-        method: methodNode ? getPropertyText(methodNode, "name") ?? "unknown" : "unknown",
-        object: "this",
-        arguments: [],
+        method: methodNode ? getPropertyText(methodNode, "name") || "unknown" : "unknown",
+        object: callerObject,
+        arguments: args,
       };
     }
   }
@@ -318,6 +320,55 @@ function parseStatement(node: Element, keyMap: Map<string, Element>): AliceState
   if (nodeType === "org.lgna.project.ast.LocalDeclarationStatement") {
     return { kind: "VariableDeclaration", name: "unknown", varType: "Object", value: "" };
   }
+  if (nodeType === "org.lgna.project.ast.DoInOrder") {
+    const body = parseStatementBlock(node, "body", keyMap);
+    return { kind: "DoInOrder", body };
+  }
+  if (nodeType === "org.lgna.project.ast.DoTogether") {
+    const body = parseStatementBlock(node, "body", keyMap);
+    return { kind: "DoTogether", body };
+  }
+  if (nodeType === "org.lgna.project.ast.WhileLoop") {
+    const body = parseStatementBlock(node, "body", keyMap);
+    return { kind: "WhileLoop", condition: "unknown", body };
+  }
+  if (nodeType === "org.lgna.project.ast.ForEachInArrayLoop") {
+    const body = parseStatementBlock(node, "body", keyMap);
+    return { kind: "ForEachInArrayLoop", itemType: "Object", itemName: "item", collection: "unknown", body };
+  }
+  if (nodeType === "org.lgna.project.ast.EachInArrayTogether") {
+    const body = parseStatementBlock(node, "body", keyMap);
+    return { kind: "EachInArrayTogether", itemType: "Object", itemName: "item", collection: "unknown", body };
+  }
 
   return { kind: nodeType.split(".").pop() ?? "Unknown" };
+}
+
+function extractArguments(invocationNode: Element, keyMap: Map<string, Element>): string[] {
+  const args: string[] = [];
+  const argNodes = getCollectionNodesResolved(invocationNode, "requiredArguments", keyMap);
+  for (const argNode of argNodes) {
+    const value = getPropertyText(argNode, "value");
+    if (value !== null && value !== undefined) {
+      args.push(value);
+    }
+  }
+  return args;
+}
+
+function parseStatementBlock(parentNode: Element, propertyName: string, keyMap: Map<string, Element>): AliceStatement[] {
+  const bodyNode = getPropertyNode(parentNode, propertyName, keyMap);
+  if (!bodyNode) return [];
+  const statementsProperty = getProperty(bodyNode, "statements");
+  if (!statementsProperty) return [];
+  const results: AliceStatement[] = [];
+  const collection = directChild(statementsProperty, "collection");
+  const container = collection ?? statementsProperty;
+  for (let i = 0; i < container.childNodes.length; i++) {
+    const child = container.childNodes[i] as Element;
+    if (child.nodeType !== 1 || child.tagName !== "node") continue;
+    const statement = parseStatement(resolve(child, keyMap), keyMap);
+    if (statement) results.push(statement);
+  }
+  return results;
 }
