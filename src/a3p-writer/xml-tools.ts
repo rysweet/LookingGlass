@@ -12,11 +12,12 @@ export function preserveXmlDeclaration(baseXmlText: string | null, serialized: s
 }
 
 let xmlDomParser: InstanceType<typeof DOMParser> | null = null;
-let xmlSerializerCtor: (new () => XMLSerializer) | null = null;
+let xmlSerializerInstance: XMLSerializer | null = null;
 
 export function parseXmlString(xml: string): Document {
   if (typeof globalThis.DOMParser !== "undefined") {
-    return new globalThis.DOMParser().parseFromString(xml, "application/xml") as unknown as Document;
+    xmlDomParser ??= new globalThis.DOMParser() as unknown as InstanceType<typeof DOMParser>;
+    return xmlDomParser.parseFromString(xml, "application/xml") as unknown as Document;
   }
   if (!xmlDomParser) {
     throw new Error("XML parser not initialized");
@@ -26,22 +27,23 @@ export function parseXmlString(xml: string): Document {
 
 export function serializeXmlString(doc: Document): string {
   if (typeof globalThis.XMLSerializer !== "undefined") {
-    return new globalThis.XMLSerializer().serializeToString(doc as unknown as Node);
+    xmlSerializerInstance ??= new globalThis.XMLSerializer() as unknown as XMLSerializer;
+    return (xmlSerializerInstance as { serializeToString(node: unknown): string }).serializeToString(doc);
   }
-  if (!xmlSerializerCtor) {
+  if (!xmlSerializerInstance) {
     throw new Error("XML serializer not initialized");
   }
-  return new xmlSerializerCtor().serializeToString(doc as never);
+  return xmlSerializerInstance.serializeToString(doc as never);
 }
 
 export async function ensureXmlTools(): Promise<void> {
   if (typeof globalThis.DOMParser !== "undefined" && typeof globalThis.XMLSerializer !== "undefined") {
     return;
   }
-  if (xmlDomParser && xmlSerializerCtor) return;
+  if (xmlDomParser && xmlSerializerInstance) return;
   const mod = await import("@xmldom/xmldom");
   xmlDomParser = new (mod.DOMParser as unknown as typeof DOMParser)();
-  xmlSerializerCtor = mod.XMLSerializer as unknown as new () => XMLSerializer;
+  xmlSerializerInstance = new (mod.XMLSerializer as unknown as new () => XMLSerializer)();
 }
 
 export function generateUuid(): string {

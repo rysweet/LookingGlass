@@ -426,11 +426,7 @@ function extractExpressionSummary(node: Element, propertyName: string, keyMap: M
   if (!propNode) return "unknown";
   const val = getPropertyText(propNode, "value");
   if (val !== null) return val;
-  const typeName = propNode.getAttribute("type")?.split(".").pop() ?? "";
-  if (typeName === "BooleanLiteral" || typeName === "StringLiteral" || typeName === "IntegerLiteral" || typeName === "DoubleLiteral") {
-    return getPropertyText(propNode, "value") ?? "unknown";
-  }
-  return typeName || "unknown";
+  return propNode.getAttribute("type")?.split(".").pop() || "unknown";
 }
 
 function extractCountValue(node: Element, keyMap: Map<string, Element>): number {

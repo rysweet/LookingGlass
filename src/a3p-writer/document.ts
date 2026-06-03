@@ -3,6 +3,7 @@ import {
   type AliceMethod,
   type AliceObject,
   type AliceProject,
+  type AliceStatement,
   type AliceTypeDefinition,
   getA3PSource,
   snapshotAliceProject,
@@ -34,7 +35,7 @@ export function buildProjectXml(project: AliceProject, baseXmlText: string | nul
   const root = doc.documentElement;
   setPropertyText(doc, root, "name", project.projectName || "Program");
 
-  const typeNodes = getNamedUserTypeNodes(doc);
+  let typeNodes = getNamedUserTypeNodes(doc);
   const sceneTypeNode = findSceneTypeNode(typeNodes);
   const sceneType = findSceneTypeDefinition(project.types);
 
@@ -49,8 +50,10 @@ export function buildProjectXml(project: AliceProject, baseXmlText: string | nul
   }
 
   if (project.types?.length) {
+    // Re-read type nodes only if new types were appended above; reuse initial scan otherwise
+    typeNodes = getNamedUserTypeNodes(doc);
     const typeMap = new Map<string, Element>();
-    for (const node of getNamedUserTypeNodes(doc)) {
+    for (const node of typeNodes) {
       const name = getPropertyText(node, "name");
       if (name) typeMap.set(name, node);
     }
@@ -360,7 +363,7 @@ function createAstNode(doc: Document, astType: string): Element {
 function appendBlockBodyProperty(
   doc: Document,
   parent: Element,
-  statements: import("../a3p-parser.js").AliceStatement[],
+  statements: AliceStatement[],
 ): void {
   const bodyProp = doc.createElement("property");
   bodyProp.setAttribute("name", "body");
@@ -375,7 +378,7 @@ function appendSupportedStatements(doc: Document, collection: Element, statement
   }
 }
 
-function serializeStatement(doc: Document, statement: import("../a3p-parser.js").AliceStatement): Element | null {
+function serializeStatement(doc: Document, statement: AliceStatement): Element | null {
   switch (statement.kind) {
     case "Comment":
       return createCommentNode(doc, statement.expression ?? "");
@@ -411,7 +414,7 @@ function createCommentNode(doc: Document, text: string): Element {
   return node;
 }
 
-function createMethodCallNode(doc: Document, statement: import("../a3p-parser.js").AliceStatement): Element {
+function createMethodCallNode(doc: Document, statement: AliceStatement): Element {
   const exprStmt = createAstNode(doc, "org.lgna.project.ast.ExpressionStatement");
 
   const exprProp = doc.createElement("property");
@@ -491,7 +494,7 @@ function createLiteralNode(doc: Document, value: string): Element {
   return node;
 }
 
-function createBlockStatementNode(doc: Document, statements: import("../a3p-parser.js").AliceStatement[]): Element {
+function createBlockStatementNode(doc: Document, statements: AliceStatement[]): Element {
   const block = createAstNode(doc, "org.lgna.project.ast.BlockStatement");
   const stmtsProp = doc.createElement("property");
   stmtsProp.setAttribute("name", "statements");
@@ -504,14 +507,14 @@ function createBlockStatementNode(doc: Document, statements: import("../a3p-pars
   return block;
 }
 
-function createBlockContainerNode(doc: Document, nodeType: string, body: import("../a3p-parser.js").AliceStatement[]): Element {
+function createBlockContainerNode(doc: Document, nodeType: string, body: AliceStatement[]): Element {
   const node = createAstNode(doc, nodeType);
   appendBlockBodyProperty(doc, node, body);
   appendBooleanProperty(doc, node, "isEnabled", true);
   return node;
 }
 
-function createWhileLoopNode(doc: Document, statement: import("../a3p-parser.js").AliceStatement): Element {
+function createWhileLoopNode(doc: Document, statement: AliceStatement): Element {
   const node = createAstNode(doc, "org.lgna.project.ast.WhileLoop");
 
   const condProp = doc.createElement("property");
@@ -524,7 +527,7 @@ function createWhileLoopNode(doc: Document, statement: import("../a3p-parser.js"
   return node;
 }
 
-function createCountLoopNode(doc: Document, statement: import("../a3p-parser.js").AliceStatement): Element {
+function createCountLoopNode(doc: Document, statement: AliceStatement): Element {
   const node = createAstNode(doc, "org.lgna.project.ast.CountLoop");
 
   // variable (UserLocal)
@@ -549,7 +552,7 @@ function createCountLoopNode(doc: Document, statement: import("../a3p-parser.js"
   return node;
 }
 
-function createConditionalNode(doc: Document, statement: import("../a3p-parser.js").AliceStatement): Element {
+function createConditionalNode(doc: Document, statement: AliceStatement): Element {
   const node = createAstNode(doc, "org.lgna.project.ast.ConditionalStatement");
 
   // booleanExpressionBodyPairs
@@ -581,7 +584,7 @@ function createConditionalNode(doc: Document, statement: import("../a3p-parser.j
   return node;
 }
 
-function createForEachNode(doc: Document, nodeType: string, statement: import("../a3p-parser.js").AliceStatement): Element {
+function createForEachNode(doc: Document, nodeType: string, statement: AliceStatement): Element {
   const node = createAstNode(doc, nodeType);
 
   // item (UserLocal)
@@ -617,7 +620,7 @@ function createReturnNode(doc: Document, expression: string): Element {
   return node;
 }
 
-function createLocalDeclarationNode(doc: Document, statement: import("../a3p-parser.js").AliceStatement): Element {
+function createLocalDeclarationNode(doc: Document, statement: AliceStatement): Element {
   const node = createAstNode(doc, "org.lgna.project.ast.LocalDeclarationStatement");
 
   // local (UserLocal)
@@ -733,9 +736,6 @@ function ensureCollectionProperty(doc: Document, parent: Element, propertyName: 
     collection.setAttribute("type", "java.util.ArrayList");
     while (property.firstChild) property.removeChild(property.firstChild);
     property.appendChild(collection);
-  }
-  if (!collection.getAttribute("type")) {
-    collection.setAttribute("type", "java.util.ArrayList");
   }
   return collection;
 }
