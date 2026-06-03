@@ -381,7 +381,7 @@ describe("ide-command-operations", () => {
     };
     const manager = new UndoRedoManager();
 
-    manager.execute(new GroupEntitiesCommand(grouping, "group1", ["a", "b"]));
+    manager.execute(new GroupEntitiesCommand(grouping as any, "group1", ["a", "b"]));
     expect(entities.has("group1")).toBe(true);
 
     manager.undo();
@@ -416,7 +416,7 @@ describe("ide-command-operations", () => {
     };
     const manager = new UndoRedoManager();
 
-    manager.execute(new UngroupEntitiesCommand(grouping, "group1"));
+    manager.execute(new UngroupEntitiesCommand(grouping as any, "group1"));
     expect(entities.has("group1")).toBe(false);
 
     manager.undo();

@@ -479,6 +479,10 @@ export class OperationCommandAdapter implements Command {
     return this.label ?? this.operation?.name ?? "operation";
   }
 
+  get undoable(): boolean | undefined {
+    return this.operation?.metadata.undoable;
+  }
+
   execute(): void {
     if (!this.operation) {
       this.operation = this.factory();

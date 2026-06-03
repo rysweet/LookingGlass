@@ -306,7 +306,7 @@ describe("value-bridge-integration", () => {
       coordinator.drop("scene-view");
 
       // Verify entity was created
-      const entity = scene.getEntity("Bunny");
+      const entity = scene.getEntity("Bunny") as SModel | undefined;
       expect(entity).toBeDefined();
       expect(entity!.position).toEqual({ x: 100, y: 0, z: 50 });
 
@@ -321,7 +321,7 @@ describe("value-bridge-integration", () => {
 
     it("dropping an entity drag creates a position change via command", () => {
       const scene = makeScene("rabbit");
-      const entity = scene.getEntity("rabbit")!;
+      const entity = scene.getEntity("rabbit")! as SModel;
       entity.position = { x: 0, y: 0, z: 0 };
 
       const manager = new UndoRedoManager();

@@ -929,7 +929,8 @@ export class AddStatementCommand implements Command {
 // ---------------------------------------------------------------------------
 
 export class SetSceneBackgroundCommand implements Command {
-  private previousColor: string | null = null;
+  private previousColor: string | undefined;
+  private captured = false;
 
   constructor(
     private readonly scene: Scene,
@@ -941,12 +942,13 @@ export class SetSceneBackgroundCommand implements Command {
   }
 
   execute(): void {
-    this.previousColor = this.scene.atmosphereColor ?? null;
+    this.previousColor = this.scene.atmosphereColor;
+    this.captured = true;
     this.scene.atmosphereColor = this.newColor;
   }
 
   undo(): void {
-    if (this.previousColor !== null) {
+    if (this.captured) {
       this.scene.atmosphereColor = this.previousColor;
     }
   }
