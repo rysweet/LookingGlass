@@ -16,6 +16,8 @@ export * as AstQuery from "./ast-query";
 export * as AstSerialization from "./ast-serialization";
 export * as AstManipulation from "./ast-manipulation";
 export * as AstEditor from "./ast-editor";
+export * as AstEditingOperations from "./ast-editing-operations";
+export * as BlockEditor from "./block-editor";
 export * as Audio from "./audio";
 export * as Multimedia from "./multimedia";
 export * as CascadeMenus from "./cascade-menus";
