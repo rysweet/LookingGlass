@@ -137,10 +137,15 @@ export class AriaLiveRegion {
   private readonly messages: LiveRegionMessage[] = [];
   private current: LiveRegionMessage | null = null;
 
+  private static readonly MAX_HISTORY = 100;
+
   /** Announce a message at the given priority. */
   announce(text: string, priority: AriaLive = "polite"): LiveRegionMessage {
     const message: LiveRegionMessage = { text, priority, timestamp: Date.now() };
     this.messages.push(message);
+    if (this.messages.length > AriaLiveRegion.MAX_HISTORY) {
+      this.messages.splice(0, this.messages.length - AriaLiveRegion.MAX_HISTORY);
+    }
     if (priority === "assertive" || !this.current) {
       this.current = message;
     }

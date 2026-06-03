@@ -95,7 +95,8 @@ export class HTML5DragSourceAdapter {
     try {
       DataTransferHelper.writePayload(event.dataTransfer, this.payload);
       return true;
-    } catch {
+    } catch (error) {
+      console.warn("Failed to write drag payload to DataTransfer:", error);
       return false;
     }
   }
