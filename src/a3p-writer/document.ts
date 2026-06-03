@@ -50,13 +50,19 @@ export function buildProjectXml(project: AliceProject, baseXmlText: string | nul
 
   if (project.types?.length) {
     const typeMap = new Map<string, Element>();
-    for (const node of typeNodes) {
+    for (const node of getNamedUserTypeNodes(doc)) {
       const name = getPropertyText(node, "name");
       if (name) typeMap.set(name, node);
     }
 
     for (const type of project.types) {
-      const targetNode = type.superTypeName?.includes("SScene") ? sceneTypeNode : typeMap.get(type.name) ?? null;
+      const isSceneType = type.superTypeName?.includes("SScene") ?? false;
+      let targetNode = isSceneType ? sceneTypeNode : typeMap.get(type.name) ?? null;
+      if (!targetNode && !isSceneType) {
+        targetNode = createNamedUserTypeNode(doc, type, root.getAttribute("version"));
+        ensureCollectionProperty(doc, root, "declaredTypes").appendChild(targetNode);
+        typeMap.set(type.name, targetNode);
+      }
       if (targetNode) {
         syncNamedUserType(doc, targetNode, type);
       }
@@ -107,8 +113,12 @@ function fieldFromSceneObject(object: AliceObject): AliceFieldDefinition {
 
 function syncNamedUserType(doc: Document, typeNode: Element, desired: AliceTypeDefinition): void {
   setPropertyText(doc, typeNode, "name", desired.name);
+  if (desired.superTypeName) {
+    setTypeProperty(doc, typeNode, "superType", desired.superTypeName);
+  }
   if (desired.fields) syncFields(doc, typeNode, desired.fields);
   if (desired.methods) syncMethods(doc, typeNode, desired.methods);
+  if (desired.constructors) syncConstructors(doc, typeNode, desired);
 }
 
 function syncFields(doc: Document, typeNode: Element, desiredFields: AliceFieldDefinition[]): void {
@@ -183,6 +193,38 @@ function syncMethodSignature(doc: Document, methodNode: Element, desired: AliceM
   appendSupportedStatements(doc, statementsCollection, desired.statements);
 }
 
+function syncConstructors(doc: Document, typeNode: Element, desiredType: AliceTypeDefinition): void {
+  const desiredConstructors = desiredType.constructors ?? [];
+  const collection = ensureCollectionProperty(doc, typeNode, "constructors");
+  const existingConstructors = directCollectionNodes(collection)
+    .filter((node) => node.getAttribute("type") === "org.lgna.project.ast.NamedUserConstructor");
+
+  for (let index = 0; index < existingConstructors.length && index < desiredConstructors.length; index += 1) {
+    syncConstructorSignature(doc, existingConstructors[index], desiredConstructors[index], desiredType.superTypeName ?? null);
+  }
+  for (let index = existingConstructors.length; index < desiredConstructors.length; index += 1) {
+    collection.appendChild(createConstructorNode(doc, desiredConstructors[index], desiredType.superTypeName ?? null));
+  }
+}
+
+function syncConstructorSignature(
+  doc: Document,
+  constructorNode: Element,
+  desired: AliceMethod,
+  superTypeName: string | null,
+): void {
+  const paramsCollection = ensureCollectionProperty(doc, constructorNode, "requiredParameters");
+  while (paramsCollection.firstChild) paramsCollection.removeChild(paramsCollection.firstChild);
+  for (const parameter of desired.parameters) {
+    paramsCollection.appendChild(createParameterNode(doc, parameter.name, parameter.type));
+  }
+
+  const bodyNode = ensureConstructorBodyNode(doc, constructorNode, superTypeName);
+  const statementsCollection = ensureCollectionProperty(doc, bodyNode, "statements");
+  while (statementsCollection.firstChild) statementsCollection.removeChild(statementsCollection.firstChild);
+  appendSupportedStatements(doc, statementsCollection, desired.statements);
+}
+
 function createMethodNode(doc: Document, method: AliceMethod): Element {
   const methodNode = doc.createElement("node");
   methodNode.setAttribute("type", "org.lgna.project.ast.UserMethod");
@@ -226,6 +268,102 @@ function createMethodNode(doc: Document, method: AliceMethod): Element {
   appendBooleanProperty(doc, methodNode, "isSignatureLocked", false);
   appendBooleanProperty(doc, methodNode, "isDeletionAllowed", true);
   return methodNode;
+}
+
+function createConstructorNode(doc: Document, constructor: AliceMethod, superTypeName: string | null): Element {
+  const constructorNode = doc.createElement("node");
+  constructorNode.setAttribute("type", "org.lgna.project.ast.NamedUserConstructor");
+  constructorNode.setAttribute("uuid", generateUuid());
+
+  const paramsCollection = appendCollectionProperty(doc, constructorNode, "requiredParameters");
+  for (const parameter of constructor.parameters) {
+    paramsCollection.appendChild(createParameterNode(doc, parameter.name, parameter.type));
+  }
+  const bodyProperty = doc.createElement("property");
+  bodyProperty.setAttribute("name", "body");
+  bodyProperty.appendChild(createConstructorBodyNode(doc, superTypeName, constructor.statements));
+  constructorNode.appendChild(bodyProperty);
+
+  appendStringProperty(doc, constructorNode, "accessLevel", "PUBLIC", "org.lgna.project.ast.AccessLevel");
+  appendStringProperty(doc, constructorNode, "managementLevel", "NONE", "org.lgna.project.ast.ManagementLevel");
+  appendBooleanProperty(doc, constructorNode, "isSignatureLocked", false);
+  appendBooleanProperty(doc, constructorNode, "isDeletionAllowed", false);
+  return constructorNode;
+}
+
+function createConstructorBodyNode(
+  doc: Document,
+  superTypeName: string | null,
+  statements: AliceMethod["statements"] = [],
+): Element {
+  const bodyNode = doc.createElement("node");
+  bodyNode.setAttribute("type", "org.lgna.project.ast.ConstructorBlockStatement");
+  bodyNode.setAttribute("uuid", generateUuid());
+
+  const constructorInvocationProperty = doc.createElement("property");
+  constructorInvocationProperty.setAttribute("name", "constructorInvocationStatement");
+  const invocationNode = doc.createElement("node");
+  invocationNode.setAttribute("type", "org.lgna.project.ast.SuperConstructorInvocationStatement");
+  invocationNode.setAttribute("uuid", generateUuid());
+  const constructorProperty = doc.createElement("property");
+  constructorProperty.setAttribute("name", "constructor");
+  constructorProperty.appendChild(createJavaConstructorNode(doc, superTypeName));
+  invocationNode.appendChild(constructorProperty);
+  appendCollectionProperty(doc, invocationNode, "requiredArguments");
+  appendCollectionProperty(doc, invocationNode, "variableArguments");
+  appendCollectionProperty(doc, invocationNode, "keyedArguments");
+  appendBooleanProperty(doc, invocationNode, "isEnabled", true);
+  constructorInvocationProperty.appendChild(invocationNode);
+  bodyNode.appendChild(constructorInvocationProperty);
+
+  const statementsCollection = appendCollectionProperty(doc, bodyNode, "statements");
+  appendSupportedStatements(doc, statementsCollection, statements);
+  appendBooleanProperty(doc, bodyNode, "isEnabled", true);
+  return bodyNode;
+}
+
+function ensureConstructorBodyNode(doc: Document, constructorNode: Element, superTypeName: string | null): Element {
+  const bodyProperty = ensureProperty(doc, constructorNode, "body");
+  let bodyNode = directChild(bodyProperty, "node");
+  if (!bodyNode) {
+    while (bodyProperty.firstChild) bodyProperty.removeChild(bodyProperty.firstChild);
+    bodyNode = createConstructorBodyNode(doc, superTypeName);
+    bodyProperty.appendChild(bodyNode);
+  }
+  return bodyNode;
+}
+
+function createJavaConstructorNode(doc: Document, declaringClassName: string | null): Element {
+  const constructorNode = doc.createElement("node");
+  constructorNode.setAttribute("type", "org.lgna.project.ast.JavaConstructor");
+  constructorNode.setAttribute("uuid", generateUuid());
+  const constructorElement = doc.createElement("constructor");
+  constructorElement.setAttribute("isVarArgs", "false");
+  const declaringClass = doc.createElement("declaringClass");
+  declaringClass.setAttribute("name", declaringClassName || "java.lang.Object");
+  constructorElement.appendChild(declaringClass);
+  constructorElement.appendChild(doc.createElement("parameters"));
+  constructorNode.appendChild(constructorElement);
+  return constructorNode;
+}
+
+function createNamedUserTypeNode(doc: Document, type: AliceTypeDefinition, version: string | null): Element {
+  const typeNode = doc.createElement("node");
+  typeNode.setAttribute("type", "org.lgna.project.ast.NamedUserType");
+  typeNode.setAttribute("uuid", generateUuid());
+  if (version) {
+    typeNode.setAttribute("version", version);
+  }
+  appendStringProperty(doc, typeNode, "name", type.name);
+  appendNullProperty(doc, typeNode, "_package");
+  appendCollectionProperty(doc, typeNode, "constructors");
+  appendStringProperty(doc, typeNode, "accessLevel", "PUBLIC", "org.lgna.project.ast.AccessLevel");
+  appendStringProperty(doc, typeNode, "finalAbstractOrNeither", "NEITHER", "org.lgna.project.ast.TypeModifierFinalAbstractOrNeither");
+  appendBooleanProperty(doc, typeNode, "isStrictFloatingPoint", false);
+  appendTypeProperty(doc, typeNode, "superType", type.superTypeName || "java.lang.Object");
+  appendCollectionProperty(doc, typeNode, "methods");
+  appendCollectionProperty(doc, typeNode, "fields");
+  return typeNode;
 }
 
 function appendSupportedStatements(doc: Document, collection: Element, statements: AliceMethod["statements"]): void {
@@ -284,6 +422,16 @@ function appendTypeProperty(doc: Document, parent: Element, propertyName: string
   parent.appendChild(property);
 }
 
+function appendCollectionProperty(doc: Document, parent: Element, propertyName: string): Element {
+  const property = doc.createElement("property");
+  property.setAttribute("name", propertyName);
+  const collection = doc.createElement("collection");
+  collection.setAttribute("type", "java.util.ArrayList");
+  property.appendChild(collection);
+  parent.appendChild(property);
+  return collection;
+}
+
 function createTypeNode(doc: Document, typeName: string): Element {
   const node = doc.createElement("node");
   node.setAttribute("type", "org.lgna.project.ast.JavaType");
@@ -300,6 +448,15 @@ function appendStringProperty(doc: Document, parent: Element, propertyName: stri
   const valueNode = doc.createElement("value");
   valueNode.setAttribute("type", valueType);
   valueNode.appendChild(doc.createTextNode(value));
+  property.appendChild(valueNode);
+  parent.appendChild(property);
+}
+
+function appendNullProperty(doc: Document, parent: Element, propertyName: string): void {
+  const property = doc.createElement("property");
+  property.setAttribute("name", propertyName);
+  const valueNode = doc.createElement("value");
+  valueNode.setAttribute("isNull", "true");
   property.appendChild(valueNode);
   parent.appendChild(property);
 }

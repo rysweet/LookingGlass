@@ -194,6 +194,63 @@ describe("a3p faithful round-trip", { timeout: 60_000 }, () => {
     expect(findSceneType(reparsed)?.name).toBe("Scene");
   });
 
+  it("creates missing custom type nodes during round-trip", async () => {
+    const project: AliceProject = {
+      version: "3.6.0.0",
+      projectName: "CustomTypeRoundTrip",
+      sceneObjects: [],
+      methods: [],
+      types: [
+        {
+          name: "Scene",
+          superTypeName: "org.lgna.story.SScene",
+          fields: [],
+          methods: [],
+          constructors: [],
+        },
+        {
+          name: "TutorialBunny",
+          superTypeName: "org.lgna.story.SBiped",
+          fields: [
+            {
+              name: "nickname",
+              typeName: "java.lang.String",
+            },
+          ],
+          methods: [
+            {
+              name: "hop",
+              isFunction: false,
+              returnType: "void",
+              parameters: [],
+              statements: [{ kind: "Comment", expression: "boing" }],
+            },
+          ],
+          constructors: [
+            {
+              name: "TutorialBunny",
+              isFunction: false,
+              returnType: "TutorialBunny",
+              parameters: [{ name: "times", type: "java.lang.Integer" }],
+              statements: [{ kind: "Comment", expression: "setup" }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const written = await writeA3P(project);
+    const reparsed = await parseA3P(written);
+    const tutorialBunny = reparsed.types?.find((type) => type.name === "TutorialBunny");
+
+    expect(tutorialBunny).toBeTruthy();
+    expect(tutorialBunny?.superTypeName).toBe("org.lgna.story.SBiped");
+    expect((tutorialBunny?.fields ?? []).map((field) => field.name)).toContain("nickname");
+    expect((tutorialBunny?.methods ?? []).map((method) => method.name)).toContain("hop");
+    expect(tutorialBunny?.constructors).toHaveLength(1);
+    expect(tutorialBunny?.constructors?.[0]?.parameters).toEqual([{ name: "times", type: "java.lang.Integer" }]);
+  });
+
   it.skipIf(!AMAZON_MINIMUM_A3P)("keeps custom types intact through round-trip", async () => {
     const original = await parseA3P(fs.readFileSync(AMAZON_MINIMUM_A3P!));
     const written = await writeA3P(original);
