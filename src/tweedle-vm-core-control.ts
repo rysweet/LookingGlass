@@ -21,7 +21,13 @@ export function execDoInOrder(stmt: AliceStatement, state: VMState): void {
     detail: `run ${body.length} statements in order`,
   });
 
-  runScopedStatements(body, state);
+  const queue = state.sceneBridge?.animationQueue;
+  queue?.beginSequentialBlock();
+  try {
+    runScopedStatements(body, state);
+  } finally {
+    queue?.endSequentialBlock();
+  }
 }
 
 export function execDoTogether(stmt: AliceStatement, state: VMState): void {

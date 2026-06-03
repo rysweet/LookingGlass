@@ -80,6 +80,7 @@ export interface RuntimeLambda {
 
 export interface AliceMethodBridge {
   handleMethodCall(target: RuntimeObject, methodName: string, args: readonly unknown[], state: VMState): boolean;
+  readonly animationQueue?: { beginSequentialBlock(): void; endSequentialBlock(): void } | null;
 }
 
 export interface VMExecutionOptions {

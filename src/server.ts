@@ -101,7 +101,8 @@ export function validateProjectPath(
 
 /** Build an AliceProject from the current server state (or return the cached parse). */
 function buildCurrentProject(state: ServerState): AliceProject {
-  return state.parsedProject ?? {
+  if (state.parsedProject) return state.parsedProject;
+  return {
     version: "3.10",
     projectName: state.projectName,
     sceneObjects: Array.from(state.sceneObjects.values()).map((o) => ({
@@ -112,7 +113,18 @@ function buildCurrentProject(state: ServerState): AliceProject {
       orientation: null,
       size: null,
     })),
-    methods: [],
+    methods: Array.from(state.procedures.entries()).map(([name, stmts]) => ({
+      name,
+      isFunction: false,
+      returnType: "void",
+      parameters: [],
+      statements: stmts.map((s) => ({
+        kind: "MethodCall" as const,
+        object: "this",
+        method: s,
+        arguments: [],
+      })),
+    })),
   };
 }
 
@@ -258,15 +270,33 @@ export function createServer(options: ServerOptions): express.Express {
     const statements = state.procedures.get(methodName)!;
     const beforeStatementCount = statements.length;
 
-    // Extract comment text from edit spec
-    const marker = editSpec.startsWith("append-comment:")
-      ? editSpec.slice("append-comment:".length)
-      : editSpec;
+   let marker: string;
+   if (editSpec.startsWith("append-comment:")) {
+     marker = editSpec.slice("append-comment:".length);
+   } else if (editSpec.startsWith("append-statement:")) {
+     marker = editSpec.slice("append-statement:".length);
+   } else {
+     marker = editSpec;
+   }
 
-    statements.push(marker);
-    const afterStatementCount = statements.length;
+   statements.push(marker);
+   const afterStatementCount = statements.length;
 
-    const methodNames = Array.from(state.procedures.keys());
+   // Sync the statement to parsedProject so executeProject includes it
+   if (editSpec.startsWith("append-statement:") && state.parsedProject) {
+     const method = state.parsedProject.methods.find((m) => m.name === methodName);
+     if (method) {
+       method.statements ??= [];
+       method.statements.push({
+         kind: "MethodCall",
+         object: "this",
+         method: marker.trim(),
+         arguments: [],
+       });
+     }
+   }
+
+   const methodNames = Array.from(state.procedures.keys());
 
     // Write the edited project artifact (a copy or placeholder .a3p)
     const editedProjectPath = path.join(

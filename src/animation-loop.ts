@@ -150,6 +150,8 @@ export class AnimationQueue {
   #currentTimeMs = 0;
   readonly #animations: StoredAnimation[] = [];
   readonly #entityTailTimes = new Map<string, number>();
+  #globalTailTimeMs = 0;
+  #sequentialDepth = 0;
 
   get currentTimeMs(): number {
     return this.#currentTimeMs;
@@ -157,6 +159,21 @@ export class AnimationQueue {
 
   get size(): number {
     return this.#animations.length;
+  }
+
+  /** Enter a globally-sequential block (DoInOrder). Nestable. */
+  beginSequentialBlock(): void {
+    this.#sequentialDepth++;
+    this.#globalTailTimeMs = Math.max(this.#globalTailTimeMs, this.#currentTimeMs);
+  }
+
+  /** Exit a globally-sequential block. */
+  endSequentialBlock(): void {
+    this.#sequentialDepth = Math.max(0, this.#sequentialDepth - 1);
+  }
+
+  get isSequential(): boolean {
+    return this.#sequentialDepth > 0;
   }
 
   enqueue<T>(animation: AnimationDefinition<T>): Promise<void> {
@@ -168,8 +185,15 @@ export class AnimationQueue {
       return Promise.resolve();
     }
 
-    const startTimeMs = Math.max(this.#currentTimeMs, this.#entityTailTimes.get(animation.entityId) ?? this.#currentTimeMs);
-    this.#entityTailTimes.set(animation.entityId, startTimeMs + durationMs);
+    const entityTail = this.#entityTailTimes.get(animation.entityId) ?? this.#currentTimeMs;
+    const startTimeMs = this.#sequentialDepth > 0
+      ? Math.max(this.#currentTimeMs, entityTail, this.#globalTailTimeMs)
+      : Math.max(this.#currentTimeMs, entityTail);
+    const endTimeMs = startTimeMs + durationMs;
+    this.#entityTailTimes.set(animation.entityId, endTimeMs);
+    if (this.#sequentialDepth > 0) {
+      this.#globalTailTimeMs = endTimeMs;
+    }
 
     return new Promise<void>((resolve) => {
       this.#animations.push({
@@ -218,6 +242,8 @@ export class AnimationQueue {
     this.#animations.length = 0;
     this.#entityTailTimes.clear();
     this.#currentTimeMs = 0;
+    this.#globalTailTimeMs = 0;
+    this.#sequentialDepth = 0;
   }
 
   #remove(animation: StoredAnimation): void {

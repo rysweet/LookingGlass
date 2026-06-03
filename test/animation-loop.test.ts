@@ -138,4 +138,80 @@ describe("animation-loop", () => {
     expect(loop.simulationTimeMs).toBe(0);
     expect(loop.queue.size).toBe(0);
   });
+
+  it("sequences cross-entity animations in sequential block", () => {
+    const queue = new AnimationQueue();
+    let posA = 0;
+    let posB = 0;
+
+    queue.beginSequentialBlock();
+
+    queue.enqueue({
+      entityId: "entityA",
+      durationMs: 100,
+      from: 0,
+      to: 10,
+      interpolate: (from, to, t) => from + (to - from) * t,
+      apply: (value) => { posA = value as number; },
+    });
+
+    queue.enqueue({
+      entityId: "entityB",
+      durationMs: 100,
+      from: 0,
+      to: 20,
+      interpolate: (from, to, t) => from + (to - from) * t,
+      apply: (value) => { posB = value as number; },
+    });
+
+    queue.endSequentialBlock();
+
+    // At t=50, only entityA should be animating (starts at 0, ends at 100)
+    queue.update(50);
+    expect(posA).toBeCloseTo(5);
+    expect(posB).toBe(0);
+
+    // At t=100, entityA done, entityB hasn't started yet (starts at 100)
+    queue.update(100);
+    expect(posA).toBe(10);
+    expect(posB).toBe(0);
+
+    // At t=150, entityB is mid-animation
+    queue.update(150);
+    expect(posB).toBeCloseTo(10);
+
+    // At t=200, entityB is done
+    queue.update(200);
+    expect(posB).toBe(20);
+    expect(queue.size).toBe(0);
+  });
+
+  it("overlaps cross-entity animations without sequential block", () => {
+    const queue = new AnimationQueue();
+    let posA = 0;
+    let posB = 0;
+
+    queue.enqueue({
+      entityId: "entityA",
+      durationMs: 100,
+      from: 0,
+      to: 10,
+      interpolate: (from, to, t) => from + (to - from) * t,
+      apply: (value) => { posA = value as number; },
+    });
+
+    queue.enqueue({
+      entityId: "entityB",
+      durationMs: 100,
+      from: 0,
+      to: 20,
+      interpolate: (from, to, t) => from + (to - from) * t,
+      apply: (value) => { posB = value as number; },
+    });
+
+    // Without sequential block, both start at t=0 — they overlap
+    queue.update(50);
+    expect(posA).toBeCloseTo(5);
+    expect(posB).toBeCloseTo(10);
+  });
 });

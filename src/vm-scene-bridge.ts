@@ -267,6 +267,10 @@ export class VmSceneBridge implements AliceMethodBridge {
     this.#animationQueue = animationQueue;
   }
 
+  get animationQueue(): AnimationQueue | null {
+    return this.#animationQueue;
+  }
+
   registerEntity(entityId: string, sceneNode: SceneGraphNode): void {
     this.#entityNodes.set(entityId, sceneNode);
     this.#nodeEntities.set(sceneNode, entityId);
