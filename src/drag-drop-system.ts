@@ -146,7 +146,12 @@ export class DropTarget<T = unknown> {
       return false;
     }
     this.received.push(proxy);
-    this.onDrop?.(proxy);
+    try {
+      this.onDrop?.(proxy);
+    } catch (error) {
+      this.received.pop();
+      throw error;
+    }
     return true;
   }
 }
@@ -228,5 +233,69 @@ export class DragHistory {
 
   get canRedo(): boolean {
     return this.undone.length > 0;
+  }
+}
+
+export type DragSessionState = "idle" | "dragging" | "dropped" | "cancelled";
+
+/**
+ * Manages a drag-and-drop lifecycle with explicit state transitions.
+ * Prevents illegal transitions (move before begin, double-drop, etc.).
+ */
+export class DragSession<T = unknown> {
+  private _state: DragSessionState = "idle";
+  private _proxy: DragProxy<T> | null = null;
+
+  get state(): DragSessionState {
+    return this._state;
+  }
+
+  get proxy(): DragProxy<T> | null {
+    return this._proxy;
+  }
+
+  /** Start a drag. Requires idle or dragging state; call reset() after drop/cancel. */
+  begin(source: DragSource<T>, position: DragPosition = { x: 0, y: 0 }): DragProxy<T> {
+    if (this._state === "dropped" || this._state === "cancelled") {
+      throw new Error(`Cannot begin drag from "${this._state}" state; call reset() first`);
+    }
+    if (this._state === "dragging") {
+      this._proxy = null;
+    }
+    this._proxy = source.beginDrag(position);
+    this._state = "dragging";
+    return this._proxy;
+  }
+
+  /** Move the proxy. Returns null if not dragging. */
+  move(position: DragPosition): DragProxy<T> | null {
+    if (this._state !== "dragging" || !this._proxy) return null;
+    this._proxy.moveTo(position);
+    return this._proxy;
+  }
+
+  /** Attempt to drop on a target. Stays "dragging" on failed/rejected drop. */
+  drop(target: DropTarget<T>, policy: DropPolicy): boolean {
+    if (this._state !== "dragging" || !this._proxy) return false;
+    const result = target.drop(this._proxy, policy);
+    if (result) {
+      this._state = "dropped";
+      this._proxy = null;
+    }
+    return result;
+  }
+
+  /** Cancel the current drag. No-op if not dragging. */
+  cancel(): void {
+    if (this._state === "dragging") {
+      this._state = "cancelled";
+      this._proxy = null;
+    }
+  }
+
+  /** Reset to idle so a new drag can begin. */
+  reset(): void {
+    this._state = "idle";
+    this._proxy = null;
   }
 }

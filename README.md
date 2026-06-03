@@ -28,7 +28,7 @@ npm run serve
 
 ## What's implemented
 
-**336 source modules, 73188 lines, 2,500+ tests.**
+**349 source modules, 80,678 lines, 3,300+ tests.**
 
 ### Tweedle Language
 
@@ -138,6 +138,13 @@ standard library, and debugger.
 | `program-execution` | Program runner, breakpoints, step controller |
 | `alice-ide-state` | Centralized IDE state management |
 | `ide-perspectives` | Code/Scene/Run perspective switching |
+| `ide-command-operations` | Undoable IDE commands (move, resize, rename, group, align, etc.) |
+| `keyboard-event-bridge` | AWT KeyEvent → DOM keyboard event mapping with platform-aware modifiers |
+| `drag-drop-bridge` | Typed drag payloads with schema validation for IDE drag-and-drop |
+| `accessibility-bridge` | ARIA roles, live regions, screen reader announcements for IDE panels |
+| `event-system-bridge` | AWT/Swing → DOM event adapter with InputMap/ActionMap binding translation |
+| `layout-bridge` | Java layout manager → CSS translation (migration utility) |
+| `component-abstraction` | Swing component → framework-neutral descriptor (migration utility) |
 | `keyboard-shortcuts` | Shortcut management with conflict detection |
 | `notification-system` | Toast/banner notifications |
 | `object-properties` | Property editor panel |

@@ -129,6 +129,26 @@ export class ShortcutManager {
     return matches;
   }
 
+  /**
+   * Trigger at most one shortcut for a combo, preferring scoped over global.
+   * Scoped shortcuts (those with contexts matching the active set) win
+   * over global shortcuts (those with no contexts restriction).
+   */
+  triggerFirst(combo: string, contexts: string[] = []): ShortcutDefinition | null {
+    const contextSet = new Set(contexts);
+    const contextual = new ContextualShortcuts(contextSet);
+    const matches = contextual.filter(this.shortcutMap.lookup(combo));
+    if (matches.length === 0) return null;
+
+    // Partition into scoped (has at least one matching context) and global (no contexts)
+    const scoped = matches.filter(
+      (s) => s.contexts?.length && s.contexts.some((c) => contextSet.has(c)),
+    );
+    const winner = scoped.length > 0 ? scoped[0] : matches[0];
+    winner.action?.();
+    return winner;
+  }
+
   conflicts(): ShortcutConflict[] {
     return new ShortcutConflictDetector().detect(this.shortcutsById.values());
   }

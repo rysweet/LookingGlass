@@ -937,3 +937,92 @@ Tests are in `test/`:
   `project-io.ts`).
 - **`structuredClone()` requires Node 17+.** The project targets ES2022, so
   this is expected to be available.
+
+---
+
+## IDE Command Operations & Bridge Modules
+
+Issue [#88](https://github.com/rysweet/alice-web-prototype/issues/88) added
+command-pattern expansion and several bridge modules that translate Java
+Alice's AWT/Swing patterns to web equivalents.
+
+### IDE Command Operations (`ide-command-operations.ts`)
+
+Extends the undoable command system with ~32 commands (up from the original
+~17). Every command implements execute/undo symmetry and uses domain
+contracts — for example, `MoveEntityCommand` requires the target to be an
+`SMovableTurnable` rather than accepting arbitrary `SThing` instances.
+
+| Command Group | Commands |
+|---|---|
+| **Transform** | MoveEntity, ResizeEntity, RotateEntity |
+| **Property** | SetProperty, SetPaint, SetOpacity, ToggleVisibility |
+| **Hierarchy** | AddEntity, RemoveEntity, ReparentEntity, ReorderEntity |
+| **Organization** | GroupEntities, UngroupEntities |
+| **Naming** | RenameEntity |
+| **Alignment** | AlignEntities (left, center, right, top, middle, bottom) |
+| **Distribution** | DistributeEntities (horizontal, vertical) |
+| **Batch** | BatchCommand (rollback-safe composite execution) |
+
+### Event System Bridge (`event-system-bridge.ts`)
+
+Maps AWT/Swing event constants and key codes to DOM equivalents. Provides
+`DOMEventAdapter` to attach to a DOM element and dispatch through the existing
+`EventSystem`, plus `InputMapBridge` for translating Java InputMap/ActionMap
+keyboard bindings to DOM listeners with exact modifier matching.
+
+### Keyboard Event Bridge (`keyboard-event-bridge.ts`)
+
+Platform-aware keyboard shortcut registry. `resolveModCombo` maps the
+platform-neutral `mod` modifier to `ctrl` (Windows/Linux) or `meta` (macOS).
+Handles key normalization, conflict detection, and shortcut serialization.
+
+### Drag-Drop Bridge (`drag-drop-bridge.ts`)
+
+Typed drag payloads with schema validation. `DragDataTransfer` manages
+serialization and deserialization of drag data with field-level validation,
+supporting entity references, code blocks, and gallery items.
+
+### Accessibility Bridge (`accessibility-bridge.ts`)
+
+Comprehensive ARIA integration. Manages roles, live regions, and a queued
+`AccessibilityAnnouncer` that rate-limits screen reader announcements to
+prevent flooding. Covers IDE panels, dialogs, and editor regions.
+
+### Layout Bridge (`layout-bridge.ts`) — *Migration Utility*
+
+Translates six Java AWT/Swing layout managers to CSS equivalents:
+
+| Java Layout | CSS Translation |
+|---|---|
+| `BorderLayout` | CSS Grid with named areas (`north`, `south`, `east`, `west`, `center`) |
+| `BoxLayout` | Flexbox (row or column) |
+| `FlowLayout` | Flexbox with wrap |
+| `GridLayout` | CSS Grid with equal tracks |
+| `GridBagLayout` | CSS Grid with explicit row/column/span constraints |
+| `CardLayout` | Stacked panels with `visibility` toggle |
+
+> **Note:** This module exists for migration compatibility when porting Java
+> Alice layout code. New web UI should use CSS Grid/Flexbox directly.
+
+### Component Abstraction (`component-abstraction.ts`) — *Migration Utility*
+
+Defines Swing-equivalent components as framework-neutral `ComponentDescriptor`
+data objects. The `HTMLAdapter` converts descriptors to `HTMLElementSpec`
+records suitable for DOM creation by any renderer.
+
+> **Note:** This module exists for migration compatibility when translating
+> Java Swing component definitions. New web UI should use the project's
+> chosen framework (React, Vue, etc.) directly.
+
+### Testing
+
+| Test File | Covers |
+|---|---|
+| `test/ide-command-operations.test.ts` | All command types, undo/redo symmetry, domain contracts, batch rollback |
+| `test/event-system-bridge.test.ts` | AWT→DOM mapping, DOMEventAdapter dispatch, InputMap exact-match resolution |
+| `test/keyboard-event-bridge.test.ts` | Platform mod resolution, normalization, conflict detection |
+| `test/drag-drop-bridge.test.ts` | Payload serialization, schema validation, deep clone isolation |
+| `test/accessibility-bridge.test.ts` | ARIA roles, live regions, announcer rate-limiting |
+| `test/layout-bridge.test.ts` | All 6 layout translations, container/child CSS output |
+| `test/component-abstraction.test.ts` | Descriptor→HTMLElementSpec mapping, nested components, event binding |
