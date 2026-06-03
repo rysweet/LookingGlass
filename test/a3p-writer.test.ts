@@ -2,10 +2,14 @@ import { beforeAll, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import JSZip from "jszip";
-import * as a3pParserModule from "../src/a3p-parser";
-import * as a3pWriterModule from "../src/a3p-writer";
-import { parseA3P, type AliceMethod, type AliceProject, type AliceStatement } from "../src/a3p-parser";
-import { writeA3P } from "../src/a3p-writer";
+import {
+  PARSED_A3P_STATEMENT_KINDS,
+  parseA3P,
+  type AliceMethod,
+  type AliceProject,
+  type AliceStatement,
+} from "../src/a3p-parser";
+import { SUPPORTED_A3P_STATEMENT_KINDS, writeA3P } from "../src/a3p-writer";
 
 beforeAll(async () => {
   if (typeof globalThis.DOMParser === "undefined" || typeof globalThis.XMLSerializer === "undefined") {
@@ -119,14 +123,6 @@ const EXPECTED_SUPPORTED_A3P_STATEMENT_KINDS = [
   ...EXPECTED_PARSED_A3P_STATEMENT_KINDS,
   ...WRITER_ONLY_A3P_STATEMENT_KINDS,
 ] as const;
-
-type A3PParserCoverageModule = typeof a3pParserModule & {
-  PARSED_A3P_STATEMENT_KINDS?: readonly string[];
-};
-
-type A3PWriterCoverageModule = typeof a3pWriterModule & {
-  SUPPORTED_A3P_STATEMENT_KINDS?: readonly string[];
-};
 
 interface ParserRoundTripStatementCase {
   kind: string;
@@ -466,7 +462,7 @@ describe("a3p statement coverage contract", () => {
       EXPECTED_PARSED_A3P_STATEMENT_KINDS,
     );
     expectExactStatementKindSet(
-      (a3pParserModule as A3PParserCoverageModule).PARSED_A3P_STATEMENT_KINDS,
+      PARSED_A3P_STATEMENT_KINDS,
       EXPECTED_PARSED_A3P_STATEMENT_KINDS,
     );
   });
@@ -480,7 +476,7 @@ describe("a3p statement coverage contract", () => {
       EXPECTED_SUPPORTED_A3P_STATEMENT_KINDS,
     );
     expectExactStatementKindSet(
-      (a3pWriterModule as A3PWriterCoverageModule).SUPPORTED_A3P_STATEMENT_KINDS,
+      SUPPORTED_A3P_STATEMENT_KINDS,
       EXPECTED_SUPPORTED_A3P_STATEMENT_KINDS,
     );
   });

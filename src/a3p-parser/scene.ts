@@ -283,21 +283,7 @@ function extractStatements(methodNode: Element, keyMap: Map<string, Element>): A
   const bodyNode = getPropertyNode(methodNode, "body", keyMap);
   if (!bodyNode) return [];
 
-  const statementsProperty = getProperty(bodyNode, "statements");
-  if (!statementsProperty) return [];
-
-  const results: AliceStatement[] = [];
-  const collection = directChild(statementsProperty, "collection");
-  const container = collection ?? statementsProperty;
-
-  for (let i = 0; i < container.childNodes.length; i++) {
-    const child = container.childNodes[i] as Element;
-    if (child.nodeType !== 1 || child.tagName !== "node") continue;
-    const statement = parseStatement(resolve(child, keyMap), keyMap);
-    if (statement) results.push(statement);
-  }
-
-  return results;
+  return parseStatementListProperty(bodyNode, "statements", keyMap);
 }
 
 function parseStatement(node: Element, keyMap: Map<string, Element>): AliceStatement | null {
@@ -411,8 +397,13 @@ function extractArguments(invocationNode: Element, keyMap: Map<string, Element>)
 function parseStatementBlock(parentNode: Element, propertyName: string, keyMap: Map<string, Element>): AliceStatement[] {
   const bodyNode = getPropertyNode(parentNode, propertyName, keyMap);
   if (!bodyNode) return [];
-  const statementsProperty = getProperty(bodyNode, "statements");
+  return parseStatementListProperty(bodyNode, "statements", keyMap);
+}
+
+function parseStatementListProperty(parentNode: Element, propertyName: string, keyMap: Map<string, Element>): AliceStatement[] {
+  const statementsProperty = getProperty(parentNode, propertyName);
   if (!statementsProperty) return [];
+
   const results: AliceStatement[] = [];
   const collection = directChild(statementsProperty, "collection");
   const container = collection ?? statementsProperty;

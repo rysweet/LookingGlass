@@ -44,7 +44,7 @@ export const SUPPORTED_A3P_STATEMENT_KINDS = [
 
 export function buildProjectXml(project: AliceProject, baseXmlText: string | null): string {
   const source = getA3PSource(project);
-  if (baseXmlText !== null && source?.snapshot === snapshotAliceProject(project)) {
+  if (baseXmlText !== null && source && source.snapshot === snapshotAliceProject(project)) {
     return baseXmlText;
   }
 
@@ -68,7 +68,7 @@ export function buildProjectXml(project: AliceProject, baseXmlText: string | nul
 
   if (project.types?.length) {
     const typeMap = new Map<string, Element>();
-    for (const node of getNamedUserTypeNodes(doc)) {
+    for (const node of typeNodes) {
       const name = getPropertyText(node, "name");
       if (name) typeMap.set(name, node);
     }
@@ -420,7 +420,7 @@ function createStatementNode(doc: Document, statement: AliceMethod["statements"]
       loopNode.setAttribute("uuid", generateUuid());
       appendBooleanProperty(doc, loopNode, "isEnabled", true);
       appendStringProperty(doc, loopNode, "count", String(statement.count ?? 1), "java.lang.Integer");
-      appendBlockBody(doc, loopNode, statement.body ?? []);
+      appendStatementBlockProperty(doc, loopNode, "body", statement.body ?? []);
       return loopNode;
     }
     case "IfElse": {
@@ -456,7 +456,7 @@ function createStatementNode(doc: Document, statement: AliceMethod["statements"]
       doNode.setAttribute("type", "org.lgna.project.ast.DoInOrder");
       doNode.setAttribute("uuid", generateUuid());
       appendBooleanProperty(doc, doNode, "isEnabled", true);
-      appendBlockBody(doc, doNode, statement.body ?? []);
+      appendStatementBlockProperty(doc, doNode, "body", statement.body ?? []);
       return doNode;
     }
     case "DoTogether": {
@@ -464,7 +464,7 @@ function createStatementNode(doc: Document, statement: AliceMethod["statements"]
       dtNode.setAttribute("type", "org.lgna.project.ast.DoTogether");
       dtNode.setAttribute("uuid", generateUuid());
       appendBooleanProperty(doc, dtNode, "isEnabled", true);
-      appendBlockBody(doc, dtNode, statement.body ?? []);
+      appendStatementBlockProperty(doc, dtNode, "body", statement.body ?? []);
       return dtNode;
     }
     case "WhileLoop": {
@@ -473,7 +473,7 @@ function createStatementNode(doc: Document, statement: AliceMethod["statements"]
       whNode.setAttribute("uuid", generateUuid());
       appendBooleanProperty(doc, whNode, "isEnabled", true);
       appendStringProperty(doc, whNode, "condition", statement.condition ?? "unknown");
-      appendBlockBody(doc, whNode, statement.body ?? []);
+      appendStatementBlockProperty(doc, whNode, "body", statement.body ?? []);
       return whNode;
     }
     case "ForEachInArrayLoop": {
@@ -501,7 +501,7 @@ function createStatementNode(doc: Document, statement: AliceMethod["statements"]
       const lambda = doc.createElement("node");
       lambda.setAttribute("type", "org.lgna.project.ast.LambdaExpression");
       lambda.setAttribute("uuid", generateUuid());
-      appendBlockBody(doc, lambda, statement.body ?? []);
+      appendStatementBlockProperty(doc, lambda, "body", statement.body ?? []);
       argsCollection.appendChild(lambda);
       return createExpressionStatementNode(doc, invocation);
     }
@@ -559,19 +559,15 @@ function createExpressionStatementNode(doc: Document, expressionNode: Element): 
 }
 
 function createForEachInArrayLoopNode(doc: Document, nodeType: string, statement: AliceStatement): Element {
-      const feNode = doc.createElement("node");
-      feNode.setAttribute("type", nodeType);
-      feNode.setAttribute("uuid", generateUuid());
-      appendBooleanProperty(doc, feNode, "isEnabled", true);
-      appendTypeProperty(doc, feNode, "itemType", statement.itemType ?? "java.lang.Object");
-      appendStringProperty(doc, feNode, "itemName", statement.itemName ?? "item");
-      appendStringProperty(doc, feNode, "array", statement.collection ?? "unknown");
-      appendBlockBody(doc, feNode, statement.body ?? []);
-      return feNode;
-}
-
-function appendBlockBody(doc: Document, parentNode: Element, statements: AliceStatement[]): void {
-  appendStatementBlockProperty(doc, parentNode, "body", statements);
+  const feNode = doc.createElement("node");
+  feNode.setAttribute("type", nodeType);
+  feNode.setAttribute("uuid", generateUuid());
+  appendBooleanProperty(doc, feNode, "isEnabled", true);
+  appendTypeProperty(doc, feNode, "itemType", statement.itemType ?? "java.lang.Object");
+  appendStringProperty(doc, feNode, "itemName", statement.itemName ?? "item");
+  appendStringProperty(doc, feNode, "array", statement.collection ?? "unknown");
+  appendStatementBlockProperty(doc, feNode, "body", statement.body ?? []);
+  return feNode;
 }
 
 function appendStatementBlockProperty(doc: Document, parentNode: Element, propertyName: string, statements: AliceStatement[]): void {
