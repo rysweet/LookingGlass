@@ -1,6 +1,11 @@
 /**
  * Translates Java Alice's Swing layout concepts to CSS/HTML equivalents.
  *
+ * NOTE: This module exists as a **migration utility** for translating existing
+ * Java Alice layout code to web equivalents. New web UI should use CSS
+ * Grid/Flexbox directly rather than going through these Java layout
+ * abstractions. The web platform provides all this functionality natively.
+ *
  * Java Alice uses AWT/Swing layout managers:
  * - BorderLayout → CSS Grid with named areas
  * - BoxLayout → CSS Flexbox (row or column)

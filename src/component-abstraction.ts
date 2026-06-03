@@ -1,6 +1,12 @@
 /**
  * Renderer-agnostic component abstraction for Alice IDE.
  *
+ * NOTE: This module exists as a **migration utility** for translating existing
+ * Java Alice Swing component definitions into web-compatible descriptors.
+ * New web UI should use the project's chosen framework (React, Vue, etc.)
+ * directly rather than going through this abstraction layer. The web platform
+ * and its frameworks already provide equivalent component models.
+ *
  * Java Alice defines UI via Swing components (JButton, JLabel, JPanel, etc.).
  * This module defines Alice components in framework-neutral terms with
  * HTML/CSS adapters, so any renderer (React, Vue, vanilla DOM) can consume them.
