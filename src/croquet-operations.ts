@@ -1,9 +1,12 @@
 import type { Scene } from "./story-api/scene";
 import type { SThing } from "./story-api/entities";
 import type { Orientation, Position, Size } from "./story-api/types";
+import type { Command } from "./undo-redo";
 
 export interface OperationMetadata {
   readonly kind?: string;
+  /** When false, the operation is fire-and-forget: executed but not pushed onto the undo stack. */
+  readonly undoable?: boolean;
   readonly [key: string]: unknown;
 }
 
@@ -142,6 +145,9 @@ export class OperationHistory {
 
   execute<T extends Operation>(operation: T): T {
     operation.execute();
+    if (operation.metadata.undoable === false) {
+      return operation;
+    }
     this.undoStack.push(operation);
     this.redoStack.length = 0;
     return operation;
@@ -453,5 +459,36 @@ export class ReparentOperation<TEntity extends ReparentableEntity<any>> extends 
     );
     this.entity = entity;
     this.nextParent = nextParent;
+  }
+}
+
+/**
+ * Adapts a croquet-operations Operation into a Command for use with UndoRedoManager.
+ * The factory is called exactly once on first execute; subsequent execute() calls
+ * (i.e. redo via UndoRedoManager) delegate to operation.redo().
+ */
+export class OperationCommandAdapter implements Command {
+  private operation: Operation | null = null;
+
+  constructor(
+    private readonly factory: () => Operation,
+    private readonly label?: string,
+  ) {}
+
+  get description(): string {
+    return this.label ?? this.operation?.name ?? "operation";
+  }
+
+  execute(): void {
+    if (!this.operation) {
+      this.operation = this.factory();
+      this.operation.execute();
+    } else {
+      this.operation.redo();
+    }
+  }
+
+  undo(): void {
+    this.operation?.undo();
   }
 }
