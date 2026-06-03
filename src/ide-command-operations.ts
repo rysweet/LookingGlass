@@ -572,3 +572,460 @@ export class BatchCommand implements Command {
     this.executedCount = 0;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Domain Contracts (per rubber-duck guidance: explicit target interfaces)
+// ---------------------------------------------------------------------------
+
+/** Scene-level entity management contract for add/remove commands. */
+export interface SceneEntityManager {
+  addEntity(name: string, entity: SThing): void;
+  removeEntity(name: string): SThing | undefined;
+  getEntity(name: string): SThing | undefined;
+  get entities(): ReadonlyMap<string, SThing>;
+}
+
+/** Grouping contract for group/ungroup operations. */
+export interface GroupingTarget {
+  getEntity(id: string): SThing | null;
+  createGroup(name: string, memberNames: string[]): SThing;
+  dissolveGroup(groupName: string): string[];
+}
+
+// ---------------------------------------------------------------------------
+// Add / Remove Entity Commands
+// ---------------------------------------------------------------------------
+
+export class AddEntityToSceneCommand implements Command {
+  private added = false;
+
+  constructor(
+    private readonly scene: Scene,
+    private readonly entityName: string,
+    private readonly entity: SThing,
+  ) {}
+
+  get description(): string {
+    return `Add "${this.entityName}" to scene`;
+  }
+
+  execute(): void {
+    if (this.scene.getEntity(this.entityName)) {
+      throw new Error(`Entity "${this.entityName}" already exists`);
+    }
+    this.scene.addEntity(this.entityName, this.entity);
+    this.added = true;
+  }
+
+  undo(): void {
+    if (this.added) {
+      this.scene.removeEntity(this.entityName);
+      this.added = false;
+    }
+  }
+}
+
+export class RemoveEntityFromSceneCommand implements Command {
+  private removedEntity: SThing | null = null;
+
+  constructor(
+    private readonly scene: Scene,
+    private readonly entityName: string,
+  ) {}
+
+  get description(): string {
+    return `Remove "${this.entityName}" from scene`;
+  }
+
+  execute(): void {
+    const entity = this.scene.getEntity(this.entityName);
+    if (!entity) throw new Error(`Entity "${this.entityName}" not found`);
+    this.removedEntity = entity;
+    this.scene.removeEntity(this.entityName);
+  }
+
+  undo(): void {
+    if (this.removedEntity) {
+      this.scene.addEntity(this.entityName, this.removedEntity);
+      this.removedEntity = null;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Group / Ungroup Commands
+// ---------------------------------------------------------------------------
+
+export class GroupEntitiesCommand implements Command {
+  private previousSelections: ReadonlySet<string> | null = null;
+
+  constructor(
+    private readonly grouping: GroupingTarget,
+    private readonly groupName: string,
+    private readonly memberNames: string[],
+    private readonly selection?: SelectionModel,
+  ) {}
+
+  get description(): string {
+    return `Group ${this.memberNames.length} entities as "${this.groupName}"`;
+  }
+
+  execute(): void {
+    for (const name of this.memberNames) {
+      if (!this.grouping.getEntity(name)) {
+        throw new Error(`Entity "${name}" not found for grouping`);
+      }
+    }
+    if (this.selection) {
+      this.previousSelections = new Set(this.selection.selected);
+    }
+    this.grouping.createGroup(this.groupName, [...this.memberNames]);
+    if (this.selection) {
+      this.selection.clear();
+      this.selection.select([this.groupName]);
+    }
+  }
+
+  undo(): void {
+    this.grouping.dissolveGroup(this.groupName);
+    if (this.selection && this.previousSelections) {
+      this.selection.clear();
+      this.selection.select(this.previousSelections);
+    }
+  }
+}
+
+export class UngroupEntitiesCommand implements Command {
+  private dissolvedMembers: string[] = [];
+
+  constructor(
+    private readonly grouping: GroupingTarget,
+    private readonly groupName: string,
+    private readonly selection?: SelectionModel,
+  ) {}
+
+  get description(): string {
+    return `Ungroup "${this.groupName}"`;
+  }
+
+  execute(): void {
+    this.dissolvedMembers = this.grouping.dissolveGroup(this.groupName);
+    if (this.selection) {
+      this.selection.clear();
+      this.selection.select(this.dissolvedMembers);
+    }
+  }
+
+  undo(): void {
+    if (this.dissolvedMembers.length > 0) {
+      this.grouping.createGroup(this.groupName, this.dissolvedMembers);
+      if (this.selection) {
+        this.selection.clear();
+        this.selection.select([this.groupName]);
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Entity Transform Commands
+// ---------------------------------------------------------------------------
+
+export class SetEntityPositionCommand implements Command {
+  private previousPosition: Position | null = null;
+
+  constructor(
+    private readonly scene: Scene,
+    private readonly entityName: string,
+    private readonly newPosition: Position,
+  ) {}
+
+  get description(): string {
+    return `Move "${this.entityName}"`;
+  }
+
+  execute(): void {
+    const entity = this.scene.getEntity(this.entityName);
+    if (!entity) throw new Error(`Entity "${this.entityName}" not found`);
+    if (!(entity instanceof SMovableTurnable)) {
+      throw new Error(`Entity "${this.entityName}" does not support position`);
+    }
+    this.previousPosition = { ...entity.position };
+    entity.position = { ...this.newPosition };
+  }
+
+  undo(): void {
+    if (!this.previousPosition) return;
+    const entity = this.scene.getEntity(this.entityName);
+    if (entity instanceof SMovableTurnable) {
+      entity.position = { ...this.previousPosition };
+    }
+  }
+}
+
+export class SetEntityOrientationCommand implements Command {
+  private previousOrientation: Orientation | null = null;
+
+  constructor(
+    private readonly scene: Scene,
+    private readonly entityName: string,
+    private readonly newOrientation: Orientation,
+  ) {}
+
+  get description(): string {
+    return `Rotate "${this.entityName}"`;
+  }
+
+  execute(): void {
+    const entity = this.scene.getEntity(this.entityName);
+    if (!entity) throw new Error(`Entity "${this.entityName}" not found`);
+    if (!(entity instanceof SMovableTurnable)) {
+      throw new Error(`Entity "${this.entityName}" does not support orientation`);
+    }
+    this.previousOrientation = { ...entity.orientation };
+    entity.orientation = { ...this.newOrientation };
+  }
+
+  undo(): void {
+    if (!this.previousOrientation) return;
+    const entity = this.scene.getEntity(this.entityName);
+    if (entity instanceof SMovableTurnable) {
+      entity.orientation = { ...this.previousOrientation };
+    }
+  }
+}
+
+export class SetEntitySizeCommand implements Command {
+  private previousSize: { width: number; height: number; depth: number } | null = null;
+
+  constructor(
+    private readonly target: { width: number; height: number; depth: number },
+    private readonly entityName: string,
+    private readonly newSize: { width: number; height: number; depth: number },
+  ) {}
+
+  get description(): string {
+    return `Resize "${this.entityName}"`;
+  }
+
+  execute(): void {
+    this.previousSize = {
+      width: this.target.width,
+      height: this.target.height,
+      depth: this.target.depth,
+    };
+    this.target.width = this.newSize.width;
+    this.target.height = this.newSize.height;
+    this.target.depth = this.newSize.depth;
+  }
+
+  undo(): void {
+    if (this.previousSize) {
+      this.target.width = this.previousSize.width;
+      this.target.height = this.previousSize.height;
+      this.target.depth = this.previousSize.depth;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Method / Statement Commands (continued)
+// ---------------------------------------------------------------------------
+
+export class CreateMethodCommand implements Command {
+  private created = false;
+
+  constructor(
+    private readonly procedures: Map<string, string[]>,
+    private readonly methodName: string,
+    private readonly initialStatements: string[] = [],
+  ) {}
+
+  get description(): string {
+    return `Create method "${this.methodName}"`;
+  }
+
+  execute(): void {
+    if (this.procedures.has(this.methodName)) {
+      throw new Error(`Method "${this.methodName}" already exists`);
+    }
+    this.procedures.set(this.methodName, [...this.initialStatements]);
+    this.created = true;
+  }
+
+  undo(): void {
+    if (this.created) {
+      this.procedures.delete(this.methodName);
+      this.created = false;
+    }
+  }
+}
+
+export class DeleteMethodCommand implements Command {
+  private capturedStatements: string[] | null = null;
+
+  constructor(
+    private readonly procedures: Map<string, string[]>,
+    private readonly methodName: string,
+  ) {}
+
+  get description(): string {
+    return `Delete method "${this.methodName}"`;
+  }
+
+  execute(): void {
+    const stmts = this.procedures.get(this.methodName);
+    if (!stmts) throw new Error(`Method "${this.methodName}" not found`);
+    this.capturedStatements = [...stmts];
+    this.procedures.delete(this.methodName);
+  }
+
+  undo(): void {
+    if (this.capturedStatements) {
+      this.procedures.set(this.methodName, [...this.capturedStatements]);
+      this.capturedStatements = null;
+    }
+  }
+}
+
+export class AddStatementCommand implements Command {
+  private added = false;
+
+  constructor(
+    private readonly procedures: Map<string, string[]>,
+    private readonly methodName: string,
+    private readonly statement: string,
+    private readonly index?: number,
+  ) {}
+
+  get description(): string {
+    return `Add statement to "${this.methodName}"`;
+  }
+
+  execute(): void {
+    const stmts = this.procedures.get(this.methodName);
+    if (!stmts) throw new Error(`Method "${this.methodName}" not found`);
+    const insertAt = this.index !== undefined
+      ? Math.max(0, Math.min(this.index, stmts.length))
+      : stmts.length;
+    stmts.splice(insertAt, 0, this.statement);
+    this.added = true;
+  }
+
+  undo(): void {
+    if (!this.added) return;
+    const stmts = this.procedures.get(this.methodName);
+    if (!stmts) return;
+    const idx = stmts.indexOf(this.statement);
+    if (idx >= 0) {
+      stmts.splice(idx, 1);
+    }
+    this.added = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scene Property Commands (continued)
+// ---------------------------------------------------------------------------
+
+export class SetSceneBackgroundCommand implements Command {
+  private previousColor: string | null = null;
+
+  constructor(
+    private readonly scene: Scene,
+    private readonly newColor: string,
+  ) {}
+
+  get description(): string {
+    return `Set background color to ${this.newColor}`;
+  }
+
+  execute(): void {
+    this.previousColor = this.scene.atmosphereColor ?? null;
+    this.scene.atmosphereColor = this.newColor;
+  }
+
+  undo(): void {
+    if (this.previousColor !== null) {
+      this.scene.atmosphereColor = this.previousColor;
+    }
+  }
+}
+
+export class TogglePropertyCommand implements Command {
+  private previousValue: boolean | null = null;
+
+  constructor(
+    private readonly target: Record<string, boolean>,
+    private readonly property: string,
+    private readonly propertyLabel: string = property,
+  ) {}
+
+  get description(): string {
+    return `Toggle ${this.propertyLabel}`;
+  }
+
+  execute(): void {
+    this.previousValue = this.target[this.property] ?? false;
+    this.target[this.property] = !this.previousValue;
+  }
+
+  undo(): void {
+    if (this.previousValue !== null) {
+      this.target[this.property] = this.previousValue;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-Entity Selection Commands
+// ---------------------------------------------------------------------------
+
+export class AddToSelectionCommand implements Command {
+  private readonly toAdd: string[];
+  private alreadySelected: string[] = [];
+
+  constructor(
+    private readonly model: SelectionModel,
+    names: readonly string[],
+  ) {
+    this.toAdd = [...names];
+  }
+
+  get description(): string {
+    return `Add ${this.toAdd.length} to selection`;
+  }
+
+  execute(): void {
+    this.alreadySelected = this.toAdd.filter((n) => this.model.selected.has(n));
+    const newNames = this.toAdd.filter((n) => !this.model.selected.has(n));
+    this.model.select(newNames);
+  }
+
+  undo(): void {
+    const toRemove = this.toAdd.filter((n) => !this.alreadySelected.includes(n));
+    this.model.deselect(toRemove);
+  }
+}
+
+export class RemoveFromSelectionCommand implements Command {
+  private removed: string[] = [];
+
+  constructor(
+    private readonly model: SelectionModel,
+    private readonly names: readonly string[],
+  ) {}
+
+  get description(): string {
+    return `Remove ${this.names.length} from selection`;
+  }
+
+  execute(): void {
+    this.removed = [...this.names].filter((n) => this.model.selected.has(n));
+    this.model.deselect(this.removed);
+  }
+
+  undo(): void {
+    this.model.select(this.removed);
+  }
+}

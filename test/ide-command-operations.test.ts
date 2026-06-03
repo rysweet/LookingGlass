@@ -1,27 +1,41 @@
 import { describe, expect, it } from "vitest";
 import {
+  AddEntityToSceneCommand,
+  AddStatementCommand,
+  AddToSelectionCommand,
   BatchCommand,
   ClearSceneCommand,
+  CreateMethodCommand,
+  DeleteMethodCommand,
   DeleteStatementCommand,
   DuplicateEntityCommand,
+  GroupEntitiesCommand,
   MoveStatementCommand,
+  RemoveEntityFromSceneCommand,
+  RemoveFromSelectionCommand,
   RenameEntityCommand,
   RenameMethodCommand,
   ReplaceStatementCommand,
   SelectionChangeCommand,
   SetCameraViewCommand,
   SetEntityOpacityCommand,
+  SetEntityOrientationCommand,
+  SetEntityPositionCommand,
+  SetEntitySizeCommand,
   SetPropertyCommand,
+  SetSceneBackgroundCommand,
   SetScenePropertyCommand,
   SetVehicleCommand,
   SetVisibilityCommand,
   SwapEntityPositionsCommand,
+  TogglePropertyCommand,
+  UngroupEntitiesCommand,
   type EntityCloneFactory,
   type SelectionModel,
 } from "../src/ide-command-operations";
 import { UndoRedoManager } from "../src/undo-redo";
 import { Scene } from "../src/story-api/scene";
-import { SModel, SMovableTurnable, SProp } from "../src/story-api/entities";
+import { SModel, SMovableTurnable, SProp, SThing } from "../src/story-api/entities";
 
 function makeScene(...names: string[]): Scene {
   const scene = new Scene();
@@ -307,5 +321,266 @@ describe("ide-command-operations", () => {
 
     manager.redo();
     expect(entity.isShowing).toBe(false);
+  });
+
+  // ---------- Add / Remove Entity Commands ----------
+
+  it("adds an entity to the scene with undo", () => {
+    const scene = new Scene();
+    const entity = new SModel();
+    const manager = new UndoRedoManager();
+
+    manager.execute(new AddEntityToSceneCommand(scene, "rabbit", entity));
+    expect(scene.getEntity("rabbit")).toBe(entity);
+
+    manager.undo();
+    expect(scene.getEntity("rabbit")).toBeUndefined();
+  });
+
+  it("throws when adding a duplicate entity name", () => {
+    const scene = makeScene("rabbit");
+    expect(() => new AddEntityToSceneCommand(scene, "rabbit", new SModel()).execute()).toThrow("already exists");
+  });
+
+  it("removes an entity from the scene with undo", () => {
+    const scene = makeScene("rabbit");
+    const entity = scene.getEntity("rabbit")!;
+    const manager = new UndoRedoManager();
+
+    manager.execute(new RemoveEntityFromSceneCommand(scene, "rabbit"));
+    expect(scene.getEntity("rabbit")).toBeUndefined();
+
+    manager.undo();
+    expect(scene.getEntity("rabbit")).toBe(entity);
+  });
+
+  it("throws when removing a nonexistent entity", () => {
+    const scene = new Scene();
+    expect(() => new RemoveEntityFromSceneCommand(scene, "ghost").execute()).toThrow("not found");
+  });
+
+  // ---------- Group / Ungroup Commands ----------
+
+  it("groups and ungroups entities", () => {
+    const entities = new Map<string, any>([
+      ["a", { name: "a" }],
+      ["b", { name: "b" }],
+    ]);
+    const grouping = {
+      getEntity: (id: string) => entities.get(id) ?? null,
+      createGroup: (name: string, members: string[]) => {
+        const group = { name, members };
+        entities.set(name, group);
+        return group;
+      },
+      dissolveGroup: (groupName: string) => {
+        const group = entities.get(groupName) as any;
+        entities.delete(groupName);
+        return group?.members ?? [];
+      },
+    };
+    const manager = new UndoRedoManager();
+
+    manager.execute(new GroupEntitiesCommand(grouping, "group1", ["a", "b"]));
+    expect(entities.has("group1")).toBe(true);
+
+    manager.undo();
+    expect(entities.has("group1")).toBe(false);
+  });
+
+  it("throws when grouping nonexistent entities", () => {
+    const grouping = {
+      getEntity: () => null,
+      createGroup: () => ({}),
+      dissolveGroup: () => [],
+    };
+    expect(() => new GroupEntitiesCommand(grouping as any, "g", ["missing"]).execute()).toThrow("not found");
+  });
+
+  it("ungroups and restores on undo", () => {
+    const entities = new Map<string, any>([
+      ["group1", { name: "group1", members: ["a", "b"] }],
+    ]);
+    const grouping = {
+      getEntity: (id: string) => entities.get(id) ?? null,
+      createGroup: (name: string, members: string[]) => {
+        const group = { name, members };
+        entities.set(name, group);
+        return group;
+      },
+      dissolveGroup: (groupName: string) => {
+        const group = entities.get(groupName) as any;
+        entities.delete(groupName);
+        return group?.members ?? [];
+      },
+    };
+    const manager = new UndoRedoManager();
+
+    manager.execute(new UngroupEntitiesCommand(grouping, "group1"));
+    expect(entities.has("group1")).toBe(false);
+
+    manager.undo();
+    expect(entities.has("group1")).toBe(true);
+  });
+
+  // ---------- Entity Transform Commands ----------
+
+  it("sets entity position with undo", () => {
+    const scene = new Scene();
+    const entity = new SModel();
+    entity.position = { x: 0, y: 0, z: 0 };
+    scene.addEntity("obj", entity);
+    const manager = new UndoRedoManager();
+
+    manager.execute(new SetEntityPositionCommand(scene, "obj", { x: 10, y: 20, z: 30 }));
+    expect(entity.position).toEqual({ x: 10, y: 20, z: 30 });
+
+    manager.undo();
+    expect(entity.position).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it("sets entity orientation with undo", () => {
+    const scene = new Scene();
+    const entity = new SModel();
+    entity.orientation = { x: 0, y: 0, z: 0, w: 1 };
+    scene.addEntity("obj", entity);
+    const manager = new UndoRedoManager();
+
+    manager.execute(new SetEntityOrientationCommand(scene, "obj", { x: 1, y: 0, z: 0, w: 0 }));
+    expect(entity.orientation).toEqual({ x: 1, y: 0, z: 0, w: 0 });
+
+    manager.undo();
+    expect(entity.orientation).toEqual({ x: 0, y: 0, z: 0, w: 1 });
+  });
+
+  it("throws when setting position of non-movable entity", () => {
+    const scene = new Scene();
+    scene.addEntity("thing", new SThing());
+    expect(() => new SetEntityPositionCommand(scene, "thing", { x: 0, y: 0, z: 0 }).execute()).toThrow("does not support");
+  });
+
+  it("sets entity size with undo", () => {
+    const target = { width: 1, height: 2, depth: 3 };
+    const manager = new UndoRedoManager();
+
+    manager.execute(new SetEntitySizeCommand(target, "box", { width: 10, height: 20, depth: 30 }));
+    expect(target).toEqual({ width: 10, height: 20, depth: 30 });
+
+    manager.undo();
+    expect(target).toEqual({ width: 1, height: 2, depth: 3 });
+  });
+
+  // ---------- Create / Delete Method Commands ----------
+
+  it("creates a method with undo", () => {
+    const procs = makeProcedures();
+    const manager = new UndoRedoManager();
+
+    manager.execute(new CreateMethodCommand(procs, "newMethod", ["stmt-1"]));
+    expect(procs.get("newMethod")).toEqual(["stmt-1"]);
+
+    manager.undo();
+    expect(procs.has("newMethod")).toBe(false);
+  });
+
+  it("throws when creating a duplicate method", () => {
+    const procs = makeProcedures();
+    expect(() => new CreateMethodCommand(procs, "myMethod").execute()).toThrow("already exists");
+  });
+
+  it("deletes a method with undo", () => {
+    const procs = makeProcedures();
+    const manager = new UndoRedoManager();
+
+    manager.execute(new DeleteMethodCommand(procs, "helper"));
+    expect(procs.has("helper")).toBe(false);
+
+    manager.undo();
+    expect(procs.get("helper")).toEqual(["x", "y"]);
+  });
+
+  it("throws when deleting a nonexistent method", () => {
+    const procs = makeProcedures();
+    expect(() => new DeleteMethodCommand(procs, "missing").execute()).toThrow("not found");
+  });
+
+  // ---------- Add Statement Command ----------
+
+  it("adds a statement to a method with undo", () => {
+    const procs = makeProcedures();
+    const manager = new UndoRedoManager();
+
+    manager.execute(new AddStatementCommand(procs, "myMethod", "new-stmt", 1));
+    expect(procs.get("myMethod")).toEqual(["stmt-a", "new-stmt", "stmt-b", "stmt-c"]);
+
+    manager.undo();
+    expect(procs.get("myMethod")).toEqual(["stmt-a", "stmt-b", "stmt-c"]);
+  });
+
+  it("appends statement at end when no index given", () => {
+    const procs = makeProcedures();
+    new AddStatementCommand(procs, "myMethod", "appended").execute();
+    expect(procs.get("myMethod")![3]).toBe("appended");
+  });
+
+  // ---------- Scene Background Command ----------
+
+  it("sets scene background color with undo", () => {
+    const scene = makeScene("rabbit");
+    scene.atmosphereColor = "#0000ff";
+    const manager = new UndoRedoManager();
+
+    manager.execute(new SetSceneBackgroundCommand(scene, "#ff0000"));
+    expect(scene.atmosphereColor).toBe("#ff0000");
+
+    manager.undo();
+    expect(scene.atmosphereColor).toBe("#0000ff");
+  });
+
+  // ---------- Toggle Property Command ----------
+
+  it("toggles a boolean property with undo", () => {
+    const target: Record<string, boolean> = { showGrid: false };
+    const manager = new UndoRedoManager();
+
+    manager.execute(new TogglePropertyCommand(target, "showGrid", "grid"));
+    expect(target.showGrid).toBe(true);
+
+    manager.undo();
+    expect(target.showGrid).toBe(false);
+  });
+
+  // ---------- Selection Commands (continued) ----------
+
+  it("adds to selection with undo", () => {
+    const model: SelectionModel = {
+      selected: new Set<string>(["a"]),
+      select(names) { for (const n of names) (this.selected as Set<string>).add(n); },
+      deselect(names) { for (const n of names) (this.selected as Set<string>).delete(n); },
+      clear() { (this.selected as Set<string>).clear(); },
+    };
+    const manager = new UndoRedoManager();
+
+    manager.execute(new AddToSelectionCommand(model, ["b", "c"]));
+    expect([...model.selected].sort()).toEqual(["a", "b", "c"]);
+
+    manager.undo();
+    expect([...model.selected]).toEqual(["a"]);
+  });
+
+  it("removes from selection with undo", () => {
+    const model: SelectionModel = {
+      selected: new Set<string>(["a", "b", "c"]),
+      select(names) { for (const n of names) (this.selected as Set<string>).add(n); },
+      deselect(names) { for (const n of names) (this.selected as Set<string>).delete(n); },
+      clear() { (this.selected as Set<string>).clear(); },
+    };
+    const manager = new UndoRedoManager();
+
+    manager.execute(new RemoveFromSelectionCommand(model, ["b"]));
+    expect([...model.selected].sort()).toEqual(["a", "c"]);
+
+    manager.undo();
+    expect([...model.selected].sort()).toEqual(["a", "b", "c"]);
   });
 });
