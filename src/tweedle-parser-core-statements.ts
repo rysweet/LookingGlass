@@ -70,6 +70,16 @@ export function parseStatement(parser: Parser): Statement {
     return { type: "CountUpTo", count, body };
   }
 
+  // count (expr) { ... } — contextual keyword (Alice 3 syntax)
+  if (parser.check(TT.IDENTIFIER) && parser.peek().text === "count" && parser.peekAt(1).type === TT.LPAREN) {
+    parser.advance(); // consume "count"
+    parser.expect(TT.LPAREN, "'('");
+    const count = parser.parseExpression();
+    parser.expect(TT.RPAREN, "')'");
+    const body = parser.parseBlock();
+    return { type: "CountUpTo", count, body };
+  }
+
   // while (cond) { ... }
   if (parser.check(TT.WHILE)) {
     parser.advance();

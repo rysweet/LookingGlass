@@ -267,9 +267,15 @@ function evaluateCondition(condition: string, state: VMState): boolean {
 
   const value = evaluateValue(state, condition);
   if (value === true || value === "true") return true;
-  if (value === false || value === "false") return false;
+  if (value === false || value === "false" || value === null || value === 0) return false;
 
-  // Unknown conditions default to true (per spec)
+  // Numbers: nonzero is truthy
+  if (typeof value === "number") return value !== 0;
+
+  // Booleans resolved through function calls
+  if (typeof value === "boolean") return value;
+
+  // Unknown / unresolvable conditions default to true (per spec)
   return true;
 }
 

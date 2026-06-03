@@ -1,3 +1,4 @@
+import { dispatchMethod, resolveRuntimeMethod } from "./tweedle-vm-builtins-dispatch.js";
 import { initializeRuntimeObject } from "./tweedle-vm-builtins-runtime.js";
 import { RuntimeObject, VMState } from "./tweedle-vm-core-types.js";
 import { scopeLookup } from "./tweedle-vm-stack-scope.js";
@@ -75,6 +76,12 @@ export function evaluateValue(state: VMState, expr: unknown): unknown {
   const arrayLiteral = parseArrayLiteralExpression(trimmed);
   if (arrayLiteral) {
     return arrayLiteral.map((element) => evaluateArrayElement(state, element));
+  }
+
+  // Function/method call in expression context: "name(args)" or "object.method(args)"
+  const funcCall = parseFunctionCallExpression(trimmed);
+  if (funcCall) {
+    return evaluateFunctionCall(state, funcCall.object, funcCall.method, funcCall.args);
   }
 
   return trimmed;
@@ -371,4 +378,119 @@ export function valueToString(value: unknown): string {
     return "undefined";
   }
   return String(value);
+}
+
+// ── Function call evaluation in expression context ──────────────────────
+
+interface FunctionCallParts {
+  object: string | null;
+  method: string;
+  args: string[];
+}
+
+function parseFunctionCallExpression(expr: string): FunctionCallParts | null {
+  // Match patterns like "name()" or "name(a, b)" or "obj.method(a, b)"
+  // Must end with a closing paren and contain an opening paren
+  if (!expr.endsWith(")")) return null;
+
+  const openParen = findMatchingOpenParen(expr, expr.length - 1);
+  if (openParen <= 0) return null;
+
+  const prefix = expr.slice(0, openParen);
+  // Exclude "new ClassName(...)" which is handled elsewhere
+  if (prefix.startsWith("new ")) return null;
+
+  const argsStr = expr.slice(openParen + 1, expr.length - 1).trim();
+  const args = argsStr.length === 0 ? [] : splitArguments(argsStr);
+
+  const dotIndex = prefix.lastIndexOf(".");
+  if (dotIndex > 0) {
+    return {
+      object: prefix.slice(0, dotIndex),
+      method: prefix.slice(dotIndex + 1),
+      args,
+    };
+  }
+  return { object: null, method: prefix, args };
+}
+
+function findMatchingOpenParen(expr: string, closeIndex: number): number {
+  let depth = 0;
+  for (let i = closeIndex; i >= 0; i--) {
+    if (expr[i] === ")") depth++;
+    else if (expr[i] === "(") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function splitArguments(argsStr: string): string[] {
+  const args: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < argsStr.length; i++) {
+    if (argsStr[i] === "(" || argsStr[i] === "[") depth++;
+    else if (argsStr[i] === ")" || argsStr[i] === "]") depth--;
+    else if (argsStr[i] === "," && depth === 0) {
+      args.push(argsStr.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  args.push(argsStr.slice(start).trim());
+  return args;
+}
+
+function evaluateFunctionCall(
+  state: VMState,
+  objectExpr: string | null,
+  methodName: string,
+  args: string[],
+): unknown {
+  // Resolve the target object
+  let targetObject: RuntimeObject | null = null;
+  if (objectExpr) {
+    targetObject = resolveRuntimeObjectByName(state, objectExpr);
+    if (!targetObject) {
+      const resolved = evaluateValue(state, objectExpr);
+      if (isRuntimeObject(resolved)) targetObject = resolved;
+    }
+  } else {
+    targetObject = state.currentSelf;
+  }
+
+  // Try to find a user-defined method
+  if (targetObject) {
+    const method = resolveRuntimeMethod(state, targetObject.typeName, methodName, args.length);
+    if (method) {
+      dispatchMethod(method, args, state, targetObject, targetObject.typeName);
+      const returnValue = state.returnValues.get(methodName);
+      return returnValue !== undefined ? returnValue : undefined;
+    }
+  }
+
+  // Try top-level / scene-level methods
+  if (!objectExpr || objectExpr === "this") {
+    const candidates = state.methodMap.get(methodName)
+      ?? state.methodMap.get(`${methodName}/${args.length}`)
+      ?? [];
+    const topLevelMethod = candidates.find((m) => m.parameters.length === args.length)
+      ?? candidates[0];
+    if (topLevelMethod) {
+      dispatchMethod(topLevelMethod, args, state, state.currentSelf, null);
+      const returnValue = state.returnValues.get(methodName);
+      return returnValue !== undefined ? returnValue : undefined;
+    }
+  }
+
+  // Scene bridge functions (getDistanceTo, etc.)
+  if (targetObject && state.sceneBridge) {
+    const resolvedArgs = args.map((a) => evaluateValue(state, a));
+    const bridgeResult = state.sceneBridge.handleMethodCall(targetObject, methodName, resolvedArgs, state);
+    if (typeof bridgeResult !== "boolean") return bridgeResult;
+  }
+
+  // Unresolved — return the expression as-is rather than undefined
+  return `${objectExpr ? objectExpr + "." : ""}${methodName}(${args.join(", ")})`;
 }

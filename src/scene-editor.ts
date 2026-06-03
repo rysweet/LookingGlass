@@ -1,4 +1,6 @@
 import { GalleryCatalog, type GalleryModel } from "./gallery.js";
+import type { GalleryCategoryName, GalleryItem } from "./gallery/gallery-data.js";
+import { getGalleryItem } from "./gallery/gallery-data.js";
 import { SCamera, SModel, SMovableTurnable, SThing, STurnable } from "./story-api/entities.js";
 import { createEntityForType, Scene } from "./story-api/scene.js";
 import type { Orientation, Position, Size } from "./story-api/types.js";
@@ -14,6 +16,109 @@ export interface ObjectPlacementOptions {
 export interface CameraState {
   position: Position;
   target: Position;
+}
+
+interface GalleryPlacementDescriptor {
+  readonly className: string;
+  readonly defaultSize?: Size;
+  readonly placeOnGround: boolean;
+}
+
+const GALLERY_CATEGORY_PLACEMENTS: Readonly<Record<GalleryCategoryName, {
+  readonly className: string;
+  readonly baseSize: Size;
+  readonly placeOnGround: boolean;
+}>> = {
+  biped: {
+    className: "org.lgna.story.SBiped",
+    baseSize: { width: 1, height: 1.8, depth: 1 },
+    placeOnGround: true,
+  },
+  quadruped: {
+    className: "org.lgna.story.SQuadruped",
+    baseSize: { width: 1.5, height: 1.1, depth: 2 },
+    placeOnGround: true,
+  },
+  flyer: {
+    className: "org.lgna.story.SFlyer",
+    baseSize: { width: 1.2, height: 0.8, depth: 1.2 },
+    placeOnGround: false,
+  },
+  swimmer: {
+    className: "org.lgna.story.SSwimmer",
+    baseSize: { width: 1.6, height: 0.8, depth: 2.4 },
+    placeOnGround: false,
+  },
+  fish: {
+    className: "org.lgna.story.SSwimmer",
+    baseSize: { width: 1.2, height: 0.6, depth: 1.8 },
+    placeOnGround: false,
+  },
+  marine_mammal: {
+    className: "org.lgna.story.SSwimmer",
+    baseSize: { width: 1.8, height: 0.9, depth: 2.8 },
+    placeOnGround: false,
+  },
+  slitherer: {
+    className: "org.lgna.story.SSlitherer",
+    baseSize: { width: 0.7, height: 0.4, depth: 2 },
+    placeOnGround: true,
+  },
+  prop: {
+    className: "org.lgna.story.SProp",
+    baseSize: { width: 1, height: 1, depth: 1 },
+    placeOnGround: true,
+  },
+  automobile: {
+    className: "org.lgna.story.STransport",
+    baseSize: { width: 2, height: 1.5, depth: 4 },
+    placeOnGround: true,
+  },
+  aircraft: {
+    className: "org.lgna.story.STransport",
+    baseSize: { width: 2.5, height: 1.2, depth: 4 },
+    placeOnGround: true,
+  },
+  watercraft: {
+    className: "org.lgna.story.STransport",
+    baseSize: { width: 2.3, height: 1.4, depth: 4.2 },
+    placeOnGround: true,
+  },
+  train: {
+    className: "org.lgna.story.STransport",
+    baseSize: { width: 2.2, height: 1.7, depth: 4.4 },
+    placeOnGround: true,
+  },
+};
+
+function cloneSize(size: Size): Size {
+  return { width: size.width, height: size.height, depth: size.depth };
+}
+
+function scaleGalleryItemSize(item: GalleryItem): Size {
+  const placement = GALLERY_CATEGORY_PLACEMENTS[item.category];
+  return {
+    width: placement.baseSize.width * item.profile.body.width,
+    height: placement.baseSize.height * item.profile.body.height,
+    depth: placement.baseSize.depth * item.profile.body.depth,
+  };
+}
+
+function resolvePlacementFromLegacyModel(model: GalleryModel): GalleryPlacementDescriptor {
+  return {
+    className: model.className,
+    defaultSize: model.defaultSize ? cloneSize(model.defaultSize) : undefined,
+    placeOnGround: model.placeOnGround,
+  };
+}
+
+function resolvePlacementFromGalleryItem(item: GalleryItem): GalleryPlacementDescriptor {
+  const placement = GALLERY_CATEGORY_PLACEMENTS[item.category];
+  return {
+    className: placement.className,
+    defaultSize: scaleGalleryItemSize(item),
+    placeOnGround: placement.placeOnGround,
+  };
 }
 
 export interface SceneEditorOptions {
@@ -97,15 +202,12 @@ export class SceneEditor {
     return entity;
   }
 
-  placeFromGallery(modelId: string, name: string, options: ObjectPlacementOptions = {}): SThing {
-    const model = this.gallery.get(modelId);
-    if (!model) {
-      throw new TypeError(`gallery model \"${modelId}\" not found`);
-    }
-    return this.placeObject(name, model.className, {
+  placeFromGallery(model: string | GalleryItem, name: string, options: ObjectPlacementOptions = {}): SThing {
+    const placement = this.resolveGalleryPlacement(model);
+    return this.placeObject(name, placement.className, {
       ...options,
-      size: options.size ?? model.defaultSize,
-      placeOnGround: options.placeOnGround ?? model.placeOnGround,
+      size: options.size ?? placement.defaultSize,
+      placeOnGround: options.placeOnGround ?? placement.placeOnGround,
     });
   }
 
@@ -273,6 +375,24 @@ export class SceneEditor {
       }
       this.scene.setEntityPosition(name, placedPosition);
     }
+  }
+
+  private resolveGalleryPlacement(model: string | GalleryItem): GalleryPlacementDescriptor {
+    if (typeof model !== "string") {
+      return resolvePlacementFromGalleryItem(model);
+    }
+
+    const legacyModel = this.gallery.get(model);
+    if (legacyModel) {
+      return resolvePlacementFromLegacyModel(legacyModel);
+    }
+
+    const galleryItem = getGalleryItem(model);
+    if (galleryItem) {
+      return resolvePlacementFromGalleryItem(galleryItem);
+    }
+
+    throw new TypeError(`gallery model \"${model}\" not found`);
   }
 
   private requireEntity(name: string): SThing {

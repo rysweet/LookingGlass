@@ -27,6 +27,7 @@ import {
   STextModel,
   SThing,
   SThingMarker,
+  STransport,
   STorus,
   STurnable,
 } from "./expanded-entities";
@@ -55,6 +56,7 @@ const TYPE_FACTORIES: Array<[suffix: string, factory: () => SThing]> = [
   ["SCameraMarker", () => new SCameraMarker()],
   ["SThingMarker", () => new SThingMarker()],
   ["SMarker", () => new SMarker()],
+  ["STransport", () => new STransport()],
   ["SGround", () => new SGround()],
   ["SCamera", () => new SCamera()],
   ["SScene", () => new SScene()],
