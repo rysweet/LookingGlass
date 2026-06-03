@@ -55,6 +55,26 @@ export function generateUuid(): string {
   });
 }
 
+export function appendStringProperty(
+  doc: Document,
+  parent: Element,
+  propertyName: string,
+  value: string,
+  valueType = "java.lang.String",
+): void {
+  const property = doc.createElement("property");
+  property.setAttribute("name", propertyName);
+  const valueNode = doc.createElement("value");
+  valueNode.setAttribute("type", valueType);
+  valueNode.appendChild(doc.createTextNode(value));
+  property.appendChild(valueNode);
+  parent.appendChild(property);
+}
+
+export function appendBooleanProperty(doc: Document, parent: Element, propertyName: string, value: boolean): void {
+  appendStringProperty(doc, parent, propertyName, String(value), "java.lang.Boolean");
+}
+
 export function getNamedUserTypeNodes(doc: Document): Element[] {
   return elementsByTagName(doc, "node")
     .filter((node) => node.getAttribute("type") === "org.lgna.project.ast.NamedUserType");

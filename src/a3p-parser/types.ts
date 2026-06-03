@@ -79,11 +79,17 @@ export interface A3PSourceMetadata {
   snapshot: string;
 }
 
+export interface A3PMethodSourceMetadata {
+  statementsSnapshot: string;
+}
+
 export const DEFAULT_A3P_XML_ENTRY = "programType.xml";
 export const LEGACY_A3P_XML_ENTRY = "program.xml";
 
 const A3P_SOURCE = Symbol("a3p-source");
+const A3P_METHOD_SOURCE = Symbol("a3p-method-source");
 type AliceProjectWithSource = AliceProject & { [A3P_SOURCE]?: A3PSourceMetadata };
+type AliceMethodWithSource = AliceMethod & { [A3P_METHOD_SOURCE]?: A3PMethodSourceMetadata };
 
 export function getA3PSource(project: AliceProject): A3PSourceMetadata | null {
   return (project as AliceProjectWithSource)[A3P_SOURCE] ?? null;
@@ -102,8 +108,25 @@ export function snapshotAliceProject(project: AliceProject): string {
   });
 }
 
+export function snapshotAliceStatements(statements: AliceStatement[]): string {
+  return JSON.stringify(statements);
+}
+
 export function attachA3PSource(project: AliceProject, source: A3PSourceMetadata): void {
   Object.defineProperty(project, A3P_SOURCE, {
+    value: source,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
+}
+
+export function getA3PMethodSource(method: AliceMethod): A3PMethodSourceMetadata | null {
+  return (method as AliceMethodWithSource)[A3P_METHOD_SOURCE] ?? null;
+}
+
+export function attachA3PMethodSource(method: AliceMethod, source: A3PMethodSourceMetadata): void {
+  Object.defineProperty(method, A3P_METHOD_SOURCE, {
     value: source,
     enumerable: false,
     configurable: true,

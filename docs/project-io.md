@@ -221,6 +221,16 @@ If the `__original_xml__` key has been removed from the resources map,
 The caller must either preserve the original XML or provide an explicit
 `programType.xml` entry in the resources map.
 
+### A3P Statement Write Support
+
+The lower-level A3P writer can serialize basic statement bodies such as
+comments, method calls, count/while blocks, if/else blocks, returns, local
+declarations, `doInOrder`, and `doTogether`. The parser recognizes Alice
+collection loop nodes (`ForEachInArrayLoop`, `ForEachInIterableLoop`,
+`EachInArrayTogether`, and `EachInIterableTogether`), but the writer rejects
+them instead of fabricating item or collection-expression XML that it cannot
+preserve faithfully.
+
 ## Security
 
 ### ZIP Bomb Protection
