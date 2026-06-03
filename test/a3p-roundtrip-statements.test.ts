@@ -101,11 +101,11 @@ describe("a3p statement round-trip", { timeout: 60_000 }, () => {
     ];
     const project = projectWithStatements("testMethodCall", statements);
 
-    // XML-shape: must use JavaMethod (not UserMethod) to avoid indexNodes pollution
+    // XML-shape: must use JavaMethod for method reference inside MethodInvocation
     const xml = getXml(project);
     expect(xml).toContain("org.lgna.project.ast.ExpressionStatement");
     expect(xml).toContain("org.lgna.project.ast.MethodInvocation");
-    expect(xml).not.toMatch(/type="org\.lgna\.project\.ast\.UserMethod"[^>]*>(?:[^<]*<(?:property|value))/s);
+    expect(xml).toMatch(/<property name="method">\s*<node type="org\.lgna\.project\.ast\.JavaMethod"/);
 
     // Round-trip
     const written = await writeA3P(project);
