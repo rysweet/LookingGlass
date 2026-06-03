@@ -64,6 +64,7 @@ export * as DragDropSystem from "./drag-drop-system";
 export * as Formatters from "./formatters";
 export * as Gallery from "./gallery";
 export * as GalleryBrowser from "./gallery-browser";
+export * as GalleryUi from "./gallery/index";
 export * as GeometryOperations from "./geometry-operations";
 export * as TransformUtilities from "./transform-utilities";
 export * as GradingPipeline from "./grading-pipeline";
