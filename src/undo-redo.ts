@@ -15,6 +15,8 @@ export interface Command {
   execute(): void;
   undo(): void;
   readonly description: string;
+  /** When false, the command is fire-and-forget: executed but not pushed onto the undo stack. */
+  readonly undoable?: boolean;
 }
 
 const MAX_UNDO_STACK = 100;
@@ -41,6 +43,7 @@ export class UndoRedoManager {
 
   execute(cmd: Command): void {
     cmd.execute();
+    if (cmd.undoable === false) return;
     this._pushUndo(cmd);
     this._redoStack.length = 0;
   }
