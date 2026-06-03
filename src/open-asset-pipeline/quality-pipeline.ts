@@ -39,7 +39,9 @@ export type GeneratorFn = (config: ProceduralModelConfig) => ProceduralModelResu
 export interface QualityPipelineOptions {
   readonly maxIterations?: number;
   readonly threshold?: number;
-  readonly scorer?: ScorerFn | (() => QualityScoreResult);
+  readonly scorer?: ScorerFn;
+  /** Test-only: constant scorer that ignores model data. Takes precedence over scorer. */
+  readonly testScorer?: () => QualityScoreResult;
   readonly generator?: GeneratorFn;
 }
 
@@ -64,7 +66,9 @@ export async function runQualityPipeline(
   const maxIterations = options.maxIterations ?? 3;
   const threshold = options.threshold ?? 50;
   const generator = options.generator ?? generateProceduralModel;
-  const scorer = options.scorer ?? defaultScorer;
+  const scorerFn = options.testScorer
+    ? (_geom: ProceduralModelResult["geometry"], _joints: readonly ProceduralModelResult["joints"][number][], _cat: string) => options.testScorer!()
+    : (options.scorer ?? defaultScorer);
 
   if (configs.length === 0) {
     return {
@@ -90,7 +94,7 @@ export async function runQualityPipeline(
   // Initial generation + scoring
   for (const config of configs) {
     const model = generator(config);
-    const scores = callScorer(scorer, model, config.category);
+    const scores = scorerFn(model.geometry, [...model.joints], config.category);
     states.push({
       config,
       model,
@@ -115,7 +119,7 @@ export async function runQualityPipeline(
       };
 
       const model = generator(adjustedConfig);
-      const scores = callScorer(scorer, model, state.config.category);
+      const scores = scorerFn(model.geometry, [...model.joints], state.config.category);
       state.model = model;
       state.scores = scores;
       state.iterationCount = iter;
@@ -142,18 +146,4 @@ export async function runQualityPipeline(
     averageScore,
     generatedAt: new Date().toISOString(),
   };
-}
-
-// ── Scorer dispatch ────────────────────────────────────────────────
-
-function callScorer(
-  scorer: ScorerFn | (() => QualityScoreResult),
-  model: ProceduralModelResult,
-  category: string,
-): QualityScoreResult {
-  // Support both full scorer (3 args) and simple scorer (0 args)
-  if (scorer.length === 0) {
-    return (scorer as () => QualityScoreResult)();
-  }
-  return (scorer as ScorerFn)(model.geometry, [...model.joints], category);
 }

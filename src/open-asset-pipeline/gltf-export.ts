@@ -63,8 +63,11 @@ export async function exportModelToGlb(
     .setArray(positionData)
     .setBuffer(buffer);
 
-  // Build index accessor
-  const indexData = new Uint16Array(geometry.indices);
+  // Build index accessor — use Uint32 when vertex count exceeds Uint16 range
+  const vertexCount = geometry.vertices.length / 3;
+  const indexData = vertexCount > 65535
+    ? new Uint32Array(geometry.indices)
+    : new Uint16Array(geometry.indices);
   const indexAccessor = doc.createAccessor("INDEX")
     .setType("SCALAR")
     .setArray(indexData)

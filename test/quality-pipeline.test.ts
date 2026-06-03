@@ -110,7 +110,7 @@ describe("runQualityPipeline — iteration behavior", () => {
     });
 
     const report = await runQualityPipeline([makeBipedConfig()], {
-      scorer: alwaysFailScorer,
+      testScorer: alwaysFailScorer,
     });
 
     expect(report.results[0].iterationCount).toBe(3);
@@ -126,7 +126,7 @@ describe("runQualityPipeline — iteration behavior", () => {
 
     const report = await runQualityPipeline([makeBipedConfig()], {
       maxIterations: 5,
-      scorer: alwaysFailScorer,
+      testScorer: alwaysFailScorer,
     });
 
     expect(report.results[0].iterationCount).toBe(5);
@@ -140,7 +140,7 @@ describe("runQualityPipeline — iteration behavior", () => {
     };
 
     const report = await runQualityPipeline([makeBipedConfig()], {
-      scorer: passOnFirstScorer,
+      testScorer: passOnFirstScorer,
     });
 
     expect(report.results[0].iterationCount).toBe(1);
@@ -158,7 +158,7 @@ describe("runQualityPipeline — iteration behavior", () => {
 
     const report = await runQualityPipeline([makeBipedConfig()], {
       threshold: 70,
-      scorer,
+      testScorer: scorer,
     });
 
     // Should iterate max times because 60 < 70
@@ -265,7 +265,7 @@ describe("runQualityPipeline — edge cases", () => {
 
     const report = await runQualityPipeline(
       [makeBipedConfig(), makeQuadrupedConfig()],
-      { scorer, maxIterations: 1 },
+      { testScorer: scorer, maxIterations: 1 },
     );
 
     const actualPassing = report.results.filter((r) => r.scores.overall >= 50).length;
