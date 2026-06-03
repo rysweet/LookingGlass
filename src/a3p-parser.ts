@@ -3,6 +3,7 @@ export {
   parseA3PFromZip,
   readA3PXmlEntry,
 } from "./a3p-parser/archive.js";
+export { PARSED_A3P_STATEMENT_KINDS } from "./a3p-parser/scene.js";
 export {
   DEFAULT_A3P_XML_ENTRY,
   LEGACY_A3P_XML_ENTRY,

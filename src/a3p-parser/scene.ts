@@ -15,6 +15,22 @@ import type {
   AliceTypeDefinition,
 } from "./types.js";
 
+export const PARSED_A3P_STATEMENT_KINDS = [
+  "Comment",
+  "MethodCall",
+  "CountLoop",
+  "IfElse",
+  "ReturnStatement",
+  "VariableDeclaration",
+  "DoInOrder",
+  "DoTogether",
+  "WhileLoop",
+  "ForEachInArrayLoop",
+  "ForEachInIterableLoop",
+  "EachInArrayTogether",
+  "EachInIterableTogether",
+] as const;
+
 export function extractSceneObjects(namedUserTypes: Element[], keyMap: Map<string, Element>): AliceObject[] {
   const objects: AliceObject[] = [];
   const sceneType = findSceneType(namedUserTypes, keyMap);
@@ -309,10 +325,14 @@ function parseStatement(node: Element, keyMap: Map<string, Element>): AliceState
     return { kind: "Comment", expression: getPropertyText(node, "text") ?? "" };
   }
   if (nodeType === "org.lgna.project.ast.CountLoop") {
-    return { kind: "CountLoop", count: 1, body: [] };
+    const body = parseStatementBlock(node, "body", keyMap);
+    return { kind: "CountLoop", count: 1, body };
   }
   if (nodeType === "org.lgna.project.ast.ConditionalStatement") {
-    return { kind: "IfElse", condition: "unknown", ifBody: [], elseBody: [] };
+    const firstPair = getCollectionNodesResolved(node, "booleanExpressionBodyPairs", keyMap)[0] ?? null;
+    const ifBody = firstPair ? parseStatementBlock(firstPair, "body", keyMap) : [];
+    const elseBody = parseStatementBlock(node, "elseBody", keyMap);
+    return { kind: "IfElse", condition: "unknown", ifBody, elseBody };
   }
   if (nodeType === "org.lgna.project.ast.ReturnStatement") {
     return { kind: "ReturnStatement", expression: "unknown" };
@@ -336,9 +356,17 @@ function parseStatement(node: Element, keyMap: Map<string, Element>): AliceState
     const body = parseStatementBlock(node, "body", keyMap);
     return { kind: "ForEachInArrayLoop", itemType: "Object", itemName: "item", collection: "unknown", body };
   }
+  if (nodeType === "org.lgna.project.ast.ForEachInIterableLoop") {
+    const body = parseStatementBlock(node, "body", keyMap);
+    return { kind: "ForEachInIterableLoop", itemType: "Object", itemName: "item", collection: "unknown", body };
+  }
   if (nodeType === "org.lgna.project.ast.EachInArrayTogether") {
     const body = parseStatementBlock(node, "body", keyMap);
     return { kind: "EachInArrayTogether", itemType: "Object", itemName: "item", collection: "unknown", body };
+  }
+  if (nodeType === "org.lgna.project.ast.EachInIterableTogether") {
+    const body = parseStatementBlock(node, "body", keyMap);
+    return { kind: "EachInIterableTogether", itemType: "Object", itemName: "item", collection: "unknown", body };
   }
 
   return { kind: nodeType.split(".").pop() ?? "Unknown" };

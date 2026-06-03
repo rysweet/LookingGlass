@@ -2,8 +2,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import JSZip from "jszip";
-import { parseA3P, type AliceMethod, type AliceProject } from "../src/a3p-parser";
-import { writeA3P } from "../src/a3p-writer";
+import { PARSED_A3P_STATEMENT_KINDS, parseA3P, type AliceMethod, type AliceProject, type AliceStatement } from "../src/a3p-parser";
+import { SUPPORTED_A3P_STATEMENT_KINDS, writeA3P } from "../src/a3p-writer";
 
 beforeAll(async () => {
   if (typeof globalThis.DOMParser === "undefined" || typeof globalThis.XMLSerializer === "undefined") {
@@ -91,6 +91,40 @@ function addSceneMethod(project: AliceProject, method: AliceMethod): void {
   if (sceneType) {
     sceneType.methods = [...(sceneType.methods ?? []), method];
   }
+}
+
+function createSyntheticProject(method: AliceMethod): AliceProject {
+  return {
+    version: "3.10062",
+    projectName: "StatementCoverage",
+    sceneObjects: [],
+    methods: [method],
+    types: [
+      {
+        name: "Program",
+        superTypeName: "org.lgna.story.SScene",
+        methods: [method],
+        fields: [],
+        constructors: [],
+      },
+    ],
+  };
+}
+
+function summarizeStatement(statement: AliceStatement): unknown {
+  return {
+    kind: statement.kind,
+    object: statement.object ?? null,
+    method: statement.method ?? null,
+    arguments: statement.arguments ?? [],
+    expression: statement.expression ?? null,
+    name: statement.name ?? null,
+    value: statement.value ?? null,
+    event: statement.event ?? null,
+    body: (statement.body ?? []).map(summarizeStatement),
+    ifBody: (statement.ifBody ?? []).map(summarizeStatement),
+    elseBody: (statement.elseBody ?? []).map(summarizeStatement),
+  };
 }
 
 describe("a3p faithful round-trip", { timeout: 60_000 }, () => {
@@ -267,5 +301,112 @@ describe("a3p faithful round-trip", { timeout: 60_000 }, () => {
         }));
 
     expect(customTypes(reparsed)).toEqual(customTypes(original));
+  });
+
+  it("keeps parser-recognized statement kinds covered by the writer", () => {
+    expect([...SUPPORTED_A3P_STATEMENT_KINDS].sort()).toEqual([...PARSED_A3P_STATEMENT_KINDS].sort());
+  });
+
+  it("preserves nested block and loop statement bodies through round-trip", async () => {
+    const method: AliceMethod = {
+      name: "exerciseStatements",
+      isFunction: false,
+      returnType: "void",
+      parameters: [],
+      statements: [
+        {
+          kind: "DoInOrder",
+          body: [
+            { kind: "MethodCall", object: "this", method: "say", arguments: ["start"] },
+            {
+              kind: "DoTogether",
+              body: [
+                { kind: "MethodCall", object: "hero", method: "move", arguments: ["FORWARD", "1.0"] },
+                {
+                  kind: "WhileLoop",
+                  body: [{ kind: "MethodCall", object: "villain", method: "turn", arguments: ["LEFT", "0.25"] }],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          kind: "CountLoop",
+          body: [{ kind: "MethodCall", object: "hero", method: "hop", arguments: ["2.0"] }],
+        },
+        {
+          kind: "IfElse",
+          ifBody: [{ kind: "MethodCall", object: "hero", method: "say", arguments: ["yes"] }],
+          elseBody: [{ kind: "Comment", expression: "else branch" }],
+        },
+        {
+          kind: "ForEachInArrayLoop",
+          body: [{ kind: "MethodCall", object: "arrayItem", method: "move", arguments: ["UP", "0.5"] }],
+        },
+        {
+          kind: "ForEachInIterableLoop",
+          body: [{ kind: "MethodCall", object: "iterItem", method: "move", arguments: ["DOWN", "0.5"] }],
+        },
+        {
+          kind: "EachInArrayTogether",
+          body: [{ kind: "MethodCall", object: "groupItem", method: "say", arguments: ["together"] }],
+        },
+        {
+          kind: "EachInIterableTogether",
+          body: [{ kind: "MethodCall", object: "iterGroupItem", method: "say", arguments: ["also together"] }],
+        },
+      ],
+    };
+
+    const reparsed = await parseA3P(await writeA3P(createSyntheticProject(method)));
+    const roundTripped = reparsed.methods.find((candidate) => candidate.name === method.name);
+
+    expect(roundTripped?.statements.map(summarizeStatement)).toEqual(method.statements.map(summarizeStatement));
+  });
+
+  it("lowers TS-only runtime statement kinds without emitting fake Alice AST classes", async () => {
+    const method: AliceMethod = {
+      name: "tsOnlyRuntimeStatements",
+      isFunction: false,
+      returnType: "void",
+      parameters: [],
+      statements: [
+        { kind: "VariableAssignment", name: "hero.state", value: '"ready"' },
+        { kind: "EventListener", event: "SceneActivation" },
+        {
+          kind: "ForEachLoop",
+          body: [{ kind: "MethodCall", object: "item", method: "turn", arguments: ["RIGHT", "0.5"] }],
+        },
+      ],
+    };
+
+    const written = await writeA3P(createSyntheticProject(method));
+    const xml = await JSZip.loadAsync(written).then(async (zip) => zip.file("programType.xml")?.async("string"));
+    const reparsed = await parseA3P(written);
+    const roundTripped = reparsed.methods.find((candidate) => candidate.name === method.name);
+
+    expect(xml).not.toContain("org.lgna.project.ast.VariableAssignment");
+    expect(xml).not.toContain("org.lgna.project.ast.EventListener");
+    expect(xml).not.toContain("org.lgna.project.ast.ForEachLoop");
+    expect(xml).toContain("org.lgna.project.ast.ForEachInIterableLoop");
+    expect(roundTripped?.statements.map((statement) => statement.kind)).toEqual([
+      "Comment",
+      "Comment",
+      "ForEachInIterableLoop",
+    ]);
+    expect(roundTripped?.statements[0]?.expression).toBe('VariableAssignment:hero.state="ready"');
+    expect(roundTripped?.statements[1]?.expression).toBe("EventListener:SceneActivation");
+  });
+
+  it("fails visibly instead of dropping unsupported statements", async () => {
+    const method: AliceMethod = {
+      name: "unsupported",
+      isFunction: false,
+      returnType: "void",
+      parameters: [],
+      statements: [{ kind: "UnknownFutureStatement" }],
+    };
+
+    await expect(writeA3P(createSyntheticProject(method))).rejects.toThrow("Unsupported A3P statement kind");
   });
 });
