@@ -55,28 +55,36 @@ describe("OperationCommandAdapter", () => {
 
   it("calls the factory exactly once (redo uses operation.redo, not a new factory call)", () => {
     let factoryCalls = 0;
+    let executeCalls = 0;
+    let redoCalls = 0;
     let value = 0;
 
     const adapter = new OperationCommandAdapter(() => {
       factoryCalls++;
       return new Operation("set", {
-        execute: () => { value = 10; },
+        execute: () => { executeCalls++; value = 10; },
         undo: () => { value = 0; },
-        redo: () => { value = 10; },
+        redo: () => { redoCalls++; value = 10; },
       });
     });
 
     const manager = new UndoRedoManager();
     manager.execute(adapter);
     expect(factoryCalls).toBe(1);
+    expect(executeCalls).toBe(1);
+    expect(redoCalls).toBe(0);
 
     manager.undo();
     manager.redo();
     expect(factoryCalls).toBe(1); // factory NOT called again
+    expect(executeCalls).toBe(1); // operation.execute() NOT called again
+    expect(redoCalls).toBe(1);    // operation.redo() WAS called
 
     manager.undo();
     manager.redo();
     expect(factoryCalls).toBe(1);
+    expect(executeCalls).toBe(1);
+    expect(redoCalls).toBe(2);
     expect(value).toBe(10);
   });
 
@@ -293,20 +301,19 @@ describe("DragSession state machine", () => {
     expect(session.state).toBe("idle");
   });
 
-  it("begin after drop restarts the session", () => {
+  it("begin after drop restarts the session via reset()", () => {
     const session = new DragSession<string>();
     session.begin(makeSource());
     session.drop(makeTarget(), makePolicy());
     expect(session.state).toBe("dropped");
 
-    // begin() from dropped state needs reset first or direct begin
     session.reset();
     const proxy = session.begin(makeSource());
     expect(session.state).toBe("dragging");
     expect(session.proxy).toBe(proxy);
   });
 
-  it("begin after cancel restarts the session", () => {
+  it("begin after cancel restarts the session via reset()", () => {
     const session = new DragSession<string>();
     session.begin(makeSource());
     session.cancel();
@@ -358,11 +365,29 @@ describe("DragSession state machine", () => {
     expect(() => session.drop(throwingTarget, makePolicy())).toThrow(
       "onDrop failure",
     );
-    // DropTarget.drop() threw after accepting, so it returns true before the
-    // throw propagates. The session transitions to dropped. This is documented
-    // behavior — the drop handler's side effects are the handler's responsibility.
-    // In practice, if the proxy was consumed (target.received contains it),
-    // the session should not retry the same drop.
+    // DropTarget.drop() rolls back received on handler throw, so session
+    // stays in "dragging" with proxy intact — the drop never completed.
+    expect(session.state).toBe("dragging");
+    expect(session.proxy).not.toBeNull();
+    expect(throwingTarget.received).toHaveLength(0);
+  });
+
+  it("begin() throws from dropped state (must reset first)", () => {
+    const session = new DragSession<string>();
+    session.begin(makeSource());
+    session.drop(makeTarget(), makePolicy());
+    expect(session.state).toBe("dropped");
+
+    expect(() => session.begin(makeSource())).toThrow(/reset\(\) first/);
+  });
+
+  it("begin() throws from cancelled state (must reset first)", () => {
+    const session = new DragSession<string>();
+    session.begin(makeSource());
+    session.cancel();
+    expect(session.state).toBe("cancelled");
+
+    expect(() => session.begin(makeSource())).toThrow(/reset\(\) first/);
   });
 });
 

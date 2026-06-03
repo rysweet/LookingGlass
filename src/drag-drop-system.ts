@@ -146,7 +146,12 @@ export class DropTarget<T = unknown> {
       return false;
     }
     this.received.push(proxy);
-    this.onDrop?.(proxy);
+    try {
+      this.onDrop?.(proxy);
+    } catch (error) {
+      this.received.pop();
+      throw error;
+    }
     return true;
   }
 }
@@ -249,8 +254,11 @@ export class DragSession<T = unknown> {
     return this._proxy;
   }
 
-  /** Start a drag. If already dragging, cancels the current drag first. */
+  /** Start a drag. Requires idle or dragging state; call reset() after drop/cancel. */
   begin(source: DragSource<T>, position: DragPosition = { x: 0, y: 0 }): DragProxy<T> {
+    if (this._state === "dropped" || this._state === "cancelled") {
+      throw new Error(`Cannot begin drag from "${this._state}" state; call reset() first`);
+    }
     if (this._state === "dragging") {
       this._proxy = null;
     }
