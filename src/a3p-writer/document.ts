@@ -403,6 +403,7 @@ function serializeStatement(doc: Document, statement: AliceStatement): Element |
     case "VariableDeclaration":
       return createLocalDeclarationNode(doc, statement);
     default:
+      console.warn(`[a3p-writer] Skipping unsupported statement kind: "${statement.kind}"`);
       return null;
   }
 }

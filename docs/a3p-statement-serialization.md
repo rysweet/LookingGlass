@@ -67,13 +67,13 @@ const project: AliceProject = {
     parameters: [],
     statements: [
       { kind: "Comment", expression: "Setup" },
-      { kind: "MethodCall", object: "this.bunny", method: "move", arguments: ["FORWARD", "1.0"] },
+      { kind: "MethodCall", object: "bunny", method: "move", arguments: ["FORWARD", "1.0"] },
       { kind: "DoInOrder", body: [
-        { kind: "MethodCall", object: "this.bunny", method: "turn", arguments: ["LEFT", "0.5"] },
-        { kind: "MethodCall", object: "this.bunny", method: "say", arguments: ["Hello!"] },
+        { kind: "MethodCall", object: "bunny", method: "turn", arguments: ["LEFT", "0.5"] },
+        { kind: "MethodCall", object: "bunny", method: "say", arguments: ["Hello!"] },
       ]},
       { kind: "CountLoop", count: 3, body: [
-        { kind: "MethodCall", object: "this.bunny", method: "hop", arguments: [] },
+        { kind: "MethodCall", object: "bunny", method: "hop", arguments: [] },
       ]},
     ],
   }],
@@ -152,7 +152,7 @@ Arguments are `SimpleArgument` nodes wrapping `StringLiteral` expressions.
           <property name="field">
             <node type="org.lgna.project.ast.UserField" uuid="...">
               <property name="name">
-                <value type="java.lang.String">this.bunny</value>
+                <value type="java.lang.String">bunny</value>
               </property>
             </node>
           </property>
@@ -160,9 +160,7 @@ Arguments are `SimpleArgument` nodes wrapping `StringLiteral` expressions.
       </property>
       <property name="method">
         <node type="org.lgna.project.ast.JavaMethod" uuid="...">
-          <property name="name">
-            <value type="java.lang.String">move</value>
-          </property>
+          <method name="move"/>
         </node>
       </property>
       <property name="requiredArguments">
@@ -179,7 +177,7 @@ Arguments are `SimpleArgument` nodes wrapping `StringLiteral` expressions.
 method name from both `UserMethod` and `JavaMethod` node types. Walks
 `requiredArguments` collection to extract argument values.
 
-**Result:** `{ kind: "MethodCall", object: "this.bunny", method: "move", arguments: ["FORWARD", "1.0"] }`
+**Result:** `{ kind: "MethodCall", object: "bunny", method: "move", arguments: ["FORWARD", "1.0"] }`
 
 ### DoInOrder / DoTogether
 
@@ -367,7 +365,7 @@ Example — nested DoInOrder inside CountLoop:
     kind: "DoInOrder",
     body: [
       { kind: "Comment", expression: "step 1" },
-      { kind: "MethodCall", object: "this.bunny", method: "hop", arguments: [] },
+      { kind: "MethodCall", object: "bunny", method: "hop", arguments: [] },
     ],
   }],
 }
@@ -415,7 +413,7 @@ Each round-trip test follows this structure:
 it("round-trips <Kind> statements", async () => {
   // 1. Build a project with the target statement kind
   const project = makeProject([
-    { kind: "MethodCall", object: "this.bunny", method: "move", arguments: ["FORWARD"] },
+    { kind: "MethodCall", object: "bunny", method: "move", arguments: ["FORWARD"] },
   ]);
 
   // 2. Write to XML
@@ -427,7 +425,7 @@ it("round-trips <Kind> statements", async () => {
   // 4. Assert round-trip fidelity
   const stmt = archive.methods[0].statements[0];
   expect(stmt.kind).toBe("MethodCall");
-  expect(stmt.object).toBe("this.bunny");
+  expect(stmt.object).toBe("bunny");
   expect(stmt.method).toBe("move");
   expect(stmt.arguments).toContain("FORWARD");
 });
