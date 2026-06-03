@@ -43,18 +43,22 @@ function dispatchVisit<T>(node: SceneGraphNode, visitor: SceneGraphVisitor<T>): 
 /**
  * Walks a scene graph tree in pre-order DFS, dispatching each node
  * to the appropriate visitor method. Returns an array of visitor results.
+ * Uses iterative traversal with an explicit stack to avoid stack overflow
+ * on deeply nested scene graphs.
  */
 export function walkSceneGraph<T>(root: SceneGraphNode, visitor: SceneGraphVisitor<T>): T[] {
   const results: T[] = [];
+  const stack: SceneGraphNode[] = [root];
 
-  function walk(node: SceneGraphNode): void {
+  while (stack.length > 0) {
+    const node = stack.pop()!;
     results.push(dispatchVisit(node, visitor));
-    for (const child of node.children) {
-      walk(child);
+    // Push children in reverse order to maintain pre-order DFS traversal
+    for (let i = node.children.length - 1; i >= 0; i--) {
+      stack.push(node.children[i]!);
     }
   }
 
-  walk(root);
   return results;
 }
 

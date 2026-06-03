@@ -63,7 +63,8 @@ export async function runQualityPipeline(
   configs: readonly ProceduralModelConfig[],
   options: QualityPipelineOptions = {},
 ): Promise<QualityReport> {
-  const maxIterations = options.maxIterations ?? 3;
+  const MAX_ITERATIONS_CAP = 20;
+  const maxIterations = Math.min(options.maxIterations ?? 3, MAX_ITERATIONS_CAP);
   const threshold = options.threshold ?? 50;
   const generator = options.generator ?? generateProceduralModel;
   const scorerFn = options.testScorer

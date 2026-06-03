@@ -62,9 +62,14 @@ export function mergeModelGeometry(parts: readonly ModelGeometryData[]): ModelGe
   const hasUvs = parts.every(p => p.uvs && p.uvs.length > 0);
 
   for (const part of parts) {
-    allVertices.push(...part.vertices);
-    if (hasNormals && part.normals) allNormals.push(...part.normals);
-    if (hasUvs && part.uvs) allUvs.push(...part.uvs);
+    // Avoid push(...spread) which overflows the call stack for large arrays (>65K elements)
+    for (let i = 0; i < part.vertices.length; i++) allVertices.push(part.vertices[i]!);
+    if (hasNormals && part.normals) {
+      for (let i = 0; i < part.normals.length; i++) allNormals.push(part.normals[i]!);
+    }
+    if (hasUvs && part.uvs) {
+      for (let i = 0; i < part.uvs.length; i++) allUvs.push(part.uvs[i]!);
+    }
 
     for (const idx of part.indices) {
       allIndices.push(idx + vertexOffset);
