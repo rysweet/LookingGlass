@@ -368,6 +368,7 @@ This invariant is tested for:
 | Module | Role | Relationship |
 |--------|------|-------------|
 | `a3p-parser.ts` | Parses `.a3p` ZIP → `AliceProject` | Defines the `AliceProject` type that serialization operates on |
+| `a3p-writer/document.ts` | Writes `AliceProject` → `.a3p` XML | Handles native A3P XML statement serialization; see [A3P statement serialization](./a3p-statement-serialization.md) |
 | `project-io.ts` | Full `.a3p` archive read/write | Handles binary archive format; `serialization.ts` handles text formats |
 | `serialization.ts` | Text-format project save/load | Operates on `AliceProject`, not `AliceProjectArchive` |
 

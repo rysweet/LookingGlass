@@ -23,7 +23,7 @@ so the `eatme` test suite can drive real curriculum workflows.
 | Subsystem | What it does | Start here |
 | --- | --- | --- |
 | Tweedle | Parses, checks, and runs Alice code | [Tweedle parser](./tweedle-parser.md), [Tweedle type system](./tweedle-type-system.md), [Tweedle typechecker](./tweedle-typechecker.md), [VM scoping and functions](./vm-scoping-and-functions.md) |
-| AST and serialization | Stores program structure and converts it to and from files | [Serialization](./serialization.md), [Tweedle code generation](./tweedle-codegen.md) |
+| AST and serialization | Stores program structure and converts it to and from files | [Serialization](./serialization.md), [A3P statement serialization](./a3p-statement-serialization.md), [Tweedle code generation](./tweedle-codegen.md) |
 | Story API and scene model | Represents scenes, entities, events, and runtime behavior | [Story API](./story-api.md), [SScene listener methods](./sscene-listener-methods.md), [Event system](./event-system.md), [Collision detection](./collision-detection.md) |
 | Rendering | Builds and draws 3D scenes in the browser | [Scene graph](./scene-graph.md), [Scene rendering](./scene-rendering.md), [Scene manager](./scene-manager.md) |
 | IDE workflows | Supports editing, running, and curriculum tasks | [IDE operations](./ide-operations.md), [Grading pipeline](./grading-pipeline.md) |
@@ -48,6 +48,7 @@ so the `eatme` test suite can drive real curriculum workflows.
 
 ### Reference
 
+- [A3P statement serialization](./a3p-statement-serialization.md)
 - [API reference](./api-reference.md)
 - [Animation system](./animation.md)
 - [Audio](./audio.md)

@@ -44,6 +44,7 @@ Most tests live in `test/` and follow the same names as the source modules.
 | --- | --- | --- |
 | Tweedle language | `test/tweedle-parser*.test.ts`, `test/tweedle-java-fixtures.test.ts` | parsing, syntax coverage, Java parity cases |
 | AST and code editing | `test/ast-*.test.ts`, `test/code-editor.test.ts`, `test/code-generation.test.ts` | AST transforms, editor state, generated code |
+| A3P serialization | `test/a3p-writer.test.ts`, `test/a3p-parser.test.ts`, `test/a3p-roundtrip-statements.test.ts` | writer/reader fidelity, statement round-trip for all 11 kinds |
 | Story API and entities | `test/story-api-expanded.test.ts`, `test/entity-*.test.ts` | scene objects, properties, behaviors, collisions |
 | Rendering and scene model | `test/scene-*.test.ts`, `test/render-*.test.ts`, `test/camera-system.test.ts` | scene setup, render helpers, camera behavior |
 | Server and hooks | `test/server.test.ts`, `test/hooks.test.ts`, `test/evidence-writer.test.ts` | REST API responses and eatme-facing proofs |

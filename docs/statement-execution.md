@@ -64,6 +64,10 @@ Response:
 
 ## Supported Statement Kinds
 
+These statement kinds are parsed from `.a3p` project files by the
+[A3P statement serializer](./a3p-statement-serialization.md) and executed
+by the VM:
+
 | Kind | Behavior |
 |------|----------|
 | `MethodCall` | If `object` is `"this"` and `method` matches a project method → dispatches with parameter binding (see [vm-scoping-and-functions.md](./vm-scoping-and-functions.md)). Otherwise logs `object.method(args)`. Unknown objects/methods are logged without error. |
