@@ -8,7 +8,7 @@ lesson grading.
 
 ## Overview
 
-The module exposes three layers:
+The core scene/entity model has three runtime layers:
 
 | Layer | File | Purpose |
 |---|---|---|
@@ -16,7 +16,20 @@ The module exposes three layers:
 | Entity hierarchy | `entities.ts` | Abstract class hierarchy from `SThing` down to concrete `SBiped`, `SFlyer`, etc. |
 | Scene container | `scene.ts` | `Scene` class with CRUD operations and `Scene.fromProject()` bridge |
 
-All public types and classes are barrel-exported from `src/story-api/index.ts`.
+The broader Story API topology includes helper and export modules beside those
+runtime layers. `implementation.ts` exists now; `world.ts` is the planned helper
+owner introduced by the public barrel refactor:
+
+| Layer | File | Purpose |
+|---|---|---|
+| Implementation summaries | `implementation.ts` | Runtime implementation summaries and lifecycle helpers |
+| World helpers | `world.ts` | Planned home for story-world aggregation, diagnostics, comparison, and compatibility helpers |
+| Public barrel | `index.ts` | Planned export-only barrel for all public Story API names |
+
+All public types, classes, and helper functions are exposed through
+`src/story-api/index.ts`. The planned refactor makes that public barrel
+export-only; see [Story API public barrel topology](./story-api-public-barrels.md)
+for the import contract and module ownership rules.
 
 ## Quick Start
 
@@ -566,7 +579,8 @@ scene.setEntityPosition('ground', { x: 1, y: 0, z: 0 });
 
 ## Module Exports
 
-Everything is exported from the barrel at `src/story-api/index.ts`:
+Everything is exposed from `src/story-api/index.ts`. After the planned public
+barrel refactor, that file is export-only:
 
 ```typescript
 // Value types
@@ -590,6 +604,9 @@ import {
 
 // Scene container
 import { Scene } from './story-api';
+
+// Story-world helpers
+import { buildStoryWorld, describeStoryWorld } from './story-api';
 ```
 
 ## Architecture
@@ -597,12 +614,15 @@ import { Scene } from './story-api';
 ```
 src/
   story-api/
-    index.ts        — Barrel re-export of all public types and classes
+    index.ts        — Planned export-only barrel for all public Story API names
     types.ts        — Position, Orientation, Size, JointId, Vec3, BoundingBox, JointNode
     entities.ts     — SThing → STurnable → SMovableTurnable → SModel →
                       SJointedModel → {SBiped, SFlyer, SQuadruped, SProp}
                       + SGround, SCamera, SScene
+    implementation.ts — Runtime implementation summaries and lifecycle helpers
     scene.ts        — Scene container with CRUD + static fromProject() bridge
+    world.ts        — Planned story-world aggregation, diagnostics, comparison, and
+                      compatibility helpers
   a3p-parser.ts     — .a3p ZIP/XML parser + joint/bbox/texture extraction
   animation.ts      — Pure-functional tween engine (see animation.md)
   project-io.ts     — Full .a3p archive read/write (see project-io.md)
@@ -614,9 +634,13 @@ test/
   project-io.test.ts — Round-trip, manifest, thumbnail, security
 ```
 
-The story API has **zero new dependencies** — it imports only the existing
-`AliceProject` and `AliceObject` types from `a3p-parser.ts` (type-only
-imports, no runtime dependency on the parser module).
+The planned public barrel has no implementation logic or initialization side
+effects. Story-world helpers will live in `world.ts` and import from sibling
+Story API modules instead of importing from the public barrel.
+
+The scene/entity model remains dependency-light: project bridge helpers use
+existing `a3p-parser.ts` types type-only and do not add third-party runtime
+dependencies.
 
 ## Related Modules
 
