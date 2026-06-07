@@ -23,7 +23,6 @@ const STORY_API_BARREL_MODULES = [
 
 const WORLD_ALLOWED_RUNTIME_IMPORTS = [
   "./entities",
-  "./implementation",
   "./scene",
   "./types",
 ];

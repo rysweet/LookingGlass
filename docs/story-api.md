@@ -579,8 +579,7 @@ scene.setEntityPosition('ground', { x: 1, y: 0, z: 0 });
 
 ## Module Exports
 
-Everything is exposed from `src/story-api/index.ts`. After the planned public
-barrel refactor, that file is export-only:
+Everything is exposed from export-only `src/story-api/index.ts`:
 
 ```typescript
 // Value types
@@ -614,14 +613,14 @@ import { buildStoryWorld, describeStoryWorld } from './story-api';
 ```
 src/
   story-api/
-    index.ts        — Planned export-only barrel for all public Story API names
+    index.ts        — Export-only barrel for all public Story API names
     types.ts        — Position, Orientation, Size, JointId, Vec3, BoundingBox, JointNode
     entities.ts     — SThing → STurnable → SMovableTurnable → SModel →
                       SJointedModel → {SBiped, SFlyer, SQuadruped, SProp}
                       + SGround, SCamera, SScene
     implementation.ts — Runtime implementation summaries and lifecycle helpers
     scene.ts        — Scene container with CRUD + static fromProject() bridge
-    world.ts        — Planned story-world aggregation, diagnostics, comparison, and
+    world.ts        — Story-world aggregation, diagnostics, comparison, and
                       compatibility helpers
   a3p-parser.ts     — .a3p ZIP/XML parser + joint/bbox/texture extraction
   animation.ts      — Pure-functional tween engine (see animation.md)
@@ -634,9 +633,9 @@ test/
   project-io.test.ts — Round-trip, manifest, thumbnail, security
 ```
 
-The planned public barrel has no implementation logic or initialization side
-effects. Story-world helpers will live in `world.ts` and import from sibling
-Story API modules instead of importing from the public barrel.
+The public barrel has no implementation logic or initialization side effects.
+Story-world helpers live in `world.ts` and import from sibling Story API modules
+instead of importing from the public barrel.
 
 The scene/entity model remains dependency-light: project bridge helpers use
 existing `a3p-parser.ts` types type-only and do not add third-party runtime

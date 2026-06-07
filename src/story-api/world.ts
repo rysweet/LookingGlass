@@ -4,8 +4,8 @@ import {
   createSceneFromProject,
   describeScene,
   listSceneEntities,
-  Scene,
   snapshotScene,
+  type Scene,
   type SceneSnapshot,
 } from "./scene";
 import { createDefaultTransform, type Position, type Size } from "./types";
