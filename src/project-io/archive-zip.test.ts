@@ -69,6 +69,16 @@ describe("project-io/archive-zip", () => {
     }
   });
 
+  it("rejects direct reads of entries whose original ZIP name was unsafe", async () => {
+    const zip = await JSZip.loadAsync(await createZip({
+      "../programType.xml": "<node />",
+    }));
+
+    expect(zip.file("programType.xml")).not.toBeNull();
+    await expectProjectIoError(() => readZipText(zip, "programType.xml"), "unsafe-path");
+    await expectProjectIoError(() => readZipBytes(zip, "programType.xml"), "unsafe-path");
+  });
+
   it("reads and writes ZIP text and bytes through validated paths", async () => {
     const zip = new JSZip();
     writeZipBytes(zip, "resources/data/config.bin", new Uint8Array([1, 2, 3]));
