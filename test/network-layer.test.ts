@@ -2,10 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   APIClient,
   ConnectionStatus,
+  ExternalServiceError,
+  HttpError,
   MessageProtocol,
   OfflineQueue,
   RetryPolicy,
   WebSocketClient,
+  createHttpServiceAdapter,
+  type ExternalServiceAdapter,
   type FetchLike,
   type WebSocketLike,
 } from "../src/network-layer.js";
@@ -94,13 +98,16 @@ describe("network-layer", () => {
 
   it("retries API requests and tracks connection status", async () => {
     let attempts = 0;
+    const delays: number[] = [];
     const fetchImpl: FetchLike = vi.fn(async () => {
       attempts += 1;
       if (attempts === 1) {
         return {
           ok: false,
           status: 503,
-          headers: { get: () => "application/json" },
+          headers: {
+            get: (name: string) => name.toLowerCase() === "retry-after" ? "2" : "application/json",
+          },
           json: async () => ({ error: "temporary" }),
         };
       }
@@ -112,12 +119,16 @@ describe("network-layer", () => {
       };
     });
     const client = new APIClient({
+      serviceName: "project-api",
       baseUrl: "https://alice.example.test/api",
       fetchImpl,
       retryPolicy: new RetryPolicy({
         maxAttempts: 2,
-        sleep: async () => undefined,
+        sleep: async (delayMs) => {
+          delays.push(delayMs);
+        },
         shouldRetry: () => true,
+        retryAfterMs: (error) => error instanceof ExternalServiceError ? error.retryAfterMs : null,
       }),
     });
 
@@ -126,6 +137,108 @@ describe("network-layer", () => {
     expect(response).toEqual({ projectId: "starter", revision: 2 });
     expect(client.status).toBe(ConnectionStatus.Online);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(delays).toEqual([2_000]);
+  });
+
+  it("surfaces structured HTTP errors for external service calls", async () => {
+    const fetchImpl: FetchLike = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      headers: {
+        get: (name: string) => {
+          if (name.toLowerCase() === "content-type") {
+            return "application/json";
+          }
+          if (name.toLowerCase() === "retry-after") {
+            return "1";
+          }
+          return null;
+        },
+      },
+      json: async () => ({ error: "quota exceeded" }),
+    }));
+    const client = new APIClient({
+      serviceName: "gallery-api",
+      baseUrl: "https://alice.example.test/api",
+      fetchImpl,
+      retryPolicy: new RetryPolicy({ maxAttempts: 1 }),
+    });
+
+    await expect(client.get("/models")).rejects.toMatchObject({
+      name: "HttpError",
+      serviceName: "gallery-api",
+      method: "GET",
+      url: "https://alice.example.test/api/models",
+      status: 429,
+      retryable: true,
+      retryAfterMs: 1_000,
+      responseBody: { error: "quota exceeded" },
+    });
+    expect(client.status).toBe(ConnectionStatus.Reconnecting);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry non-retryable HTTP errors by default", async () => {
+    const fetchImpl: FetchLike = vi.fn(async () => ({
+      ok: false,
+      status: 404,
+      headers: { get: () => "text/plain" },
+      text: async () => "missing",
+    }));
+    const client = new APIClient({
+      serviceName: "asset-api",
+      baseUrl: "https://alice.example.test/api",
+      fetchImpl,
+    });
+
+    await expect(client.get("/assets/missing")).rejects.toBeInstanceOf(HttpError);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(client.status).toBe(ConnectionStatus.Offline);
+  });
+
+  it("wraps transport failures through the service adapter contract", async () => {
+    const transportError = new Error("dns failure");
+    const fetchImpl: FetchLike = vi.fn(async () => {
+      throw transportError;
+    });
+    const adapter: ExternalServiceAdapter = createHttpServiceAdapter({
+      serviceName: "asset-catalog",
+      baseUrl: "https://assets.example.test",
+      fetchImpl,
+      retryPolicy: new RetryPolicy({ maxAttempts: 1 }),
+    });
+
+    await expect(adapter.get("/models")).rejects.toMatchObject({
+      name: "ExternalServiceError",
+      serviceName: "asset-catalog",
+      method: "GET",
+      url: "https://assets.example.test/models",
+      retryable: true,
+      cause: transportError,
+    });
+    expect(adapter.status).toBe(ConnectionStatus.Offline);
+  });
+
+  it("times out stalled external service calls", async () => {
+    const fetchImpl: FetchLike = vi.fn((_, init) => new Promise<never>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        reject(new Error("aborted"));
+      });
+    }));
+    const adapter = createHttpServiceAdapter({
+      serviceName: "slow-service",
+      baseUrl: "https://slow.example.test",
+      fetchImpl,
+      timeoutMs: 1,
+      retryPolicy: new RetryPolicy({ maxAttempts: 1 }),
+    });
+
+    await expect(adapter.get("/status")).rejects.toMatchObject({
+      name: "ExternalServiceError",
+      serviceName: "slow-service",
+      message: "Request to slow-service timed out.",
+      retryable: true,
+    });
   });
 
   it("keeps offline queue entries when synchronization fails", async () => {
