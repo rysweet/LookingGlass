@@ -75,6 +75,7 @@ export interface RetryPolicyOptions {
   readonly random?: () => number;
   readonly sleep?: (delayMs: number) => Promise<void>;
   readonly shouldRetry?: (error: unknown, attempt: number) => boolean;
+  readonly retryAfterMs?: (error: unknown) => number | null;
 }
 
 export class RetryPolicy {
@@ -85,6 +86,7 @@ export class RetryPolicy {
   private readonly random: () => number;
   private readonly sleep: (delayMs: number) => Promise<void>;
   private readonly shouldRetry: (error: unknown, attempt: number) => boolean;
+  private readonly retryAfterMs: (error: unknown) => number | null;
 
   constructor(options: RetryPolicyOptions = {}) {
     this.maxAttempts = Math.max(1, options.maxAttempts ?? 3);
@@ -92,8 +94,9 @@ export class RetryPolicy {
     this.maxDelayMs = Math.max(this.baseDelayMs, options.maxDelayMs ?? 5_000);
     this.jitterFactor = Math.max(0, options.jitterFactor ?? 0);
     this.random = options.random ?? Math.random;
-    this.sleep = options.sleep ?? (async () => undefined);
+    this.sleep = options.sleep ?? defaultSleep;
     this.shouldRetry = options.shouldRetry ?? (() => true);
+    this.retryAfterMs = options.retryAfterMs ?? (() => null);
   }
 
   getDelay(attempt: number): number {
@@ -114,7 +117,7 @@ export class RetryPolicy {
         if (attempt >= this.maxAttempts || !this.shouldRetry(error, attempt)) {
           throw error;
         }
-        await this.sleep(this.getDelay(attempt));
+        await this.sleep(this.retryAfterMs(error) ?? this.getDelay(attempt));
         attempt += 1;
       }
     }
@@ -171,38 +174,89 @@ export interface FetchLike {
 }
 
 export interface APIClientOptions {
+  readonly serviceName?: string;
   readonly baseUrl?: string;
   readonly fetchImpl?: FetchLike;
   readonly retryPolicy?: RetryPolicy;
   readonly defaultHeaders?: Record<string, string>;
+  readonly timeoutMs?: number;
 }
 
 export interface RequestOptions {
   readonly retry?: boolean;
   readonly headers?: Record<string, string>;
+  readonly timeoutMs?: number;
 }
 
-class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
+export interface ExternalServiceAdapter {
+  readonly serviceName: string;
+  readonly status: ConnectionStatus;
+  get<T>(path: string, options?: RequestOptions): Promise<T>;
+  post<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
+  request<T>(path: string, init?: RequestInit, options?: RequestOptions): Promise<T>;
+}
+
+export interface ExternalServiceErrorOptions {
+  readonly serviceName: string;
+  readonly method: string;
+  readonly url: string;
+  readonly status?: number;
+  readonly retryable: boolean;
+  readonly responseBody?: unknown;
+  readonly retryAfterMs?: number | null;
+  readonly cause?: unknown;
+}
+
+export class ExternalServiceError extends Error {
+  readonly serviceName: string;
+  readonly method: string;
+  readonly url: string;
+  readonly status?: number;
+  readonly retryable: boolean;
+  readonly responseBody?: unknown;
+  readonly retryAfterMs: number | null;
+  readonly cause?: unknown;
+
+  constructor(message: string, options: ExternalServiceErrorOptions) {
     super(message);
+    this.name = "ExternalServiceError";
+    this.serviceName = options.serviceName;
+    this.method = options.method;
+    this.url = options.url;
+    this.status = options.status;
+    this.retryable = options.retryable;
+    this.responseBody = options.responseBody;
+    this.retryAfterMs = options.retryAfterMs ?? null;
+    this.cause = options.cause;
+  }
+}
+
+export class HttpError extends ExternalServiceError {
+  constructor(status: number, message: string, options: Omit<ExternalServiceErrorOptions, "status">) {
+    super(message, { ...options, status });
     this.name = "HttpError";
   }
 }
 
-export class APIClient {
+export class APIClient implements ExternalServiceAdapter {
+  readonly serviceName: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
   private readonly retryPolicy: RetryPolicy;
   private readonly defaultHeaders: Record<string, string>;
+  private readonly timeoutMs: number | null;
   private connectionStatus = ConnectionStatus.Offline;
 
   constructor(options: APIClientOptions = {}) {
+    this.serviceName = options.serviceName ?? "external-service";
     this.baseUrl = options.baseUrl ?? "";
     this.fetchImpl = options.fetchImpl ?? (fetch as unknown as FetchLike);
     this.retryPolicy = options.retryPolicy ?? new RetryPolicy({
-      shouldRetry: (error) => !(error instanceof HttpError) || error.status >= 500,
+      shouldRetry: (error) => isRetryableExternalCall(error),
+      retryAfterMs: (error) => error instanceof ExternalServiceError ? error.retryAfterMs : null,
     });
     this.defaultHeaders = { ...(options.defaultHeaders ?? {}) };
+    this.timeoutMs = options.timeoutMs && options.timeoutMs > 0 ? options.timeoutMs : null;
   }
 
   get status(): ConnectionStatus {
@@ -225,24 +279,47 @@ export class APIClient {
 
   async request<T>(path: string, init: RequestInit = {}, options: RequestOptions = {}): Promise<T> {
     const runRequest = async (): Promise<T> => {
+      const url = this.resolveUrl(path);
+      const method = init.method ?? "GET";
+      const timeout = createTimeout(options.timeoutMs ?? this.timeoutMs);
       let response: FetchResponseLike;
       try {
-        response = await this.fetchImpl(this.resolveUrl(path), {
+        response = await this.fetchImpl(url, {
           ...init,
+          signal: init.signal ?? timeout.signal,
           headers: {
             ...this.defaultHeaders,
-            ...(init.headers as Record<string, string> | undefined),
+            ...normalizeHeaders(init.headers),
             ...(options.headers ?? {}),
           },
         });
       } catch (error) {
         this.connectionStatus = ConnectionStatus.Offline;
-        throw error;
+        throw new ExternalServiceError(
+          timeout.signal?.aborted ? `Request to ${this.serviceName} timed out.` : `Request to ${this.serviceName} failed.`,
+          {
+            serviceName: this.serviceName,
+            method,
+            url,
+            retryable: true,
+            cause: error,
+          },
+        );
+      } finally {
+        timeout.clear();
       }
 
       if (!response.ok) {
-        this.connectionStatus = response.status >= 500 ? ConnectionStatus.Reconnecting : ConnectionStatus.Offline;
-        throw new HttpError(response.status, `Request failed with status ${response.status}`);
+        const retryable = isRetryableStatus(response.status);
+        this.connectionStatus = retryable ? ConnectionStatus.Reconnecting : ConnectionStatus.Offline;
+        throw new HttpError(response.status, `Request to ${this.serviceName} failed with status ${response.status}.`, {
+          serviceName: this.serviceName,
+          method,
+          url,
+          retryable,
+          responseBody: await parseErrorBody(response),
+          retryAfterMs: parseRetryAfter(getHeader(response.headers, "retry-after")),
+        });
       }
 
       this.connectionStatus = ConnectionStatus.Online;
@@ -267,6 +344,10 @@ export class APIClient {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
     return `${normalizedBase}${normalizedPath}`;
   }
+}
+
+export function createHttpServiceAdapter(options: APIClientOptions = {}): ExternalServiceAdapter {
+  return new APIClient(options);
 }
 
 export interface WebSocketLike {
@@ -389,6 +470,17 @@ async function parseResponse<T>(response: FetchResponseLike): Promise<T> {
   return await response.text?.() as T;
 }
 
+async function parseErrorBody(response: FetchResponseLike): Promise<unknown> {
+  try {
+    return await parseResponse<unknown>(response);
+  } catch (error) {
+    return {
+      unreadable: true,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 function getHeader(headers: FetchHeadersLike | undefined, name: string): string | null {
   if (!headers) {
     return null;
@@ -399,4 +491,65 @@ function getHeader(headers: FetchHeadersLike | undefined, name: string): string 
   const normalizedName = name.toLowerCase();
   const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === normalizedName);
   return entry ? String(entry[1]) : null;
+}
+
+function normalizeHeaders(headers: HeadersInit | undefined): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+  if (typeof Headers !== "undefined" && headers instanceof Headers) {
+    const record: Record<string, string> = {};
+    headers.forEach((value, key) => {
+      record[key] = value;
+    });
+    return record;
+  }
+  if (Array.isArray(headers)) {
+    return Object.fromEntries(headers.map(([key, value]) => [key, String(value)]));
+  }
+  return Object.fromEntries(Object.entries(headers).map(([key, value]) => [key, String(value)]));
+}
+
+function isRetryableExternalCall(error: unknown): boolean {
+  if (error instanceof ExternalServiceError) {
+    return error.retryable;
+  }
+  return true;
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function parseRetryAfter(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, seconds * 1_000);
+  }
+  const retryAt = Date.parse(value);
+  if (!Number.isFinite(retryAt)) {
+    return null;
+  }
+  return Math.max(0, retryAt - Date.now());
+}
+
+function createTimeout(timeoutMs: number | null): { readonly signal?: AbortSignal; readonly clear: () => void } {
+  if (!timeoutMs) {
+    return { clear: () => undefined };
+  }
+  const controller = new AbortController();
+  const timeoutId: ReturnType<typeof setTimeout> = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timeoutId),
+  };
+}
+
+async function defaultSleep(delayMs: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
 }

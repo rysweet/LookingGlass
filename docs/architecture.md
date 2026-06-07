@@ -13,7 +13,7 @@ TypeScript modules that are easy to test and replace.
 | Renderer | `src/scene-*`, `src/render-*`, `src/scenegraph.ts`, `src/scene-builder.ts` | Turn Alice scenes into browser-rendered 3D output |
 | IDE | `src/code-editor.ts`, `src/procedure-editor.ts`, `src/workspace.ts`, `src/run-system.ts` | Drive editing, scene setup, and run workflows |
 | Croquet and collaboration | `src/croquet*`, `src/collaboration.ts`, `src/state-synchronization.ts` | Support multi-user and shared state workflows |
-| Infrastructure | `src/server.ts`, `src/cli.ts`, `src/project-*`, `src/resource-*`, `src/hooks/*` | File I/O, HTTP API, hooks, and outside-in integration |
+| Infrastructure | `src/server.ts`, `src/cli.ts`, `src/network-layer.ts`, `src/project-*`, `src/resource-*`, `src/hooks/*` | File I/O, HTTP API, outbound service adapters, hooks, and outside-in integration |
 
 ## Module organization
 

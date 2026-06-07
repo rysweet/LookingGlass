@@ -90,6 +90,7 @@ function buildFactoryCases() {
     ["Localization.createFormatter", () => PublicApi.Localization.createFormatter("en")],
     ["Materials.createMaterialDefinition", () => PublicApi.Materials.createMaterialDefinition({ opacity: 2 })],
     ["Materials.createAppearanceFromMaterial", () => PublicApi.Materials.createAppearanceFromMaterial(PublicApi.Materials.createMaterialDefinition())],
+    ["NetworkLayer.createHttpServiceAdapter", () => PublicApi.NetworkLayer.createHttpServiceAdapter({ serviceName: "contract-api" })],
     ["PrintSystem.createPrintableDocument", () => PublicApi.PrintSystem.createPrintableDocument(parsedScript)],
     ["ProjectTemplate.createEmptyWorldProject", () => PublicApi.ProjectTemplate.createEmptyWorldProject({ projectName: "FactoryWorld" })],
     ["ProjectTemplate.createProjectFromTemplate", () => contractArchive],
@@ -210,6 +211,10 @@ function assertFactoryResult(key: string, value: unknown): void {
         value instanceof PublicApi.Scenegraph.SingleAppearance
           || value instanceof PublicApi.Scenegraph.TexturedAppearance,
       ).toBe(true);
+      return;
+    case "NetworkLayer.createHttpServiceAdapter":
+      expectKeys(value, ["serviceName", "status", "get", "post", "request"]);
+      expect((value as { serviceName: string }).serviceName).toBe("contract-api");
       return;
     case "PrintSystem.createPrintableDocument":
       expectKeys(value, ["title", "text", "html", "standalonePage"]);

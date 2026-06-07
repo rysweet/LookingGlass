@@ -30,6 +30,7 @@ so the `eatme` test suite can drive real curriculum workflows.
 | IDE workflows | Supports editing, running, and curriculum tasks | [IDE operations](./ide-operations.md), [Grading pipeline](./grading-pipeline.md) |
 | Assets and resources | Loads models, images, audio, and project files | [Model resources](./model-resources.md), [Open-asset pipeline](./open-asset-pipeline.md), [Resource manager](./resource-manager.md), [Project IO](./project-io.md), [Image editor](./image-editor.md), [Audio](./audio.md) |
 | eatme integration | Exposes HTTP endpoints and scenario-friendly workflows | [API reference](./api-reference.md), [Server API](./server-api.md), [Gadugi test scenarios](./gadugi-test-scenarios.md) |
+| External service integration | Wraps outbound HTTP and WebSocket calls behind retryable adapters | [External service integration](./external-service-integration.md) |
 
 ## Documentation map
 
@@ -54,6 +55,7 @@ so the `eatme` test suite can drive real curriculum workflows.
 - [Audio](./audio.md)
 - [Collision detection](./collision-detection.md)
 - [Event system](./event-system.md)
+- [External service integration](./external-service-integration.md)
 - [Grading pipeline](./grading-pipeline.md)
 - [Image editor](./image-editor.md)
 - [Model resources](./model-resources.md)
