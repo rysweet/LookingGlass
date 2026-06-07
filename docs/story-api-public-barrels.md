@@ -1,6 +1,6 @@
 ---
 title: Story API Public Barrel Topology
-description: Planned public import contract and module ownership rules for the export-only Story API barrels.
+description: Public import contract and module ownership rules for the export-only Story API barrels.
 last_updated: 2026-06-07
 review_schedule: as-needed
 doc_type: reference
@@ -8,15 +8,9 @@ doc_type: reference
 
 # Story API Public Barrel Topology
 
-> **PLANNED - implementation pending**
->
-> This document describes the target public barrel topology for the Story API
-> refactor. Until that refactor lands, `src/story-api/index.ts` may still contain
-> helper implementation logic and `src/story-api/world.ts` may not exist yet.
-
 The root public barrel (`src/index.ts`) and Story API public barrel
-(`src/story-api/index.ts`) will be export-only modules. They will expose the same
-public API as before, but implementation logic will live in focused sibling
+(`src/story-api/index.ts`) are export-only modules. They expose the same
+public API as before, while implementation logic lives in focused sibling
 modules.
 
 This keeps public imports stable while reducing the chance that public barrels
@@ -79,7 +73,7 @@ console.log(scene.getEntity("bunny") instanceof SBiped);
 | --- | --- | --- |
 | `src/index.ts` | Exposes `StoryApi` as one root namespace export among the repository's other root namespace exports | Export declarations only |
 | `src/story-api` | Exposes all public Story API names through repository bundler directory resolution | Re-export from `index.ts` only |
-| `src/story-api/index.ts` | Exposes all names from `entities`, `implementation`, `scene`, `types`, and `world` | Export declarations only after the refactor lands |
+| `src/story-api/index.ts` | Exposes all names from `entities`, `implementation`, `scene`, `types`, and `world` | Export declarations only |
 
 The refactor must preserve the existing consumer contract. Named exports from
 `src/story-api` and `src/story-api/index.ts` remain identical.
@@ -109,8 +103,8 @@ src/
     world.ts           Story-world aggregation, summary, diagnostics, and compatibility helpers
 ```
 
-`src/story-api/world.ts` will own the helper logic that used to live in the
-Story API barrel. It will import directly from sibling implementation modules:
+`src/story-api/world.ts` owns the helper logic that used to live in the
+Story API barrel. It imports directly from sibling implementation modules:
 
 ```typescript
 import type { AliceProject } from "../a3p-parser";
@@ -125,8 +119,8 @@ It must not import from `./index`, `../index`, or `../story-api`.
 
 ## World helper API
 
-The world helper API will be exported from `src/story-api/world.ts` and
-re-exported unchanged from `src/story-api/index.ts`, `src/story-api`, and the
+The world helper API is exported from `src/story-api/world.ts` and re-exported
+unchanged from `src/story-api/index.ts`, `src/story-api`, and the
 root `StoryApi` namespace.
 
 ### Interfaces
@@ -194,7 +188,7 @@ scripts when those checks are run locally.
 
 ## Maintaining the topology
 
-Keep these rules true after the refactor lands:
+Keep these rules true:
 
 1. `src/index.ts` stays export-only.
 2. `src/story-api/index.ts` stays export-only.
