@@ -1,15 +1,10 @@
-import type { AliceObject, AliceProject } from "./a3p-parser.js";
+import type { AliceProject } from "./a3p-parser.js";
 import {
-  CameraNode,
-  GroupNode,
-  LightNode,
   SceneGraph,
   SceneGraphNode,
   type Transform,
   Transformable,
   VisualNode,
-  quaternionMultiply,
-  rotateVec3ByQuaternion,
 } from "./scene-graph.js";
 import {
   addVec3,
@@ -17,7 +12,6 @@ import {
   normalizeQuaternion,
   normalizeVec3,
   orientationFromLookDirection,
-  quaternionConjugate,
   quaternionFromAxisAngle,
   quaternionMultiply as multiplyOrientation,
   relationOffset,
@@ -40,29 +34,29 @@ import { type AnimationEasing, AnimationLoop, AnimationQueue, easeInOut, interpo
 import type { AliceMethodBridge, ExecutionResult, RuntimeObject, VMState, VMExecutionOptions } from "./tweedle-vm-core-types.js";
 import { executeProject, virtualMachine } from "./tweedle-vm-core-setup.js";
 import type { EntryPointExecutionOptions } from "./virtual-machine.js";
+import {
+  createProjectSceneRegistration,
+  targetEntityIdOf,
+  type ProjectSceneRegistration,
+} from "./vm-scene-bridge-entities.js";
+import {
+  durationMs,
+  easeFor,
+  numericValue,
+  screenPositionOf,
+  toColor3,
+} from "./vm-scene-bridge-mapping.js";
+import {
+  cloneTransform,
+  identityTransform,
+  projectedWorldForNode,
+  worldToLocalTransform,
+} from "./vm-scene-bridge-transforms.js";
 
-const IDENTITY_ORIENTATION: Orientation = Object.freeze({ x: 0, y: 0, z: 0, w: 1 });
-const UNIT_SCALE: Vec3 = Object.freeze({ x: 1, y: 1, z: 1 });
 const DEFAULT_BUBBLE_DURATION_MS = 2000;
 
-const COLOR_KEYWORDS: Readonly<Record<string, { r: number; g: number; b: number }>> = Object.freeze({
-  WHITE: { r: 1, g: 1, b: 1 },
-  BLACK: { r: 0, g: 0, b: 0 },
-  RED: { r: 1, g: 0, b: 0 },
-  GREEN: { r: 0, g: 1, b: 0 },
-  BLUE: { r: 0, g: 0, b: 1 },
-  YELLOW: { r: 1, g: 1, b: 0 },
-  ORANGE: { r: 1, g: 0.5, b: 0 },
-  PURPLE: { r: 0.5, g: 0, b: 0.5 },
-  PINK: { r: 1, g: 0.75, b: 0.8 },
-  GRAY: { r: 0.5, g: 0.5, b: 0.5 },
-  GREY: { r: 0.5, g: 0.5, b: 0.5 },
-  BROWN: { r: 0.6, g: 0.4, b: 0.2 },
-  CYAN: { r: 0, g: 1, b: 1 },
-  MAGENTA: { r: 1, g: 0, b: 1 },
-});
-
 export type SceneNode = SceneGraphNode;
+export type { ProjectSceneRegistration };
 
 export interface ScreenPosition {
   readonly x: number;
@@ -85,163 +79,13 @@ export interface VmSceneBridgeOptions {
   readonly defaultBubbleDurationMs?: number;
 }
 
-export interface ProjectSceneRegistration {
-  readonly sceneGraph: SceneGraph;
-  readonly entityNodes: ReadonlyMap<string, SceneGraphNode>;
-}
-
 export interface VmSceneRuntimeOptions extends VmSceneBridgeOptions {
   readonly sceneGraph?: SceneGraph;
   readonly render?: (simulationTimeMs: number) => void;
 }
 
-function identityTransform(): Transform {
-  return {
-    position: { x: 0, y: 0, z: 0 },
-    orientation: { ...IDENTITY_ORIENTATION },
-    scale: { ...UNIT_SCALE },
-  };
-}
-
-function cloneTransform(value: Transform): Transform {
-  return {
-    position: { ...value.position },
-    orientation: { ...value.orientation },
-    scale: { ...value.scale },
-  };
-}
-
-function multiplyVec3(left: Vec3, right: Vec3): Vec3 {
-  return {
-    x: left.x * right.x,
-    y: left.y * right.y,
-    z: left.z * right.z,
-  };
-}
-
-function divideVec3(left: Vec3, right: Vec3): Vec3 {
-  return {
-    x: right.x === 0 ? 0 : left.x / right.x,
-    y: right.y === 0 ? 0 : left.y / right.y,
-    z: right.z === 0 ? 0 : left.z / right.z,
-  };
-}
-
-function invertOrientation(orientation: Orientation): Orientation {
-  return normalizeQuaternion(quaternionConjugate(orientation));
-}
-
-function combineTransforms(parent: Transform, child: Transform): Transform {
-  const scaled = multiplyVec3(parent.scale, child.position);
-  const rotated = rotateVec3ByQuaternion(scaled, parent.orientation);
-  return {
-    position: addVec3(parent.position, rotated),
-    orientation: normalizeQuaternion(quaternionMultiply(parent.orientation, child.orientation)),
-    scale: multiplyVec3(parent.scale, child.scale),
-  };
-}
-
-function worldToLocalTransform(parentWorld: Transform, world: Transform): Transform {
-  const offset = subtractVec3(world.position, parentWorld.position);
-  const unrotated = rotateVec3ByQuaternion(offset, invertOrientation(parentWorld.orientation));
-  return {
-    position: divideVec3(unrotated, parentWorld.scale),
-    orientation: normalizeQuaternion(multiplyOrientation(invertOrientation(parentWorld.orientation), world.orientation)),
-    scale: divideVec3(world.scale, parentWorld.scale),
-  };
-}
-
-function numericValue(value: unknown, fallback = 0): number {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function durationMs(value: unknown): number {
-  const parsed = numericValue(value, 0);
-  return parsed > 0 ? parsed * 1000 : 0;
-}
-
-function easeFor(value: unknown): AnimationEasing {
-  if (typeof value === "string" && value.toUpperCase().includes("GENT")) {
-    return "ease-in-out";
-  }
-  return "linear";
-}
-
-function toColor3(value: unknown): { r: number; g: number; b: number } | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  const hex = trimmed.startsWith("#") ? trimmed.slice(1) : trimmed;
-  if (/^[\da-fA-F]{6}$/.test(hex)) {
-    return {
-      r: Number.parseInt(hex.slice(0, 2), 16) / 255,
-      g: Number.parseInt(hex.slice(2, 4), 16) / 255,
-      b: Number.parseInt(hex.slice(4, 6), 16) / 255,
-    };
-  }
-
-  return COLOR_KEYWORDS[trimmed.toUpperCase()] ?? null;
-}
-
-function screenPositionOf(worldPosition: Vec3): ScreenPosition {
-  return {
-    x: worldPosition.x * 100,
-    y: worldPosition.y * -100,
-    visible: true,
-  };
-}
-
-function chooseNodeForObject(object: AliceObject): SceneGraphNode {
-  if (/camera/i.test(object.typeName)) {
-    return new CameraNode(object.name);
-  }
-  if (/sun|light/i.test(object.typeName)) {
-    return new LightNode(object.name, "directional");
-  }
-  if (/scene/i.test(object.typeName)) {
-    return new GroupNode(object.name);
-  }
-  const node = new VisualNode(object.name);
-  node.meshRef = object.resourceType;
-  return node;
-}
-
-function transformFromObject(object: AliceObject): Transform {
-  return {
-    position: object.position ? { ...object.position } : { x: 0, y: 0, z: 0 },
-    orientation: object.orientation ? { ...object.orientation } : { ...IDENTITY_ORIENTATION },
-    scale: object.size
-      ? { x: object.size.width, y: object.size.height, z: object.size.depth }
-      : { ...UNIT_SCALE },
-  };
-}
-
-function targetEntityIdOf(value: unknown): string | null {
-  if (!value) {
-    return null;
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "object" && value !== null && "name" in value) {
-    const named = value as { name?: unknown };
-    return typeof named.name === "string" ? named.name : null;
-  }
-  return null;
-}
-
 export function createSceneGraphForProject(project: AliceProject, sceneGraph: SceneGraph = new SceneGraph()): ProjectSceneRegistration {
-  const entityNodes = new Map<string, SceneGraphNode>();
-  for (const object of project.sceneObjects) {
-    const node = chooseNodeForObject(object);
-    node.localTransform = transformFromObject(object);
-    sceneGraph.root.addChild(node);
-    entityNodes.set(object.name, node);
-  }
-  return { sceneGraph, entityNodes };
+  return createProjectSceneRegistration(project, sceneGraph);
 }
 
 export class VmSceneBridge implements AliceMethodBridge {
@@ -377,12 +221,10 @@ export class VmSceneBridge implements AliceMethodBridge {
   }
 
   #projectedWorldForNode(node: SceneGraphNode | null): Transform {
-    if (!node) {
-      return identityTransform();
-    }
-    const entityId = this.#nodeEntities.get(node);
-    const local = cloneTransform(entityId ? this.#projectedLocals.get(entityId) ?? node.localTransform : node.localTransform);
-    return combineTransforms(this.#projectedWorldForNode(node.parent), local);
+    return projectedWorldForNode(node, (sceneNode) => {
+      const entityId = this.#nodeEntities.get(sceneNode);
+      return entityId ? this.#projectedLocals.get(entityId) : sceneNode.localTransform;
+    });
   }
 
   #worldFor(entityId: string): Transform {
@@ -622,9 +464,8 @@ export class VmSceneBridge implements AliceMethodBridge {
     const node = this.#requireTransformable(entityId);
     const world = this.#worldFor(entityId);
     const targetId = targetEntityIdOf(vehicleValue);
-    const vehicle = targetId ? this.#entityNodes.get(targetId) ?? null : null;
-    const parent = vehicle ?? this.#findRoot(node);
-    if (parent === node || !parent) {
+    const parent = targetId ? this.#entityNodes.get(targetId) ?? null : null;
+    if (!parent || parent === node || this.#containsDescendant(node, parent)) {
       return;
     }
     parent.addChild(node);
@@ -635,17 +476,20 @@ export class VmSceneBridge implements AliceMethodBridge {
     this.updateSpeechBubblePositions();
   }
 
-  #findRoot(node: SceneGraphNode): SceneGraphNode | null {
-    let current: SceneGraphNode | null = node;
-    while (current?.parent) {
+  #containsDescendant(root: SceneGraphNode, candidate: SceneGraphNode): boolean {
+    let current: SceneGraphNode | null = candidate;
+    while (current) {
+      if (current === root) {
+        return true;
+      }
       current = current.parent;
     }
-    return current;
+    return false;
   }
 
   #place(entityId: string, relationValue: unknown, targetValue: unknown, offsetValue?: unknown): Promise<void> {
     const targetId = targetEntityIdOf(targetValue);
-    if (!targetId) {
+    if (!targetId || !this.#entityNodes.has(targetId)) {
       return Promise.resolve();
     }
     const selfWorld = this.#worldFor(entityId);
@@ -670,7 +514,7 @@ export class VmSceneBridge implements AliceMethodBridge {
 
   #pointAt(entityId: string, targetValue: unknown): Promise<void> {
     const targetId = targetEntityIdOf(targetValue);
-    if (!targetId) {
+    if (!targetId || !this.#entityNodes.has(targetId)) {
       return Promise.resolve();
     }
     const world = this.#worldFor(entityId);
@@ -684,7 +528,7 @@ export class VmSceneBridge implements AliceMethodBridge {
 
   #orientTo(entityId: string, targetValue: unknown): Promise<void> {
     const targetId = targetEntityIdOf(targetValue);
-    if (!targetId) {
+    if (!targetId || !this.#entityNodes.has(targetId)) {
       return Promise.resolve();
     }
     return this.#animateWorldOrientation(entityId, this.#worldFor(targetId).orientation, 0, "linear");
@@ -692,7 +536,7 @@ export class VmSceneBridge implements AliceMethodBridge {
 
   #moveToward(entityId: string, targetValue: unknown, amountValue: unknown, durationValue?: unknown, styleValue?: unknown): Promise<void> {
     const targetId = targetEntityIdOf(targetValue);
-    if (!targetId) {
+    if (!targetId || !this.#entityNodes.has(targetId)) {
       return Promise.resolve();
     }
     const world = this.#worldFor(entityId);
@@ -707,7 +551,7 @@ export class VmSceneBridge implements AliceMethodBridge {
 
   #turnToFace(entityId: string, targetValue: unknown, durationValue?: unknown, styleValue?: unknown): Promise<void> {
     const targetId = targetEntityIdOf(targetValue);
-    if (!targetId) {
+    if (!targetId || !this.#entityNodes.has(targetId)) {
       return Promise.resolve();
     }
     const world = this.#worldFor(entityId);
