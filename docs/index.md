@@ -28,7 +28,7 @@ so the `eatme` test suite can drive real curriculum workflows.
 | Story API and scene model | Represents scenes, entities, events, and runtime behavior | [Story API](./story-api.md), [planned Story API public barrel topology](./story-api-public-barrels.md), [SScene listener methods](./sscene-listener-methods.md), [Event system](./event-system.md), [Collision detection](./collision-detection.md) |
 | Rendering | Builds and draws 3D scenes in the browser | [Scene graph](./scene-graph.md), [Scene rendering](./scene-rendering.md), [Scene manager](./scene-manager.md) |
 | IDE workflows | Supports editing, running, and curriculum tasks | [IDE operations](./ide-operations.md), [Grading pipeline](./grading-pipeline.md) |
-| Assets and resources | Loads models, images, audio, and project files | [Model resources](./model-resources.md), [Open-asset pipeline](./open-asset-pipeline.md), [Resource manager](./resource-manager.md), [Project IO](./project-io.md), [Image editor](./image-editor.md), [Audio](./audio.md) |
+| Assets and resources | Loads models, images, audio, and project files | [Creating, using, and testing 3D character assets](./creating-using-testing-3d-character-assets.md), [Model resources](./model-resources.md), [Open-asset pipeline](./open-asset-pipeline.md), [Resource manager](./resource-manager.md), [Project IO](./project-io.md), [Image editor](./image-editor.md), [Audio](./audio.md) |
 | eatme integration | Exposes HTTP endpoints and scenario-friendly workflows | [API reference](./api-reference.md), [Server API](./server-api.md), [Gadugi test scenarios](./gadugi-test-scenarios.md) |
 | External service integration | Wraps outbound HTTP and WebSocket calls behind retryable adapters | [External service integration](./external-service-integration.md) |
 
@@ -38,6 +38,7 @@ so the `eatme` test suite can drive real curriculum workflows.
 
 - [Getting started](./getting-started.md)
 - [Adding open-source 3D models](./tutorial-adding-3d-models.md)
+- [Creating, using, and testing 3D character assets](./creating-using-testing-3d-character-assets.md)
 - [Round-trip an `.a3p` project with Project IO](./tutorial-project-io-round-trip.md)
 
 ### How-to guides and workflows
@@ -58,6 +59,7 @@ so the `eatme` test suite can drive real curriculum workflows.
 - [External service integration](./external-service-integration.md)
 - [Grading pipeline](./grading-pipeline.md)
 - [Image editor](./image-editor.md)
+- [Creating, using, and testing 3D character assets](./creating-using-testing-3d-character-assets.md)
 - [Model resources](./model-resources.md)
 - [Open-asset pipeline](./open-asset-pipeline.md)
 - [Project IO](./project-io.md)
