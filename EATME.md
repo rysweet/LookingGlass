@@ -27,7 +27,12 @@ Options:
   --port <number>           Port to listen on (default: 3000)
   --evidence-dir <path>     Directory for proof artifact JSON files
   --project <path>          Path to a starter .a3p project file
+  --api-token <token>       Token required by mutating local API requests
 ```
+
+When `serve` starts without `--api-token`, it generates a per-server
+`localApiToken` and prints it in the startup JSON. Include that value in the
+`X-Alice-Local-Api-Token` header for every mutating API request.
 
 ## API Endpoints
 
@@ -99,7 +104,7 @@ Save the project. Writes save proof artifacts.
 { "saveSelector": "scene.myFirstMethod" }
 ```
 
-### `GET /api/screenshot`
+### `POST /api/screenshot`
 Capture a screenshot of the viewport (placeholder in headless mode).
 
 ## Proof Artifact Schemas

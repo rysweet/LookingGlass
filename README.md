@@ -187,9 +187,14 @@ test suite for automated end-to-end testing:
 | `/api/code/edit-procedure` | POST | Edit a method body |
 | `/api/world/run` | POST | Run the world |
 | `/api/project/save` | POST | Save the project |
-| `/api/screenshot` | GET | Capture current render |
+| `/api/screenshot` | POST | Capture current render |
 | `/api/events/register` | POST | Register event handler |
 | `/api/events/fire` | POST | Fire an event |
+
+Mutating local API requests must use `Content-Type: application/json`. When
+served from the CLI, include the startup `localApiToken` in the
+`X-Alice-Local-Api-Token` header. Browser-originated mutations are accepted only
+from local origins.
 
 ## Testing
 

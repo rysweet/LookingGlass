@@ -3,6 +3,10 @@ import { createInitialServerState, type ServerState } from "./state.js";
 import { evidenceService, type EvidenceService } from "./evidence-service.js";
 import { projectService, type ProjectService } from "./project-service.js";
 import { screenshotService, type ScreenshotService } from "./screenshot-service.js";
+import {
+  createLocalApiSecurity,
+  type LocalApiSecurity,
+} from "./security.js";
 import { templateService, type TemplateService } from "./template-service.js";
 
 export interface ServerOptions {
@@ -10,6 +14,9 @@ export interface ServerOptions {
   evidenceDir: string;
   projectPath?: string;
   allowedProjectDirs?: readonly string[];
+  localApiToken?: string;
+  allowedHosts?: readonly string[];
+  allowedOrigins?: readonly string[];
 }
 
 export interface ServerContext {
@@ -21,6 +28,7 @@ export interface ServerContext {
   projectService: ProjectService;
   screenshotService: ScreenshotService;
   templateService: TemplateService;
+  localApiSecurity: LocalApiSecurity;
 }
 
 export function createServerContext(options: ServerOptions): ServerContext {
@@ -35,5 +43,10 @@ export function createServerContext(options: ServerOptions): ServerContext {
     projectService,
     screenshotService,
     templateService,
+    localApiSecurity: createLocalApiSecurity({
+      token: options.localApiToken,
+      allowedHosts: options.allowedHosts,
+      allowedOrigins: options.allowedOrigins,
+    }),
   };
 }

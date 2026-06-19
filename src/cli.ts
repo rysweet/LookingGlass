@@ -1,20 +1,22 @@
 #!/usr/bin/env node
 import * as path from "path";
 import { createServer } from "./server.js";
+import { createLocalApiToken } from "./server/security.js";
 
 export interface CliConfig {
   readonly command: "serve" | "help" | "print-config";
   readonly port: number;
   readonly evidenceDir: string;
   readonly project?: string;
+  readonly localApiToken?: string;
 }
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_EVIDENCE_DIR = "./evidence";
 const USAGE = [
   "Usage:",
-  "  alice-web serve [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>]",
-  "  alice-web print-config [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>]",
+  "  alice-web serve [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>] [--api-token <token>]",
+  "  alice-web print-config [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>] [--api-token <token>]",
   "  alice-web help",
 ].join("\n");
 
@@ -26,6 +28,7 @@ export function parseArgs(argv: string[]): CliConfig {
   let port = DEFAULT_PORT;
   let evidenceDir = DEFAULT_EVIDENCE_DIR;
   let project: string | undefined;
+  let localApiToken: string | undefined;
 
   for (let i = 1; i < args.length; i++) {
     const current = args[i];
@@ -39,9 +42,12 @@ export function parseArgs(argv: string[]): CliConfig {
       case "--project":
         project = parseProjectPath(args[++i]);
         break;
+      case "--api-token":
+        localApiToken = parseApiToken(args[++i]);
+        break;
       case "--help":
       case "-h":
-        return { command: "help", port, evidenceDir, project };
+        return { command: "help", port, evidenceDir, project, localApiToken };
       default:
         if (current?.startsWith("-")) {
           throw new Error(`Unknown option: ${current}`);
@@ -49,7 +55,7 @@ export function parseArgs(argv: string[]): CliConfig {
     }
   }
 
-  return { command, port, evidenceDir, project };
+  return { command, port, evidenceDir, project, localApiToken };
 }
 
 function normalizeCommand(value: string): CliConfig["command"] {
@@ -84,6 +90,13 @@ function parseProjectPath(value: string | undefined): string {
   return value;
 }
 
+function parseApiToken(value: string | undefined): string {
+  if (!value || !value.trim()) {
+    throw new Error("--api-token requires a non-empty token");
+  }
+  return value;
+}
+
 export function formatConfig(config: CliConfig): string {
   return JSON.stringify(
     {
@@ -91,6 +104,7 @@ export function formatConfig(config: CliConfig): string {
       port: config.port,
       evidenceDir: path.resolve(config.evidenceDir),
       project: config.project ? path.resolve(config.project) : null,
+      localApiToken: config.localApiToken ?? null,
       runtime: "typescript-web-prototype",
     },
     null,
@@ -117,10 +131,12 @@ async function run(config: CliConfig): Promise<void> {
 }
 
 async function serve(config: CliConfig): Promise<void> {
+  const localApiToken = config.localApiToken ?? createLocalApiToken();
   const app = createServer({
     port: config.port,
     evidenceDir: config.evidenceDir,
     projectPath: config.project,
+    localApiToken,
   });
   const server = app.listen(config.port, "127.0.0.1", () => {
     console.log(
@@ -129,6 +145,7 @@ async function serve(config: CliConfig): Promise<void> {
         port: config.port,
         evidenceDir: config.evidenceDir,
         project: config.project ?? null,
+        localApiToken,
         pid: process.pid,
         runtime: "typescript-web-prototype",
       }),
