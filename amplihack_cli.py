@@ -52,20 +52,22 @@ def main(argv: list[str] | None = None) -> int:
     scenario = SCENARIOS[args.command]
     repo = ensure_checkout()
     ensure_tool("npm")
-    ensure_tool("npx")
 
     print(f"Scenario: {scenario['description']}", flush=True)
     print(f"Checkout: {repo}", flush=True)
 
     if not args.no_install:
-        run(["npm", "ci", "--no-audit", "--no-fund", "--silent"], cwd=repo)
+        run(["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund", "--silent"], cwd=repo)
     elif not (repo / "node_modules").exists():
         raise SystemExit("--no-install was used, but cached node_modules does not exist")
 
     env = os.environ.copy()
     env["NODE_OPTIONS"] = merge_node_options(env.get("NODE_OPTIONS"))
     command = [
-        "npx",
+        "npm",
+        "exec",
+        "--no",
+        "--",
         "vitest",
         "run",
         "test/a3p-writer.test.ts",
