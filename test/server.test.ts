@@ -1,25 +1,25 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createServer } from "../src/server";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import type { Express } from "express";
 import request from "supertest";
 
-const TEST_EVIDENCE_DIR = path.resolve(__dirname, "../.test-server-evidence");
-
 describe("server API", () => {
   let app: Express;
+  let evidenceDir: string;
 
-  beforeAll(() => {
-    fs.mkdirSync(TEST_EVIDENCE_DIR, { recursive: true });
+  beforeEach(() => {
+    evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-server-test-"));
     app = createServer({
       port: 0,
-      evidenceDir: TEST_EVIDENCE_DIR,
+      evidenceDir,
     });
   });
 
-  afterAll(() => {
-    fs.rmSync(TEST_EVIDENCE_DIR, { recursive: true, force: true });
+  afterEach(() => {
+    fs.rmSync(evidenceDir, { recursive: true, force: true });
   });
 
   describe("GET /api/health", () => {
@@ -55,7 +55,7 @@ describe("server API", () => {
 
       // Verify evidence artifact was written
       const artifactPath = path.join(
-        TEST_EVIDENCE_DIR,
+        evidenceDir,
         "scene-object-added.json",
       );
       expect(fs.existsSync(artifactPath)).toBe(true);
@@ -90,7 +90,7 @@ describe("server API", () => {
 
       // Verify proof artifact was written
       const proofPath = path.join(
-        TEST_EVIDENCE_DIR,
+        evidenceDir,
         "first-lesson-code-editor-action-proof.json",
       );
       expect(fs.existsSync(proofPath)).toBe(true);
@@ -102,7 +102,7 @@ describe("server API", () => {
       expect(proof.success).toBe(true);
 
       // Verify edited project was written
-      const editedPath = path.join(TEST_EVIDENCE_DIR, "edited-project.a3p");
+      const editedPath = path.join(evidenceDir, "edited-project.a3p");
       expect(fs.existsSync(editedPath)).toBe(true);
       expect(fs.statSync(editedPath).size).toBeGreaterThan(0);
     });
@@ -141,19 +141,14 @@ describe("server API", () => {
       expect(res.body.status).toBe("completed");
       expect(typeof res.body.run_duration_ms).toBe("number");
 
-      const evidencePath = path.join(TEST_EVIDENCE_DIR, "run-world-result.json");
+      const evidencePath = path.join(evidenceDir, "run-world-result.json");
       expect(fs.existsSync(evidencePath)).toBe(true);
       const evidence = JSON.parse(fs.readFileSync(evidencePath, "utf-8"));
       expect(evidence.status).toBe("completed");
     });
 
     it("rejects run before launch", async () => {
-      // Create fresh server without launching
-      const freshApp = createServer({
-        port: 0,
-        evidenceDir: TEST_EVIDENCE_DIR,
-      });
-      await request(freshApp).post("/api/world/run").send({}).expect(400);
+      await request(app).post("/api/world/run").send({}).expect(400);
     });
   });
 
@@ -215,7 +210,7 @@ describe("server API", () => {
       expect(res.body.status).toBe("captured");
       expect(res.body.path).toContain("screenshot.png");
 
-      const screenshotPath = path.join(TEST_EVIDENCE_DIR, "screenshot.png");
+      const screenshotPath = path.join(evidenceDir, "screenshot.png");
       expect(fs.existsSync(screenshotPath)).toBe(true);
     });
   });
@@ -224,11 +219,11 @@ describe("server API", () => {
     it("keeps mutable project state scoped to each server instance", async () => {
       const firstApp = createServer({
         port: 0,
-        evidenceDir: path.join(TEST_EVIDENCE_DIR, "isolated-first"),
+        evidenceDir: path.join(evidenceDir, "isolated-first"),
       });
       const secondApp = createServer({
         port: 0,
-        evidenceDir: path.join(TEST_EVIDENCE_DIR, "isolated-second"),
+        evidenceDir: path.join(evidenceDir, "isolated-second"),
       });
 
       await request(firstApp).post("/api/launch").send({}).expect(200);
