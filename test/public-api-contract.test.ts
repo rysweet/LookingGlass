@@ -76,7 +76,7 @@ function buildFactoryCases() {
     ["Curriculum.createCurriculumMetadata", () => PublicApi.Curriculum.createCurriculumMetadata()],
     ["Curriculum.createCurriculumProgress", () => PublicApi.Curriculum.createCurriculumProgress()],
     ["EntityAnimation.createBrowserSpeechSynthesisAdapter", () => PublicApi.EntityAnimation.createBrowserSpeechSynthesisAdapter({
-      speechSynthesis: { speak: () => undefined, cancel: () => undefined } as SpeechSynthesis,
+      speechSynthesis: { speak: () => undefined, cancel: () => undefined } as unknown as SpeechSynthesis,
       SpeechSynthesisUtterance: class {
         text: string;
         rate = 1;
