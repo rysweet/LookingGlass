@@ -5,8 +5,15 @@ on:
     paths:
       - 'src/**'
       - 'test/**'
+      - 'e2e/**'
+      - 'gadugi/**'
+      - '.test-roundtrip/**'
+      - 'amplihack_cli.py'
+      - 'test_amplihack_cli.py'
+      - 'pyproject.toml'
       - 'package.json'
       - 'package-lock.json'
+      - 'playwright.config.*'
       - 'tsconfig*.json'
       - 'vite.config.*'
       - 'vitest.config.*'
@@ -16,8 +23,15 @@ on:
     paths:
       - 'src/**'
       - 'test/**'
+      - 'e2e/**'
+      - 'gadugi/**'
+      - '.test-roundtrip/**'
+      - 'amplihack_cli.py'
+      - 'test_amplihack_cli.py'
+      - 'pyproject.toml'
       - 'package.json'
       - 'package-lock.json'
+      - 'playwright.config.*'
       - 'tsconfig*.json'
       - 'vite.config.*'
       - 'vitest.config.*'
@@ -28,12 +42,12 @@ permissions:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -41,11 +55,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run build:server
-      - name: Prepare real A3P test fixture
-        run: |
-          sudo mkdir -p /home/azureuser/src/eatme/crates/eatme-alice/tests/fixtures/real
-          sudo chown -R "$USER":"$USER" /home/azureuser
-          curl --fail --location --output /home/azureuser/src/eatme/crates/eatme-alice/tests/fixtures/real/amazonMinimum.a3p https://raw.githubusercontent.com/rysweet/eatme/8593e76d62802c4d01ccc30b8a6ae334f81ad7b6/crates/eatme-alice/tests/fixtures/real/amazonMinimum.a3p
-      - name: Install Gadugi test runner
-        run: npm install --no-save github:rysweet/gadugi-agentic-test
+      - run: python3 -m unittest test_amplihack_cli.py
       - run: npm test
+      - run: npm run test:gadugi
+      - run: npx --no-install playwright install chromium
+      - run: npm run test:e2e
+      - run: npm run test:coverage
