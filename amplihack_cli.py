@@ -21,17 +21,17 @@ SCENARIOS = {
     "a3p-statement-simple": {
         "description": "A3P parser/writer statement inventory contract",
         "pattern": (
-            "keeps parser round-trip cases in exact parity with PARSED_A3P_STATEMENT_KINDS|"
-            "keeps writer coverage cases in exact parity with SUPPORTED_A3P_STATEMENT_KINDS"
+            "keeps parser-recognized statement kinds explicit|"
+            "keeps writer round-trip coverage cases in exact parity with SUPPORTED_A3P_STATEMENT_KINDS"
         ),
     },
     "a3p-statement-integration": {
         "description": "A3P statement round-trip, lowering, and fail-loud coverage",
         "pattern": (
-            "round-trips parser-recognized|"
+            "round-trips writer-supported|"
             "lowers VariableAssignment statements|"
             "lowers EventListener statements|"
-            "lowers runtime ForEach statements|"
+            "rejects TS-only ForEach statements|"
             "throws instead of dropping unsupported statement kinds"
         ),
     },
@@ -62,20 +62,22 @@ def main(argv: list[str] | None = None) -> int:
     scenario = SCENARIOS[args.command]
     repo = ensure_checkout(allow_mutable_checkout=args.allow_mutable_checkout)
     ensure_tool("npm")
-    ensure_tool("npx")
 
     print(f"Scenario: {scenario['description']}", flush=True)
     print(f"Checkout: {repo}", flush=True)
 
     if not args.no_install:
-        run(["npm", "ci", "--no-audit", "--no-fund", "--silent"], cwd=repo)
+        run(["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund", "--silent"], cwd=repo)
     elif not (repo / "node_modules").exists():
         raise SystemExit("--no-install was used, but cached node_modules does not exist")
 
     env = os.environ.copy()
     env["NODE_OPTIONS"] = merge_node_options(env.get("NODE_OPTIONS"))
     command = [
-        "npx",
+        "npm",
+        "exec",
+        "--no",
+        "--",
         "vitest",
         "run",
         "test/a3p-writer.test.ts",
