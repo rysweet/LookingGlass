@@ -76,7 +76,7 @@ Example response:
 ```json
 {
   "status": "launched",
-  "project": "/workspace/alice-web-prototype/fixtures/starter.a3p",
+  "project": "/workspace/lookingglass/fixtures/starter.a3p",
   "projectName": "starter",
   "sceneObjectCount": 2
 }
