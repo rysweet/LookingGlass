@@ -68,6 +68,22 @@ function buildFactoryCases() {
   const contractArchive = PublicApi.ProjectTemplate.createProjectFromTemplate("empty-world", {
     projectName: "ArchiveContract",
   });
+  const speechRuntime = {
+    speechSynthesis: {
+      speak() {},
+      cancel() {},
+    } as unknown as SpeechSynthesis,
+    SpeechSynthesisUtterance: class {
+      text: string;
+      rate = 1;
+      pitch = 1;
+      volume = 1;
+
+      constructor(text: string) {
+        this.text = text;
+      }
+    } as typeof SpeechSynthesisUtterance,
+  };
 
   return new Map<string, FactoryCase>([
     ["Accessibility.createHighContrastStyle", () => PublicApi.Accessibility.createHighContrastStyle()],
@@ -75,6 +91,7 @@ function buildFactoryCases() {
     ["CodeGeneration.createTweedleSource", () => PublicApi.CodeGeneration.createTweedleSource("Demo", [])],
     ["Curriculum.createCurriculumMetadata", () => PublicApi.Curriculum.createCurriculumMetadata()],
     ["Curriculum.createCurriculumProgress", () => PublicApi.Curriculum.createCurriculumProgress()],
+    ["EntityAnimation.createBrowserSpeechSynthesisAdapter", () => PublicApi.EntityAnimation.createBrowserSpeechSynthesisAdapter(speechRuntime)],
     ["ErrorHandling.createStructuredErrorReport", () => PublicApi.ErrorHandling.createStructuredErrorReport(new Error("boom"))],
     ["ExportHtml.createHtmlExportDocument", () => PublicApi.ExportHtml.createHtmlExportDocument(contractProject)],
     ["Formatters.createDefaultFormatterRegistry", () => PublicApi.Formatters.createDefaultFormatterRegistry()],
@@ -176,6 +193,9 @@ function assertFactoryResult(key: string, value: unknown): void {
       return;
     case "Curriculum.createCurriculumProgress":
       expect(value).toEqual({ demonstratedConcepts: [] });
+      return;
+    case "EntityAnimation.createBrowserSpeechSynthesisAdapter":
+      expectKeys(value, ["available", "speak", "cancel"]);
       return;
     case "ErrorHandling.createStructuredErrorReport":
       expectKeys(value, ["message", "name", "rawStack", "stackFrames"]);
