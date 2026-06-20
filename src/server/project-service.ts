@@ -75,14 +75,23 @@ async function loadRequestedProject(
 
   try {
     const project = await parseA3P(readResult.data);
+    const fileProjectName = path.basename(resolvedProjectFile, ".a3p");
     return {
       ok: true,
       project,
-      projectName: project.projectName || path.basename(resolvedProjectFile, ".a3p"),
+      projectName: userFacingProjectName(project.projectName, fileProjectName),
     };
   } catch {
     return { ok: false, error: `project file is corrupt or unsupported: ${resolvedProjectFile}` };
   }
+}
+
+function userFacingProjectName(parsedProjectName: string | null | undefined, fileProjectName: string): string {
+  const normalized = parsedProjectName?.trim();
+  if (!normalized || normalized === "Program" || normalized === "Unknown") {
+    return fileProjectName;
+  }
+  return normalized;
 }
 
 export class ProjectRunError extends Error {
