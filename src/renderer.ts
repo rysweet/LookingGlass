@@ -1,5 +1,5 @@
 /**
- * Alice Web Renderer — Three.js rendering pipeline matching Java's GL renderer.
+ * LookingGlass renderer — Three.js rendering pipeline matching Java's GL renderer.
  *
  * Java has core/glrender with 77 adapter classes, RenderContext, picking,
  * and display tasks. This ports the key subsystems to Three.js.

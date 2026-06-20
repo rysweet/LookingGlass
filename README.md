@@ -204,7 +204,7 @@ terms that intentionally remain Alice-branded.
 
 Mutating local API requests must use `Content-Type: application/json`. When
 served from the CLI, include the startup `localApiToken` in the
-`X-Alice-Local-Api-Token` header. Browser-originated mutations are accepted only
+`X-LookingGlass-Local-Api-Token` header. Browser-originated mutations are accepted only
 from local origins.
 
 ## Testing

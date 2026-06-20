@@ -166,7 +166,7 @@ Bad request responses use HTTP `400` with an `error` field. Unhandled server err
 
 Mutating local API routes require `Content-Type: application/json`. CLI-served
 instances also require the per-server startup token in the
-`X-Alice-Local-Api-Token` header and reject non-local `Host` or browser
+`X-LookingGlass-Local-Api-Token` header and reject non-local `Host` or browser
 `Origin` headers.
 
 ## Evidence artifacts
@@ -335,7 +335,7 @@ Capture a screenshot:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/screenshot \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```

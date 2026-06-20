@@ -44,8 +44,8 @@ npm run serve -- --port 3000 --evidence-dir ./evidence
 
 You should see output indicating the server is listening. Leave this
 terminal open and use a second terminal for the `curl` commands below.
-Copy the startup `localApiToken` into `ALICE_LOCAL_API_TOKEN`; mutating
-requests use it in `X-Alice-Local-Api-Token`.
+Copy the startup `localApiToken` into `LOOKINGGLASS_LOCAL_API_TOKEN`; mutating
+requests use it in `X-LookingGlass-Local-Api-Token`.
 
 ## Step 1 — Health check
 
@@ -116,7 +116,7 @@ Create a project from the `snow` template:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/new \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId": "snow"}'
 ```
@@ -158,7 +158,7 @@ Capture the starting state before making changes:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/screenshot \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```
@@ -192,7 +192,7 @@ Add a fox character to make the story more interesting:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/scene/add-object \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"className": "Fox"}'
 ```
@@ -220,7 +220,7 @@ code is edited by appending statements:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/code/edit-procedure \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
     "procedureSelector": "scene.myFirstMethod",
@@ -258,7 +258,7 @@ Execute the project through the Tweedle VM:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/world/run \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```
@@ -297,7 +297,7 @@ Capture the scene again to see the fox:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/screenshot \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```
@@ -330,7 +330,7 @@ Wire up a `sceneActivated` event that fires when the world starts:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/events/register \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated", "handlerName": "onWorldStart"}'
 ```
@@ -356,7 +356,7 @@ Simulate the scene activation:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/events/fire \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated", "payload": {}}'
 ```
@@ -385,7 +385,7 @@ Save everything to a portable `.a3p` archive:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/save \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"saveSelector": "scene.myFirstMethod"}'
 ```
@@ -410,7 +410,7 @@ Take a final screenshot to document the completed state:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/screenshot \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 cp evidence/screenshot.png docs/screenshots/07-final-saved-project.png
@@ -443,7 +443,7 @@ end-to-end:
 #!/usr/bin/env bash
 set -euo pipefail
 BASE=http://127.0.0.1:3000
-TOKEN_HEADER="X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN"
+TOKEN_HEADER="X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN"
 
 echo "=== Health check ==="
 curl -s "$BASE/api/health" | jq .
@@ -516,7 +516,7 @@ The tutorial used `snow`, but you can substitute any template. Here are
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/new \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId": "blank", "projectName": "MyBlankProject"}'
 ```
@@ -525,7 +525,7 @@ curl -X POST http://127.0.0.1:3000/api/project/new \
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/new \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId": "sea-floor", "projectName": "OceanAdventure"}'
 ```
@@ -534,7 +534,7 @@ curl -X POST http://127.0.0.1:3000/api/project/new \
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/new \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId": "moon", "projectName": "LunarExploration"}'
 ```
@@ -657,7 +657,7 @@ tutorial uses `POST /api/project/new` (Step 3), which sets
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/events/register \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated", "handlerName": "myHandler"}'
 ```
@@ -674,7 +674,7 @@ curl -X POST http://127.0.0.1:3000/api/events/register \
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/events/register \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "keyPress", "handlerName": "onJump", "key": "SPACE"}'
 ```

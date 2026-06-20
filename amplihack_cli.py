@@ -15,9 +15,7 @@ DIST_NAME = "lookingglass-amplihack"
 DEFAULT_REPO_URL = "https://github.com/rysweet/alice-web-prototype.git"
 NODE_HEAP_OPTION = "--max-old-space-size=32768"
 LOOKINGGLASS_SOURCE_ENV = "LOOKINGGLASS_SOURCE"
-LEGACY_SOURCE_ENV = "ALICE_WEB_SOURCE"
 LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT_ENV = "LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT"
-LEGACY_ALLOW_MUTABLE_CHECKOUT_ENV = "ALICE_WEB_ALLOW_MUTABLE_CHECKOUT"
 COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 SCENARIOS = {
@@ -58,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Unsafe: allow fallback to a requested branch/tag when the installation metadata "
             f"does not include an immutable commit SHA. {LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT_ENV}=1 "
-            f"also enables this; {LEGACY_ALLOW_MUTABLE_CHECKOUT_ENV}=1 remains a compatibility alias."
+            "also enables this."
         ),
     )
     args = parser.parse_args(argv)
@@ -94,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def ensure_checkout(allow_mutable_checkout: bool = False) -> Path:
-    source_override = os.environ.get(LOOKINGGLASS_SOURCE_ENV) or os.environ.get(LEGACY_SOURCE_ENV)
+    source_override = os.environ.get(LOOKINGGLASS_SOURCE_ENV)
     if source_override:
         repo = Path(source_override).expanduser().resolve()
         validate_repo(repo)
@@ -162,10 +160,7 @@ def string_value(value: object) -> str | None:
 
 
 def mutable_checkout_allowed(allow_mutable_checkout: bool) -> bool:
-    env_value = os.environ.get(LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT_ENV) or os.environ.get(
-        LEGACY_ALLOW_MUTABLE_CHECKOUT_ENV,
-        "",
-    )
+    env_value = os.environ.get(LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT_ENV, "")
     return allow_mutable_checkout or env_value.lower() in {
         "1",
         "true",

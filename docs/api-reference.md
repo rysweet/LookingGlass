@@ -17,8 +17,8 @@ npm run serve -- --evidence-dir ./evidence
 
 Base URL examples below use `http://127.0.0.1:3000`. Mutating requests must
 send `Content-Type: application/json`. When using the CLI server, copy the
-startup `localApiToken` into `ALICE_LOCAL_API_TOKEN` and send it as
-`X-Alice-Local-Api-Token`.
+startup `localApiToken` into `LOOKINGGLASS_LOCAL_API_TOKEN` and send it as
+`X-LookingGlass-Local-Api-Token`.
 
 ## Endpoint summary
 
@@ -378,7 +378,7 @@ Error response when nothing has been launched yet:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/screenshot \
-  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```
