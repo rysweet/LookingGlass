@@ -2,7 +2,6 @@
 
 **Layer**: api-contracts × data-flow
 **Severity**: High
-**Pass**: 1
 **Evidence**:
 - `docs/atlas/data-flow/data-flow.mmd:31-37` routes `POST /api/project/save` through `writeA3P / writeProject` into a JSZip-backed archive sink.
 - `docs/atlas/api-contracts/README.md:17,44-45` describes `/api/project/save` as a placeholder/copy proof path.
