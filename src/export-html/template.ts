@@ -1,10 +1,9 @@
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import type { AliceProject } from "../a3p-parser.js";
 import type { HtmlExportViewport } from "./types.js";
 
-const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 let cachedThreeModuleSource: string | null = null;
 
 export function normalizeViewport(
@@ -28,7 +27,7 @@ function getThreeModuleSource(): string {
   if (cachedThreeModuleSource !== null) {
     return cachedThreeModuleSource;
   }
-  const threeModulePath = resolve(MODULE_DIR, "../../node_modules/three/build/three.module.js");
+  const threeModulePath = require.resolve("three").replace(/three\.cjs$/, "three.module.js");
   cachedThreeModuleSource = readFileSync(threeModulePath, "utf8");
   return cachedThreeModuleSource;
 }
