@@ -66,7 +66,7 @@ export function createLocalApiProtectionMiddleware(
 }
 
 function shouldProtect(req: Request): boolean {
-  return req.path.startsWith("/api/") && UNSAFE_METHODS.has(req.method);
+  return req.path.toLowerCase().startsWith("/api/") && UNSAFE_METHODS.has(req.method);
 }
 
 function hasJsonContentType(req: Request): boolean {

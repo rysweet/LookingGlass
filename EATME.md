@@ -36,6 +36,9 @@ When `serve` starts without `--api-token`, it generates a per-server
 
 ## API Endpoints
 
+See [docs/api-reference.md](docs/api-reference.md) for the full request and
+response reference.
+
 ### `GET /api/health`
 Returns process status. Used by eatme for `process_started` assertion.
 
@@ -44,6 +47,12 @@ Start/initialize the prototype with a project.
 ```json
 { "project": "/path/to/starter.a3p" }
 ```
+
+### `GET /api/project/templates`
+List available project templates.
+
+### `POST /api/project/new`
+Create a project from a template.
 
 ### `POST /api/scene/add-object`
 Add an object to the scene. Writes `scene-object-added.json` to evidence dir.
@@ -59,6 +68,12 @@ Simulate editing a procedure. Writes `first-lesson-code-editor-action-proof.json
   "editSpec": "append-comment:eatme first lesson edit proof"
 }
 ```
+
+### `POST /api/code/create-procedure`
+Create a procedure in the current project state.
+
+### `POST /api/code/create-function`
+Create a function in the current project state.
 
 ### `POST /api/events/register`
 Register an event listener. Supports `sceneActivated`, `keyPress`, and
@@ -138,7 +153,7 @@ Five gadugi-compatible YAML scenarios in `gadugi/` provide outside-in
 integration tests covering the full API surface:
 
 ```bash
-gadugi-agentic-test run gadugi/ --verbose
+NODE_OPTIONS=--max-old-space-size=32768 gadugi-test run -d gadugi
 ```
 
 | Scenario | Tests |

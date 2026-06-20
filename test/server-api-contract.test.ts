@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { parseA3P } from "../src/a3p-parser";
 import { createServer } from "../src/server";
 import * as fs from "fs";
 import * as os from "os";
@@ -112,6 +113,21 @@ describe("server API response contracts", () => {
       sceneObjectCount: 2,
     });
     expect(fs.existsSync(requestedProject)).toBe(false);
+
+    const edit = await localPost(app, "/api/code/edit-procedure")
+      .send({
+        procedureSelector: "scene.myFirstMethod",
+        editSpec: "append-comment:missing source marker",
+      })
+      .expect(200);
+    expect(edit.body.status).toBe("proved");
+
+    const editedProjectPath = path.join(evidenceDir, "edited-project.a3p");
+    const editedProjectBytes = fs.readFileSync(editedProjectPath);
+    expect(editedProjectBytes.toString("utf-8")).not.toContain("alice-web-prototype-placeholder");
+    const editedProject = await parseA3P(editedProjectBytes);
+    expect(editedProject.projectName).toBe("Program");
+    expect(editedProject.methods.map((method) => method.name)).toContain("myFirstMethod");
   });
 
   it("characterizes scene, code edit, save, and run artifact contracts", async () => {
@@ -173,7 +189,13 @@ describe("server API response contracts", () => {
       action_proof: "first-lesson-code-editor-action-proof.json",
     });
     expect(edit.body.doesNotClaim).toContain("visible rendering correctness");
-    expect(fs.existsSync(path.join(evidenceDir, "edited-project.a3p"))).toBe(true);
+    const editedProjectPath = path.join(evidenceDir, "edited-project.a3p");
+    expect(fs.existsSync(editedProjectPath)).toBe(true);
+    const editedProjectBytes = fs.readFileSync(editedProjectPath);
+    expect(editedProjectBytes.toString("utf-8")).not.toContain("alice-web-prototype-placeholder");
+    const editedProject = await parseA3P(editedProjectBytes);
+    expect(editedProject.projectName).toBe("Program");
+    expect(editedProject.methods.map((method) => method.name)).toContain("myFirstMethod");
     expect(readJson(edit.body.evidenceArtifact)).toMatchObject({
       schema_version: "eatme.alice-first-lesson-code-editor-action-proof/v1",
       status: "proved",
