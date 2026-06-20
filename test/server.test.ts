@@ -9,6 +9,7 @@ import { LOCAL_API_TOKEN_HEADER } from "../src/server/security";
 
 const TEST_EVIDENCE_DIR = path.resolve(__dirname, "../.test-server-evidence");
 const TEST_LOCAL_API_TOKEN = "test-local-api-token";
+const EXCESSIVE_ROUTE_STRING = "x".repeat(1025);
 
 function createTestServer(options: Parameters<typeof createServer>[0]): Express {
   return createServer({
@@ -181,6 +182,23 @@ describe("server API", () => {
     });
   });
 
+  describe("request body parsing", () => {
+    it("rejects malformed JSON bodies with a client error", async () => {
+      await localPost(app, "/api/project/new")
+        .set("Content-Type", "application/json")
+        .send("{")
+        .expect(400);
+    });
+
+    it("rejects non-JSON request bodies before route defaults run", async () => {
+      const res = await localPost(app, "/api/project/new")
+        .set("Content-Type", "text/plain")
+        .send("not json")
+        .expect(415);
+      expect(res.body.error).toBe("Content-Type must be application/json");
+    });
+  });
+
   describe("POST /api/scene/add-object", () => {
     it("adds object and writes evidence", async () => {
       const res = await localPost(app, "/api/scene/add-object")
@@ -207,6 +225,23 @@ describe("server API", () => {
     it("rejects missing className", async () => {
       await localPost(app, "/api/scene/add-object")
         .send({})
+        .expect(400);
+    });
+
+    it("rejects malformed object fields", async () => {
+      await localPost(app, "/api/scene/add-object")
+        .send({ className: 123 })
+        .expect(400);
+
+      await localPost(app, "/api/scene/add-object")
+        .send({ className: "" })
+        .expect(400);
+
+      await localPost(app, "/api/scene/add-object")
+        .send({
+          className: "org.lgna.story.SBiped",
+          name: EXCESSIVE_ROUTE_STRING,
+        })
         .expect(400);
     });
   });
@@ -248,6 +283,81 @@ describe("server API", () => {
       const editedProject = await parseA3P(editedBytes);
       expect(editedProject.methods.map((method) => method.name)).toContain("myFirstMethod");
     });
+
+    it("rejects malformed edit fields", async () => {
+      await localPost(app, "/api/code/edit-procedure")
+        .send({
+          procedureSelector: 123,
+          editSpec: "append-comment:bad selector",
+        })
+        .expect(400);
+
+      await localPost(app, "/api/code/edit-procedure")
+        .send({
+          procedureSelector: "scene.myFirstMethod",
+          editSpec: "",
+        })
+        .expect(400);
+
+      await localPost(app, "/api/code/edit-procedure")
+        .send({
+          procedureSelector: "scene.myFirstMethod",
+          editSpec: EXCESSIVE_ROUTE_STRING,
+        })
+        .expect(400);
+    });
+  });
+
+  describe("POST /api/code/create-procedure", () => {
+    it("accepts valid parameter fields", async () => {
+      const res = await localPost(app, "/api/code/create-procedure")
+        .send({
+          name: "validParameterFields",
+          parameters: [
+            { name: "speed", type: "DecimalNumber", defaultValue: "1.0" },
+          ],
+        })
+        .expect(200);
+
+      expect(res.body.parameters).toEqual([
+        { name: "speed", type: "DecimalNumber", defaultValue: "1.0" },
+      ]);
+    });
+
+    it("rejects malformed parameter fields", async () => {
+      await localPost(app, "/api/code/create-procedure")
+        .send({
+          name: "badParameterContainer",
+          parameters: { name: "speed" },
+        })
+        .expect(400);
+
+      await localPost(app, "/api/code/create-procedure")
+        .send({
+          name: "badParameterName",
+          parameters: [{ name: "" }],
+        })
+        .expect(400);
+
+      await localPost(app, "/api/code/create-procedure")
+        .send({
+          name: "badParameterDefault",
+          parameters: [{ name: "speed", defaultValue: EXCESSIVE_ROUTE_STRING }],
+        })
+        .expect(400);
+    });
+  });
+
+  describe("POST /api/code/create-function", () => {
+    it("rejects malformed function parameter fields", async () => {
+      await localPost(app, "/api/code/create-function")
+        .send({
+          name: "badFunctionParameter",
+          returnType: "DecimalNumber",
+          parameters: [{ name: "distance", type: { nested: true } }],
+        })
+        .expect(400);
+    });
   });
 
   describe("POST /api/project/save", () => {
@@ -263,6 +373,20 @@ describe("server API", () => {
       expect(res.body.save_selector).toBe("scene.myFirstMethod");
       expect(res.body.saved_project_artifact).toBeTruthy();
       expect(res.body.save_artifact).toBeTruthy();
+    });
+
+    it("rejects malformed save fields", async () => {
+      await localPost(app, "/api/project/save")
+        .send({ saveSelector: 123 })
+        .expect(400);
+
+      await localPost(app, "/api/project/save")
+        .send({ targetPath: "" })
+        .expect(400);
+
+      await localPost(app, "/api/project/save")
+        .send({ targetPath: EXCESSIVE_ROUTE_STRING })
+        .expect(400);
     });
   });
 
@@ -366,6 +490,20 @@ describe("server API", () => {
 
       expect(res.body.error).toContain("nonexistent");
       expect(res.body.availableTemplates).toBeInstanceOf(Array);
+    });
+
+    it("rejects malformed template fields", async () => {
+      await localPost(app, "/api/project/new")
+        .send({ templateId: 123 })
+        .expect(400);
+
+      await localPost(app, "/api/project/new")
+        .send({ projectName: "" })
+        .expect(400);
+
+      await localPost(app, "/api/project/new")
+        .send({ projectName: EXCESSIVE_ROUTE_STRING })
+        .expect(400);
     });
   });
 
