@@ -5,8 +5,10 @@ on:
     paths:
       - 'src/**'
       - 'test/**'
+      - 'e2e/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'playwright.config.*'
       - 'tsconfig*.json'
       - 'vite.config.*'
       - 'vitest.config.*'
@@ -16,8 +18,10 @@ on:
     paths:
       - 'src/**'
       - 'test/**'
+      - 'e2e/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'playwright.config.*'
       - 'tsconfig*.json'
       - 'vite.config.*'
       - 'vitest.config.*'
@@ -46,6 +50,7 @@ jobs:
           sudo mkdir -p /home/azureuser/src/eatme/crates/eatme-alice/tests/fixtures/real
           sudo chown -R "$USER":"$USER" /home/azureuser
           curl --fail --location --output /home/azureuser/src/eatme/crates/eatme-alice/tests/fixtures/real/amazonMinimum.a3p https://raw.githubusercontent.com/rysweet/eatme/8593e76d62802c4d01ccc30b8a6ae334f81ad7b6/crates/eatme-alice/tests/fixtures/real/amazonMinimum.a3p
-      - name: Install Gadugi test runner
-        run: npm install --no-save github:rysweet/gadugi-agentic-test
       - run: npm test
+      - run: npx playwright install chromium
+      - run: npm run test:e2e
+      - run: npm run test:coverage
