@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { parseA3P } from "../src/a3p-parser";
 import { createServer } from "../src/server";
 import * as fs from "fs";
 import * as path from "path";
@@ -104,7 +105,10 @@ describe("server API", () => {
       // Verify edited project was written
       const editedPath = path.join(TEST_EVIDENCE_DIR, "edited-project.a3p");
       expect(fs.existsSync(editedPath)).toBe(true);
-      expect(fs.statSync(editedPath).size).toBeGreaterThan(0);
+      const editedBytes = fs.readFileSync(editedPath);
+      expect(editedBytes.toString("utf-8")).not.toContain("alice-web-prototype-placeholder");
+      const editedProject = await parseA3P(editedBytes);
+      expect(editedProject.methods.map((method) => method.name)).toContain("myFirstMethod");
     });
   });
 
