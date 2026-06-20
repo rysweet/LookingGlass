@@ -7,7 +7,8 @@ alongside the original Java Alice.
 ## Quick Start
 
 ```bash
-cd alice-web-prototype
+git clone https://github.com/rysweet/alice-web-prototype.git lookingglass
+cd lookingglass
 npm install
 npm run build:server
 
@@ -146,14 +147,14 @@ A `typescript` target entry has been added to
 
 To use:
 ```bash
-export LOOKINGGLASS_TYPESCRIPT_HOME=/path/to/alice-web-prototype
+export LOOKINGGLASS_TYPESCRIPT_HOME=/path/to/lookingglass
 export LOOKINGGLASS_TYPESCRIPT_API_URL=http://localhost:3000
 ```
 
 Compatibility aliases stay supported for existing harnesses:
 
 ```bash
-export ALICE_TYPESCRIPT_HOME=/path/to/alice-web-prototype
+export ALICE_TYPESCRIPT_HOME=/path/to/lookingglass
 export ALICE_TYPESCRIPT_API_URL=http://localhost:3000
 export ALICE_WEB_URL=http://localhost:3000
 ```

@@ -181,7 +181,12 @@ describe("LookingGlass identity contract", () => {
       "src/open-asset-pipeline/types.ts",
       "src/open-asset-pipeline/gltf-export.ts",
       "README.md",
+      "EATME.md",
       "mkdocs.yml",
+      "gadugi/01-a3p-open-parse-render.yaml",
+      "gadugi/03-scene-entity-manipulation.yaml",
+      "gadugi/04-event-system.yaml",
+      "scripts/blender/export-alice-gltf.py",
       "docs/index.md",
       "docs/server-api.md",
       "docs/api-reference.md",
@@ -196,6 +201,9 @@ describe("LookingGlass identity contract", () => {
       "alice-web serve",
       "alice-web print-config",
       "alice-web-prototype export-html",
+      "cd alice-web-prototype",
+      "/path/to/alice-web-prototype",
+      "/workspace/alice-web-prototype",
     ];
 
     for (const surface of forbiddenSurfaces) {

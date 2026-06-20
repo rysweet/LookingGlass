@@ -77,7 +77,7 @@ Example output:
 {
   "command": "print-config",
   "port": 3100,
-  "evidenceDir": "/workspace/alice-web-prototype/tmp/evidence",
+  "evidenceDir": "/workspace/lookingglass/tmp/evidence",
   "project": null,
   "runtime": "lookingglass-typescript-web"
 }
