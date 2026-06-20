@@ -254,7 +254,7 @@ function renderMethod(method: AliceMethod, options: { isStatic: boolean }): stri
 }
 
 function renderMethodBody(method: AliceMethod, returnType: string): string {
-  const lines = flattenStatementComments(method.statements).map((line) => `// ${line}`);
+  const lines = flattenStatementComments(method.statements).map((line) => `// ${escapeJavaLineComment(line)}`);
   if (lines.length === 0) {
     lines.push("// Generated from Alice project with no direct Java body translation.");
   }
@@ -262,6 +262,10 @@ function renderMethodBody(method: AliceMethod, returnType: string): string {
     lines.push(`return ${defaultJavaValue(returnType)};`);
   }
   return lines.join("\n");
+}
+
+function escapeJavaLineComment(value: string): string {
+  return value.replace(/[\r\n\u2028\u2029]+/g, " ");
 }
 
 function flattenStatementComments(statements: readonly AliceStatement[], depth = 0): string[] {
