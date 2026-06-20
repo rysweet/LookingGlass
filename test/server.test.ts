@@ -7,6 +7,7 @@ import * as path from "path";
 import type { Express } from "express";
 import request from "supertest";
 import { LOCAL_API_TOKEN_HEADER } from "../src/server/security";
+import { REPOSITORY_A3P_FIXTURE } from "./fixtures/a3p-fixtures";
 
 const TEST_LOCAL_API_TOKEN = "test-local-api-token";
 const EXCESSIVE_ROUTE_STRING = "x".repeat(1025);
@@ -180,6 +181,19 @@ describe("server API", () => {
       const res = await localPost(app, "/api/launch").send({}).expect(200);
       expect(res.body.status).toBe("launched");
       expect(res.body.sceneObjectCount).toBeGreaterThanOrEqual(2);
+    });
+
+    it("uses the requested .a3p filename when the parsed project name is generic", async () => {
+      const fixtureApp = createTestServer({
+        port: 0,
+        evidenceDir: path.join(evidenceDir, "fixture-launch"),
+        projectPath: REPOSITORY_A3P_FIXTURE,
+      });
+
+      const res = await localPost(fixtureApp, "/api/launch").send({}).expect(200);
+
+      expect(res.body.status).toBe("launched");
+      expect(res.body.projectName).toBe("sanitized-scene");
     });
   });
 
