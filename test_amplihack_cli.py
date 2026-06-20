@@ -107,7 +107,7 @@ class ResolveCheckoutRevisionTests(unittest.TestCase):
     def test_canonical_env_allows_mutable_revision_with_warning(self) -> None:
         stderr = io.StringIO()
 
-        with patch.dict(os.environ, {amplihack_cli.LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT_ENV: "1"}, clear=True):
+        with patch.dict(os.environ, {amplihack_cli.ALICE_WEB_ALLOW_MUTABLE_CHECKOUT_ENV: "1"}, clear=True):
             with redirect_stderr(stderr):
                 revision, commit = amplihack_cli.resolve_checkout_revision(
                     "https://example.invalid/repo.git",
@@ -117,21 +117,6 @@ class ResolveCheckoutRevisionTests(unittest.TestCase):
         self.assertEqual(revision, "release")
         self.assertIsNone(commit)
         self.assertIn("WARNING: unsafe mutable checkout enabled", stderr.getvalue())
-
-    def test_legacy_env_alias_allows_mutable_revision_with_warning(self) -> None:
-        stderr = io.StringIO()
-
-        with patch.dict(os.environ, {amplihack_cli.LEGACY_ALLOW_MUTABLE_CHECKOUT_ENV: "1"}, clear=True):
-            with redirect_stderr(stderr):
-                revision, commit = amplihack_cli.resolve_checkout_revision(
-                    "https://example.invalid/repo.git",
-                    {"requested_revision": "release"},
-                )
-
-        self.assertEqual(revision, "release")
-        self.assertIsNone(commit)
-        self.assertIn("WARNING: unsafe mutable checkout enabled", stderr.getvalue())
-
 
 if __name__ == "__main__":
     unittest.main()

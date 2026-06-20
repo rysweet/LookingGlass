@@ -74,7 +74,7 @@ export function generateBlenderExportScript(config?: BlenderExportConfig): strin
 
   return `#!/usr/bin/env python3
 """
-LookingGlass — Blender glTF Export Pipeline
+Alice — Blender glTF Export Pipeline
 
 Exports Blender models to glTF/GLB format with Alice-compatible joint naming.
 Run from command line:
@@ -212,7 +212,7 @@ if __name__ == "__main__":
  * and how to use the Blender pipeline.
  */
 export function getAssetSourceGuide(): string {
-  return `# Open-Source 3D Asset Sources for LookingGlass
+  return `# Open-Source 3D Asset Sources for Alice
 
 ## Recommended Sources (CC0 / CC-BY compatible)
 
@@ -259,7 +259,7 @@ The pipeline automatically renames Blender bones to Alice's canonical naming:
 
 Custom mappings can be added to the BONE_NAME_MAP in the export script.
 
-## Integration with LookingGlass
+## Integration with Alice
 
 After exporting models, register them with the ModelResourceCatalog:
 

@@ -66,14 +66,15 @@ Build and start the server, then run API-driven tests or external harnesses:
 
 ```bash
 npm run build:server
-npm run serve -- --port 3099 --evidence-dir ./evidence
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
+npm run serve -- --port 3099 --evidence-dir ./evidence --api-token "$ALICE_LOCAL_API_TOKEN"
 ```
 
 In another terminal, point `eatme` at that URL if you are not using the
 default:
 
 ```bash
-export LOOKINGGLASS_WEB_URL=http://127.0.0.1:3099
+export ALICE_WEB_URL=http://127.0.0.1:3099
 ```
 
-Use `LOOKINGGLASS_WEB_URL` for LookingGlass web-platform harnesses.
+Use `ALICE_WEB_URL` for Alice web-platform harnesses.

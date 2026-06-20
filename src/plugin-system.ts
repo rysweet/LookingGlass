@@ -64,7 +64,7 @@ export interface LoadedPluginSummary {
   active: boolean;
 }
 
-const DEFAULT_STORAGE_KEY = "lookingglass.plugins.settings";
+const DEFAULT_STORAGE_KEY = "alice-web.plugins.settings";
 const LEGACY_STORAGE_KEY = "alice-web.plugins.settings";
 
 function cloneValue<T>(value: T): T {

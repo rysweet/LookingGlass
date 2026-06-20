@@ -10,7 +10,7 @@ import {
   WarningNotification,
 } from "../src/notification-system";
 
-const STORAGE_KEY = "lookingglass.notifications.test";
+const STORAGE_KEY = "alice-web.notifications.test";
 
 beforeEach(() => {
   localStorage.clear();
@@ -38,7 +38,7 @@ describe("notification-system", () => {
     expect(new NotificationHistory(localStorage, STORAGE_KEY).list()).toEqual([]);
   });
 
-  it("migrates legacy default notification history into the LookingGlass key", () => {
+  it("uses the Alice web default notification history key", () => {
     localStorage.setItem("alice-web.notifications.history", JSON.stringify([
       InfoNotification("Migrated", "Legacy history"),
     ]));
@@ -46,7 +46,7 @@ describe("notification-system", () => {
     const history = new NotificationHistory();
 
     expect(history.list()[0]?.title).toBe("Migrated");
-    expect(localStorage.getItem("lookingglass.notifications.history")).toBe(
+    expect(localStorage.getItem("alice-web.notifications.history")).toBe(
       localStorage.getItem("alice-web.notifications.history"),
     );
   });

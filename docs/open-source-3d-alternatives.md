@@ -1,4 +1,4 @@
-# Open-Source 3D Alternatives for LookingGlass
+# Open-Source 3D Alternatives for Alice
 
 > **Issue:** [#86](https://github.com/rysweet/alice-web-prototype/issues/86) —
 > Alice 3's desktop client ships proprietary Sims-style 3D character models that

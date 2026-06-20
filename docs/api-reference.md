@@ -1,7 +1,7 @@
 # API reference
 
-The REST API gives `eatme` and local scripts a simple way to launch
-LookingGlass, change the scene, edit code, run the world, and capture evidence.
+The REST API gives `eatme` and local scripts a simple way to launch Alice,
+change the scene, edit code, run the world, and capture evidence.
 
 For server configuration, state isolation, evidence artifact semantics, and
 route ownership, see [Server API](./server-api.md).
@@ -12,13 +12,14 @@ Build and run the server:
 
 ```bash
 npm run build:server
-npm run serve -- --evidence-dir ./evidence
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
+npm run serve -- --evidence-dir ./evidence --api-token "$ALICE_LOCAL_API_TOKEN"
 ```
 
 Base URL examples below use `http://127.0.0.1:3000`. Mutating requests must
-send `Content-Type: application/json`. When using the CLI server, copy the
-startup `localApiToken` into `LOOKINGGLASS_LOCAL_API_TOKEN` and send it as
-`X-LookingGlass-Local-Api-Token`.
+send `Content-Type: application/json`. When using the CLI server, set
+`ALICE_LOCAL_API_TOKEN` before startup, pass it with `--api-token`, and send the
+same value as `X-Alice-Local-Api-Token`.
 
 ## Endpoint summary
 
@@ -52,11 +53,11 @@ Example response:
   "launched": false,
   "pid": 12345,
   "uptime": 3.2,
-  "runtime": "lookingglass-typescript-web"
+  "runtime": "alice-web"
 }
 ```
 
-The `runtime` value is the LookingGlass runtime identity.
+The `runtime` value is the Alice web runtime identity.
 
 ## `POST /api/launch`
 
@@ -64,6 +65,7 @@ Start a session with an `.a3p` path.
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/launch \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"project":"./fixtures/starter.a3p"}'
 ```
@@ -79,7 +81,7 @@ Example response:
 ```json
 {
   "status": "launched",
-  "project": "/workspace/lookingglass/fixtures/starter.a3p",
+  "project": "/workspace/alice-web/fixtures/starter.a3p",
   "projectName": "starter",
   "sceneObjectCount": 2
 }
@@ -147,6 +149,7 @@ session to the new project.
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/new \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId": "snow", "projectName": "WinterStory"}'
 ```
@@ -188,6 +191,7 @@ call `POST /api/launch` separately when using this endpoint.
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/scene/add-object \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"className":"org.lgna.story.SBiped","name":"bunny"}'
 ```
@@ -215,6 +219,7 @@ Example response:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/code/edit-procedure \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"procedureSelector":"scene.myFirstMethod","editSpec":"append-comment:move bunny forward"}'
 ```
@@ -252,6 +257,7 @@ Create a procedure in the current project state.
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/code/create-procedure \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"name":"walkForward","parameters":[{"name":"distance","type":"DecimalNumber"}]}'
 ```
@@ -286,6 +292,7 @@ Create a function in the current project state.
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/code/create-function \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"name":"getDistance","returnType":"DecimalNumber"}'
 ```
@@ -315,6 +322,7 @@ Example response:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/save \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"saveSelector":"scene.myFirstMethod","targetPath":"./evidence/saved-project.a3p"}'
 ```
@@ -344,7 +352,10 @@ Example response:
 Run the current project through the Tweedle VM.
 
 ```bash
-curl -X POST http://127.0.0.1:3000/api/world/run -H 'Content-Type: application/json' -d '{}'
+curl -X POST http://127.0.0.1:3000/api/world/run \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{}'
 ```
 
 Example response:
@@ -378,7 +389,7 @@ Error response when nothing has been launched yet:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/screenshot \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```
@@ -402,6 +413,7 @@ response that explains that fallback.
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/events/register \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType":"sceneActivated","handlerName":"setupScene"}'
 ```
@@ -439,6 +451,7 @@ Example response:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/events/fire \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType":"sceneActivated","payload":{}}'
 ```

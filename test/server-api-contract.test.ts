@@ -65,7 +65,7 @@ describe("server API response contracts", () => {
     expect(beforeLaunch.body).toMatchObject({
       status: "running",
       launched: false,
-      runtime: "lookingglass-typescript-web",
+      runtime: "alice-web",
     });
     expect(typeof beforeLaunch.body.pid).toBe("number");
     expect(typeof beforeLaunch.body.uptime).toBe("number");

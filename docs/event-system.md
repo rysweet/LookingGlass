@@ -31,23 +31,28 @@ events. All event operations return 400 if the server has not been launched.
 ```bash
 # Build and start the server
 npm run build:server
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
 node dist-server/cli.js serve \
   --port 3000 \
   --evidence-dir ./evidence \
+  --api-token "$ALICE_LOCAL_API_TOKEN" \
   --project /path/to/starter.a3p
 
 # Launch the project
 curl -X POST http://localhost:3000/api/launch \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"project": "/path/to/starter.a3p"}'
 
 # Register a scene activation event
 curl -X POST http://localhost:3000/api/events/register \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated", "handlerName": "initScene"}'
 
 # Fire the scene activation
 curl -X POST http://localhost:3000/api/events/fire \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated"}'
 ```
@@ -193,11 +198,13 @@ unconditionally when a `sceneActivated` event is fired.
 ```bash
 # Register
 curl -X POST http://localhost:3000/api/events/register \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated", "handlerName": "initWorld"}'
 
 # Fire — always triggers all sceneActivated registrations
 curl -X POST http://localhost:3000/api/events/fire \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated"}'
 ```
@@ -210,16 +217,19 @@ whose `key` matches `payload.key` will trigger.
 ```bash
 # Register for Space key
 curl -X POST http://localhost:3000/api/events/register \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "keyPress", "handlerName": "onJump", "key": "Space"}'
 
 # Fire Space — triggers onJump
 curl -X POST http://localhost:3000/api/events/fire \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "keyPress", "payload": {"key": "Space"}}'
 
 # Fire ArrowUp — does NOT trigger onJump
 curl -X POST http://localhost:3000/api/events/fire \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "keyPress", "payload": {"key": "ArrowUp"}}'
 ```
@@ -245,15 +255,18 @@ If `distance ≤ threshold`, the registration triggers.
 ```bash
 # Add objects to the scene first
 curl -X POST http://localhost:3000/api/scene/add-object \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"className": "org.lgna.story.SBiped", "name": "bunny"}'
 
 curl -X POST http://localhost:3000/api/scene/add-object \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"className": "org.lgna.story.SBiped", "name": "cat"}'
 
 # Register proximity detection between bunny and cat
 curl -X POST http://localhost:3000/api/events/register \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
     "eventType": "proximity",
@@ -264,6 +277,7 @@ curl -X POST http://localhost:3000/api/events/register \
 
 # Fire proximity — evaluates distance between bunny and cat
 curl -X POST http://localhost:3000/api/events/fire \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "proximity", "payload": {"sourceObject": "bunny"}}'
 ```
@@ -300,17 +314,20 @@ ID and is evaluated independently:
 ```bash
 # Register two sceneActivated handlers
 curl -X POST http://localhost:3000/api/events/register \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated", "handlerName": "setupLights"}'
 # → {"registrationId": "evt-1", ..., "handlerName": "setupLights", "evidenceArtifact": "..."}
 
 curl -X POST http://localhost:3000/api/events/register \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated", "handlerName": "setupCamera"}'
 # → {"registrationId": "evt-2", ..., "handlerName": "setupCamera", "evidenceArtifact": "..."}
 
 # Fire — both trigger
 curl -X POST http://localhost:3000/api/events/fire \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated"}'
 # → {"triggered": [

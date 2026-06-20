@@ -229,7 +229,7 @@ describe("IdeMenuBarModel", () => {
       clipboard: new Clipboard(),
       tutorialSystem,
       about: {
-        applicationName: "LookingGlass",
+        applicationName: "Alice",
         version: "test-version",
       },
       onAbout: async (about) => {
@@ -244,7 +244,7 @@ describe("IdeMenuBarModel", () => {
     await model.getMenuItem("tutorial").execute();
 
     expect(aboutCalls).toHaveLength(1);
-    expect(aboutCalls[0]).toMatch(/^LookingGlass:test-version:\d+$/);
+    expect(aboutCalls[0]).toMatch(/^Alice:test-version:\d+$/);
     expect(tutorialCalls).toEqual(["add-ground:Open the gallery."]);
   });
 });

@@ -3,7 +3,6 @@ import { realpathSync } from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import { createServer } from "./server.js";
-import { createLocalApiToken } from "./server/security.js";
 
 export interface CliConfig {
   readonly command: "serve" | "help" | "print-config";
@@ -17,9 +16,9 @@ const DEFAULT_PORT = 3000;
 const DEFAULT_EVIDENCE_DIR = "./evidence";
 const USAGE = [
   "Usage:",
-  "  lookingglass serve [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>] [--api-token <token>]",
-  "  lookingglass print-config [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>] [--api-token <token>]",
-  "  lookingglass help",
+  "  alice-web serve [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>] [--api-token <token>]",
+  "  alice-web print-config [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>] [--api-token <token>]",
+  "  alice-web help",
 ].join("\n");
 
 export function parseArgs(argv: string[]): CliConfig {
@@ -109,8 +108,7 @@ export function formatConfig(config: CliConfig): string {
       port: config.port,
       evidenceDir: path.resolve(config.evidenceDir),
       project: config.project ? path.resolve(config.project) : null,
-      localApiToken: config.localApiToken ?? null,
-      runtime: "lookingglass-typescript-web",
+      runtime: "alice-web",
     },
     null,
     2,
@@ -136,12 +134,11 @@ async function run(config: CliConfig): Promise<void> {
 }
 
 async function serve(config: CliConfig): Promise<void> {
-  const localApiToken = config.localApiToken ?? createLocalApiToken();
   const app = createServer({
     port: config.port,
     evidenceDir: config.evidenceDir,
     projectPath: config.project,
-    localApiToken,
+    localApiToken: config.localApiToken,
   });
   const server = app.listen(config.port, "127.0.0.1", () => {
     console.log(
@@ -150,9 +147,8 @@ async function serve(config: CliConfig): Promise<void> {
         port: config.port,
         evidenceDir: config.evidenceDir,
         project: config.project ?? null,
-        localApiToken,
         pid: process.pid,
-        runtime: "lookingglass-typescript-web",
+        runtime: "alice-web",
       }),
     );
   });

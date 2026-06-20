@@ -74,7 +74,7 @@ export function writeEditProcedureProof(
       selection_mode: "api_direct",
       selected_declaration: evidence.methodName,
       code_composite_declaration: evidence.methodName,
-      code_editor_backing: "lookingglass-typescript-web",
+      code_editor_backing: "alice-web",
       code_editor_code: evidence.methodName,
       operation_fired: true,
       action: "append-comment",
@@ -149,7 +149,7 @@ export function writeSaveProof(
     {
       schema_version: SAVE_RESULT_SCHEMA,
       status: "saved",
-      source: "lookingglass-typescript-web",
+      source: "alice-web",
       operation: "SaveProjectOperation",
       extension: "a3p",
       finished: true,

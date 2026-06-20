@@ -1,7 +1,7 @@
 # Getting started
 
-Use this guide when you want a clean local setup for the browser app and the
-LookingGlass REST API server.
+Use this guide when you want a clean local setup for the Alice browser app and
+REST API server.
 
 ## What you need
 
@@ -46,7 +46,8 @@ npm run build:server
 Then start it with the built-in CLI:
 
 ```bash
-npm run serve
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
+npm run serve -- --api-token "$ALICE_LOCAL_API_TOKEN"
 ```
 
 The default CLI port is `3000`.
@@ -54,10 +55,10 @@ The default CLI port is `3000`.
 ## Start the server for `eatme`
 
 The `eatme` web-platform tests use `http://localhost:3099` unless you set a
-different API URL. This command starts LookingGlass on that port:
+different API URL. This command starts Alice on that port:
 
 ```bash
-npm run serve -- --port 3099 --evidence-dir ./evidence
+npm run serve -- --port 3099 --evidence-dir ./evidence --api-token "$ALICE_LOCAL_API_TOKEN"
 ```
 
 Check that the server is up:
@@ -72,11 +73,11 @@ Expected response shape:
 {
   "status": "running",
   "launched": false,
-  "runtime": "lookingglass-typescript-web"
+  "runtime": "alice-web"
 }
 ```
 
-The `runtime` value is the LookingGlass runtime identity.
+The `runtime` value is the Alice web runtime identity.
 
 ## Common local commands
 
@@ -87,5 +88,5 @@ The `runtime` value is the LookingGlass runtime identity.
 | Build API server | `npm run build:server` |
 | Run tests | `npm test` |
 | Start browser dev server | `npm run dev` |
-| Start API server | `npm run serve` |
-| Start API server on eatme's default port | `npm run serve -- --port 3099 --evidence-dir ./evidence` |
+| Start API server | `npm run serve -- --api-token "$ALICE_LOCAL_API_TOKEN"` |
+| Start API server on eatme's default port | `npm run serve -- --port 3099 --evidence-dir ./evidence --api-token "$ALICE_LOCAL_API_TOKEN"` |
