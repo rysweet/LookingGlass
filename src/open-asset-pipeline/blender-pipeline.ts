@@ -259,7 +259,7 @@ The pipeline automatically renames Blender bones to Alice's canonical naming:
 
 Custom mappings can be added to the BONE_NAME_MAP in the export script.
 
-## Integration with Alice Web
+## Integration with LookingGlass
 
 After exporting models, register them with the ModelResourceCatalog:
 

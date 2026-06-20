@@ -115,17 +115,16 @@ identity-bearing string values change.
 
 ## eatme environment variables
 
-`LOOKINGGLASS_*` variables are canonical after the rename. Existing
-`ALICE_*` variables remain aliases so external harnesses do not break.
+`LOOKINGGLASS_*` variables are canonical after the rename. Do not introduce
+old product-branded environment variables for LookingGlass runtime configuration.
 
-| Purpose | Canonical variable | Compatibility aliases |
-| --- | --- | --- |
-| Repository checkout path | `LOOKINGGLASS_TYPESCRIPT_HOME` | `ALICE_TYPESCRIPT_HOME` |
-| API base URL for the TypeScript target | `LOOKINGGLASS_TYPESCRIPT_API_URL` | `ALICE_TYPESCRIPT_API_URL` |
-| Browser/API web URL used by web-platform harnesses | `LOOKINGGLASS_WEB_URL` | `ALICE_WEB_URL` |
+| Purpose | Canonical variable |
+| --- | --- |
+| Repository checkout path | `LOOKINGGLASS_TYPESCRIPT_HOME` |
+| API base URL for the TypeScript target | `LOOKINGGLASS_TYPESCRIPT_API_URL` |
+| Browser/API web URL used by web-platform harnesses | `LOOKINGGLASS_WEB_URL` |
 
-When both a canonical variable and an alias are set, the canonical
-`LOOKINGGLASS_*` value wins.
+Use `LOOKINGGLASS_*` names in docs, scripts, and harness examples.
 
 ## Server API identity
 
@@ -237,8 +236,7 @@ test asserts that:
 - `/api/health` and `print-config` report `lookingglass-typescript-web`;
 - docs and examples use LookingGlass product branding;
 - generated metadata uses LookingGlass identity values;
-- eatme target configuration accepts `LOOKINGGLASS_*` variables and preserves
-  the documented `ALICE_*` aliases;
+- eatme target configuration and docs use `LOOKINGGLASS_*` variables;
 - browser storage migrates exact old keys to exact new keys;
 - generated logs and transient artifacts are not part of the committed diff;
 - allowed `Alice` terms are limited to historical, technical, repository-path,

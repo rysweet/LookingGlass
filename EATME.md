@@ -41,7 +41,7 @@ Options:
 
 When `serve` starts without `--api-token`, it generates a per-server
 `localApiToken` and prints it in the startup JSON. Include that value in the
-`X-Alice-Local-Api-Token` header for every mutating API request.
+`X-LookingGlass-Local-Api-Token` header for every mutating API request.
 
 ## API Endpoints
 
@@ -156,16 +156,7 @@ export LOOKINGGLASS_TYPESCRIPT_HOME=/path/to/lookingglass
 export LOOKINGGLASS_TYPESCRIPT_API_URL=http://localhost:3000
 ```
 
-Compatibility aliases stay supported for existing harnesses:
-
-```bash
-export ALICE_TYPESCRIPT_HOME=/path/to/lookingglass
-export ALICE_TYPESCRIPT_API_URL=http://localhost:3000
-export ALICE_WEB_URL=http://localhost:3000
-```
-
-If both canonical `LOOKINGGLASS_*` variables and aliases are set, the
-`LOOKINGGLASS_*` value wins.
+Use `LOOKINGGLASS_*` names in eatme target configuration and harness scripts.
 
 ## Gadugi Integration Test Scenarios
 

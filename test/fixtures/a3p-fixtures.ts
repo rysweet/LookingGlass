@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 export const REPOSITORY_A3P_FIXTURE = path.resolve(__dirname, "a3p/sanitized-scene.a3p");
-export const RUN_EXTERNAL_A3P_FIXTURES = process.env.ALICE_WEB_RUN_EXTERNAL_A3P_FIXTURES === "1";
+export const RUN_EXTERNAL_A3P_FIXTURES = process.env.LOOKINGGLASS_RUN_EXTERNAL_A3P_FIXTURES === "1";
 
 export const OPTIONAL_EXTERNAL_A3P_FIXTURES = [
   "/home/azureuser/src/alice/core/resources/src/application/resources/starter-projects/amazonMinimum.a3p",

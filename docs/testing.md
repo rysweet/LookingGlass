@@ -76,5 +76,4 @@ default:
 export LOOKINGGLASS_WEB_URL=http://127.0.0.1:3099
 ```
 
-Existing harnesses may still use `ALICE_WEB_URL`; the rename keeps it as a
-compatibility alias.
+Use `LOOKINGGLASS_WEB_URL` for LookingGlass web-platform harnesses.

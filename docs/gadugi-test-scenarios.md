@@ -170,7 +170,7 @@ steps:
       done;
       test "$READY" = 1;
       node -e "const fs=require(\"fs\"); const d=JSON.parse(fs.readFileSync(process.argv[1], \"utf8\")); if (d.status !== \"running\") throw new Error(\"health failed\");" "$HEALTH_JSON";
-      curl -fsS -X POST "http://127.0.0.1:$PORT/api/launch" -H "X-Alice-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{}" >"$LAUNCH_JSON";
+      curl -fsS -X POST "http://127.0.0.1:$PORT/api/launch" -H "X-LookingGlass-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{}" >"$LAUNCH_JSON";
       node -e "const fs=require(\"fs\"); const d=JSON.parse(fs.readFileSync(process.argv[1], \"utf8\")); if (d.status !== \"launched\") throw new Error(\"launch failed\");" "$LAUNCH_JSON";
       kill "$SERVER_PID";
       wait "$SERVER_PID" 2>/dev/null || true;

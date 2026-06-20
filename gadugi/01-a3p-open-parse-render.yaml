@@ -52,9 +52,9 @@ scenario:
         test "$READY" = 1;
         grep -Eq "\"status\"[[:space:]]*:[[:space:]]*\"listening\"" "$SERVER_LOG";
         node -e "const fs=require(\"fs\"); const d=JSON.parse(fs.readFileSync(process.argv[1], \"utf8\")); if (d.status !== \"running\") throw new Error(\"health status was not running\"); if (d.runtime !== \"lookingglass-typescript-web\") throw new Error(\"unexpected runtime\");" "$HEALTH_JSON";
-        curl -fsS -X POST "http://127.0.0.1:$PORT/api/launch" -H "X-Alice-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{\"project\":\"$A3P_FILE\"}" >"$LAUNCH_JSON";
+        curl -fsS -X POST "http://127.0.0.1:$PORT/api/launch" -H "X-LookingGlass-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{\"project\":\"$A3P_FILE\"}" >"$LAUNCH_JSON";
         node -e "const fs=require(\"fs\"); const d=JSON.parse(fs.readFileSync(process.argv[1], \"utf8\")); if (d.status !== \"launched\") throw new Error(\"project did not launch\"); if (!d.projectName) throw new Error(\"projectName missing\"); if (d.sceneObjectCount < 2) throw new Error(\"expected at least 2 scene objects\");" "$LAUNCH_JSON";
-        curl -fsS -X POST "http://127.0.0.1:$PORT/api/screenshot" -H "X-Alice-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{}" >"$SCREENSHOT_JSON";
+        curl -fsS -X POST "http://127.0.0.1:$PORT/api/screenshot" -H "X-LookingGlass-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{}" >"$SCREENSHOT_JSON";
         node -e "const fs=require(\"fs\"); const d=JSON.parse(fs.readFileSync(process.argv[1], \"utf8\")); if (d.status !== \"captured\") throw new Error(\"screenshot was not captured\"); if (!d.path || !d.path.endsWith(\"screenshot.png\")) throw new Error(\"screenshot path missing\"); if (d.objectCount !== undefined && d.objectCount < 2) throw new Error(\"expected at least 2 screenshot objects\"); if (d.objectCount === undefined && d.placeholder !== true) throw new Error(\"screenshot objectCount missing without placeholder fallback\");" "$SCREENSHOT_JSON";
         kill "$SERVER_PID";
         wait "$SERVER_PID" 2>/dev/null || true;

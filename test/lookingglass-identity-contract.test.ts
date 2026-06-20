@@ -87,8 +87,8 @@ describe("LookingGlass identity contract", () => {
     expect(amplihackCli).toContain('DIST_NAME = "lookingglass-amplihack"');
     expect(amplihackCli).toContain('LOOKINGGLASS_SOURCE_ENV = "LOOKINGGLASS_SOURCE"');
     expect(amplihackCli).toContain('LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT_ENV = "LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT"');
-    expect(amplihackCli).toContain("ALICE_WEB_SOURCE");
-    expect(amplihackCli).toContain("ALICE_WEB_ALLOW_MUTABLE_CHECKOUT");
+    expect(amplihackCli).not.toContain("ALICE_WEB_SOURCE");
+    expect(amplihackCli).not.toContain("ALICE_WEB_ALLOW_MUTABLE_CHECKOUT");
   });
 
   it("reports LookingGlass runtime identity from CLI config and health", async () => {
@@ -176,10 +176,12 @@ describe("LookingGlass identity contract", () => {
       "pyproject.toml",
       "src/cli.ts",
       "src/server/routes/health-routes.ts",
+      "src/server/security.ts",
       "src/evidence-writer.ts",
       "src/export-html/template.ts",
       "src/open-asset-pipeline/types.ts",
       "src/open-asset-pipeline/gltf-export.ts",
+      "src/renderer.ts",
       "README.md",
       "EATME.md",
       "mkdocs.yml",
@@ -192,6 +194,8 @@ describe("LookingGlass identity contract", () => {
       "docs/api-reference.md",
       "docs/getting-started.md",
       "docs/testing.md",
+      "docs/gadugi-test-scenarios.md",
+      "docs/tutorial-building-your-first-alice-app.md",
       "docs/tutorial-lookingglass-server-workflow.md",
       "docs/lookingglass-identity.md",
     ];
@@ -204,6 +208,14 @@ describe("LookingGlass identity contract", () => {
       "cd alice-web-prototype",
       "/path/to/alice-web-prototype",
       "/workspace/alice-web-prototype",
+      "ALICE_WEB_SOURCE",
+      "ALICE_WEB_ALLOW_MUTABLE_CHECKOUT",
+      "ALICE_WEB_URL",
+      "ALICE_WEB_RUN_EXTERNAL_A3P_FIXTURES",
+      "ALICE_LOCAL_API_TOKEN",
+      "X-Alice-Local-Api-Token",
+      "Alice Web Renderer",
+      "Integration with Alice Web",
     ];
 
     for (const surface of forbiddenSurfaces) {
