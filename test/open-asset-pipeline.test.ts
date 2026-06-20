@@ -617,6 +617,6 @@ describe("license constants", () => {
 
   it("procedural license has correct SPDX", () => {
     expect(PROCEDURAL_LICENSE.spdxId).toBe("MIT");
-    expect(PROCEDURAL_LICENSE.author).toBe("LookingGlass");
+    expect(PROCEDURAL_LICENSE.author).toBe("Alice");
   });
 });

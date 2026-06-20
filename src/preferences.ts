@@ -38,7 +38,7 @@ export const DEFAULT_PREFERENCES: Readonly<UserPreferences> = Object.freeze({
   autoSaveInterval: 60,
 });
 
-const DEFAULT_STORAGE_KEY = "lookingglass.preferences";
+const DEFAULT_STORAGE_KEY = "alice-web.preferences";
 const LEGACY_STORAGE_KEY = "alice-web.preferences";
 const KNOWN_KEYS = Object.keys(DEFAULT_PREFERENCES) as Array<keyof UserPreferences>;
 

@@ -1,4 +1,4 @@
-# Tutorial: Verify a local LookingGlass server
+# Tutorial: Verify a local Alice server
 
 This tutorial walks through building the API server, starting it on
 the `eatme` default port, checking the runtime identity, creating a project, and
@@ -18,16 +18,24 @@ npm install
 NODE_OPTIONS=--max-old-space-size=32768 npm run build:server
 ```
 
-## 2. Start LookingGlass
+## 2. Start Alice
 
 Start the local server on port `3099`, which is the default port used by the
 `eatme` web-platform scenarios:
 
 ```bash
-npm run serve -- --port 3099 --evidence-dir ./evidence
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
+npm run serve -- --port 3099 --evidence-dir ./evidence --api-token "$ALICE_LOCAL_API_TOKEN"
 ```
 
-Keep this terminal open. Use a second terminal for the API requests below. The installed or linked equivalent is `lookingglass serve --port 3099 --evidence-dir ./evidence`.
+Keep this terminal open. Use a second terminal for the API requests below. In
+that second terminal, export the same local token value:
+
+```bash
+export ALICE_LOCAL_API_TOKEN="<same value used to start alice-web>"
+```
+
+The installed or linked equivalent is `alice-web serve --port 3099 --evidence-dir ./evidence --api-token "$ALICE_LOCAL_API_TOKEN"`.
 
 ## 3. Check the runtime identity
 
@@ -43,7 +51,7 @@ Expected response shape:
   "launched": false,
   "pid": 12345,
   "uptime": 1.25,
-  "runtime": "lookingglass-typescript-web"
+  "runtime": "alice-web"
 }
 ```
 
@@ -56,6 +64,7 @@ Create a project from the Snow template:
 
 ```bash
 curl -X POST http://127.0.0.1:3099/api/project/new \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId":"snow","projectName":"WinterStory"}'
 ```
@@ -81,11 +90,12 @@ test harness contract.
 
 ```bash
 curl -X POST http://127.0.0.1:3099/api/project/save \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"saveSelector":"scene.myFirstMethod"}'
 ```
 
-The evidence directory now contains LookingGlass-generated proof artifacts and
+The evidence directory now contains Alice-generated proof artifacts and
 `.a3p` project output:
 
 ```text
@@ -95,4 +105,4 @@ evidence/
     `-- saved-project.a3p
 ```
 
-Use [LookingGlass identity](./lookingglass-identity.md) for the complete product, CLI, runtime, storage-key, env-var, and metadata contract.
+Use [Alice identity boundary](./alice-identity-boundary.md) for the complete product, CLI, runtime, storage-key, env-var, API header, and metadata contract.

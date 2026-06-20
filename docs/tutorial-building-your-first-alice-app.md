@@ -1,13 +1,14 @@
-# Tutorial: Building Your First LookingGlass Application
+# Tutorial: Building Your First Alice Application
 
 This hands-on tutorial walks you through building an Alice 3D application from
-scratch using the LookingGlass REST API. You will create a
+scratch using the Alice REST API. You will create a
 project from a template, populate a scene with objects, write code, run
 the world, wire up events, capture screenshots, and save your work — all
 from the command line.
 
-Every request and response shown below was captured from a live server
-session. You can reproduce them exactly by following the steps in order.
+The request and response shapes below show the planned post-correction Alice
+identity contract. Once that implementation lands, you can reproduce them by
+following the steps in order.
 
 > **Note on screenshots:** The scene renderer currently produces the same
 > base rendering regardless of scene state — scene-graph mutations (adding
@@ -37,15 +38,17 @@ npm run build:server
 Launch the API server on port 3000 (the default):
 
 ```bash
-npm run serve
+npm run build:server
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
+npm run serve -- --api-token "$ALICE_LOCAL_API_TOKEN"
 # or, with explicit options:
-npm run serve -- --port 3000 --evidence-dir ./evidence
+npm run serve -- --port 3000 --evidence-dir ./evidence --api-token "$ALICE_LOCAL_API_TOKEN"
 ```
 
 You should see output indicating the server is listening. Leave this
 terminal open and use a second terminal for the `curl` commands below.
-Copy the startup `localApiToken` into `LOOKINGGLASS_LOCAL_API_TOKEN`; mutating
-requests use it in `X-LookingGlass-Local-Api-Token`.
+Export the same `ALICE_LOCAL_API_TOKEN` value in that second terminal; mutating
+requests use it in `X-Alice-Local-Api-Token`.
 
 ## Step 1 — Health check
 
@@ -63,11 +66,11 @@ Response:
   "launched": false,
   "pid": 48291,
   "uptime": 1.42,
-  "runtime": "lookingglass-typescript-web"
+  "runtime": "alice-web"
 }
 ```
 
-The key field is `"launched": false` — the server is up but no project session is active yet. The `runtime` value is the LookingGlass identity, and the `pid` and `uptime` values will differ on your machine.
+The key field is `"launched": false` — the server is up but no project session is active yet. The `runtime` value is the Alice web runtime identity, and the `pid` and `uptime` values will differ on your machine.
 
 ![API health JSON response](screenshots/04-api-health-json.png)
 
@@ -116,7 +119,7 @@ Create a project from the `snow` template:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/new \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId": "snow"}'
 ```
@@ -158,7 +161,7 @@ Capture the starting state before making changes:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/screenshot \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```
@@ -192,7 +195,7 @@ Add a fox character to make the story more interesting:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/scene/add-object \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"className": "Fox"}'
 ```
@@ -220,7 +223,7 @@ code is edited by appending statements:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/code/edit-procedure \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
     "procedureSelector": "scene.myFirstMethod",
@@ -258,7 +261,7 @@ Execute the project through the Tweedle VM:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/world/run \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```
@@ -297,7 +300,7 @@ Capture the scene again to see the fox:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/screenshot \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```
@@ -330,7 +333,7 @@ Wire up a `sceneActivated` event that fires when the world starts:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/events/register \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated", "handlerName": "onWorldStart"}'
 ```
@@ -356,7 +359,7 @@ Simulate the scene activation:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/events/fire \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated", "payload": {}}'
 ```
@@ -385,7 +388,7 @@ Save everything to a portable `.a3p` archive:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/save \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"saveSelector": "scene.myFirstMethod"}'
 ```
@@ -410,7 +413,7 @@ Take a final screenshot to document the completed state:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/screenshot \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 cp evidence/screenshot.png docs/screenshots/07-final-saved-project.png
@@ -443,7 +446,7 @@ end-to-end:
 #!/usr/bin/env bash
 set -euo pipefail
 BASE=http://127.0.0.1:3000
-TOKEN_HEADER="X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN"
+TOKEN_HEADER="X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN"
 
 echo "=== Health check ==="
 curl -s "$BASE/api/health" | jq .
@@ -516,7 +519,7 @@ The tutorial used `snow`, but you can substitute any template. Here are
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/new \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId": "blank", "projectName": "MyBlankProject"}'
 ```
@@ -525,7 +528,7 @@ curl -X POST http://127.0.0.1:3000/api/project/new \
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/new \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId": "sea-floor", "projectName": "OceanAdventure"}'
 ```
@@ -534,7 +537,7 @@ curl -X POST http://127.0.0.1:3000/api/project/new \
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/new \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId": "moon", "projectName": "LunarExploration"}'
 ```
@@ -626,7 +629,7 @@ npm install
 **Fix:** Either kill the existing process or use a different port:
 
 ```bash
-node dist-server/cli.js serve --port 3001 --evidence-dir ./evidence
+node dist-server/cli.js serve --port 3001 --evidence-dir ./evidence --api-token "$ALICE_LOCAL_API_TOKEN"
 ```
 
 Then update all `curl` commands to use `http://127.0.0.1:3001`.
@@ -657,7 +660,7 @@ tutorial uses `POST /api/project/new` (Step 3), which sets
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/events/register \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "sceneActivated", "handlerName": "myHandler"}'
 ```
@@ -674,7 +677,7 @@ curl -X POST http://127.0.0.1:3000/api/events/register \
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/events/register \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"eventType": "keyPress", "handlerName": "onJump", "key": "SPACE"}'
 ```

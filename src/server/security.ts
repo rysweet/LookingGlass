@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from "crypto";
 import type { Request, RequestHandler } from "express";
 
-export const LOCAL_API_TOKEN_HEADER = "X-LookingGlass-Local-Api-Token";
+export const LOCAL_API_TOKEN_HEADER = "X-Alice-Local-Api-Token";
 
 const DEFAULT_ALLOWED_HOSTS = ["localhost", "127.0.0.1", "::1"];
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);

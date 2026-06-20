@@ -9,7 +9,7 @@ import type { AddressInfo } from "net";
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const CLI_PATH = path.join(PROJECT_ROOT, "dist-server/cli.js");
 const TEST_EVIDENCE_DIR = path.resolve(__dirname, "../.test-cli-evidence");
-const CLI_SYMLINK_PATH = path.join(TEST_EVIDENCE_DIR, "lookingglass-bin.js");
+const CLI_SYMLINK_PATH = path.join(TEST_EVIDENCE_DIR, "alice-web-bin.js");
 
 function runBuiltCli(args: string[], cliPath = CLI_PATH) {
   expect(
@@ -66,7 +66,7 @@ describe("CLI / server lifecycle", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.status).toBe("running");
-    expect(body.runtime).toBe("lookingglass-typescript-web");
+    expect(body.runtime).toBe("alice-web");
   });
 });
 
@@ -88,8 +88,8 @@ describe("CLI argument behavior", () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("Usage:");
-    expect(result.stdout).toContain("lookingglass serve");
-    expect(result.stdout).toContain("lookingglass print-config");
+    expect(result.stdout).toContain("alice-web serve");
+    expect(result.stdout).toContain("alice-web print-config");
     expect(result.stdout).toContain("--api-token <token>");
   });
 
@@ -125,8 +125,7 @@ describe("CLI argument behavior", () => {
       port: 4187,
       evidenceDir: path.resolve(PROJECT_ROOT, "evidence/custom"),
       project: path.resolve(PROJECT_ROOT, "stories/demo.a3p"),
-      localApiToken: null,
-      runtime: "lookingglass-typescript-web",
+      runtime: "alice-web",
     });
   });
 

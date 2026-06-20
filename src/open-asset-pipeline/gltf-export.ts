@@ -41,11 +41,11 @@ export async function exportModelToGlb(
 
   // Asset info
   doc.getRoot().getAsset().version = "2.0";
-  doc.getRoot().getAsset().generator = "LookingGlass";
+  doc.getRoot().getAsset().generator = "alice-web";
 
   if (metadata) {
     const extras = doc.getRoot().getAsset().extras as Record<string, unknown> ?? {};
-    extras.lookingglass = {
+    extras.alice = {
       modelId: metadata.modelId,
       category: metadata.category,
       generatedAt: metadata.generatedAt,
@@ -156,5 +156,32 @@ export async function exportModelToGlb(
   // Write to GLB
   const io = new NodeIO();
   const glb = await io.writeBinary(doc);
-  return glb;
+  return withAssetGenerator(glb, "alice-web");
+}
+
+function withAssetGenerator(glb: Uint8Array, generator: string): Uint8Array {
+  const result = new Uint8Array(glb);
+  const view = new DataView(result.buffer, result.byteOffset, result.byteLength);
+  const jsonChunkLength = view.getUint32(12, true);
+  const jsonChunkType = view.getUint32(16, true);
+  if (jsonChunkType !== 0x4E4F534A) {
+    throw new Error("Invalid GLB: missing JSON chunk");
+  }
+
+  const jsonOffset = 20;
+  const jsonBytes = result.subarray(jsonOffset, jsonOffset + jsonChunkLength);
+  const json = JSON.parse(new TextDecoder().decode(jsonBytes)) as {
+    asset?: { generator?: string };
+  };
+  json.asset ??= {};
+  json.asset.generator = generator;
+
+  const encoded = new TextEncoder().encode(JSON.stringify(json));
+  if (encoded.length > jsonChunkLength) {
+    throw new Error("Invalid GLB: updated asset metadata exceeds JSON chunk length");
+  }
+
+  jsonBytes.fill(0x20);
+  jsonBytes.set(encoded);
+  return result;
 }

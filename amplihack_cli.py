@@ -11,11 +11,11 @@ from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 
 
-DIST_NAME = "lookingglass-amplihack"
+DIST_NAME = "alice-web-amplihack"
 DEFAULT_REPO_URL = "https://github.com/rysweet/alice-web-prototype.git"
 NODE_HEAP_OPTION = "--max-old-space-size=32768"
-LOOKINGGLASS_SOURCE_ENV = "LOOKINGGLASS_SOURCE"
-LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT_ENV = "LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT"
+ALICE_WEB_SOURCE_ENV = "ALICE_WEB_SOURCE"
+ALICE_WEB_ALLOW_MUTABLE_CHECKOUT_ENV = "ALICE_WEB_ALLOW_MUTABLE_CHECKOUT"
 COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 SCENARIOS = {
@@ -42,7 +42,7 @@ SCENARIOS = {
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="amplihack",
-        description="Run LookingGlass outside-in validation scenarios from a uvx-installed branch.",
+        description="Run Alice outside-in validation scenarios from a uvx-installed branch.",
     )
     parser.add_argument("command", choices=sorted(SCENARIOS))
     parser.add_argument(
@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             "Unsafe: allow fallback to a requested branch/tag when the installation metadata "
-            f"does not include an immutable commit SHA. {LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT_ENV}=1 "
+            f"does not include an immutable commit SHA. {ALICE_WEB_ALLOW_MUTABLE_CHECKOUT_ENV}=1 "
             "also enables this."
         ),
     )
@@ -92,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def ensure_checkout(allow_mutable_checkout: bool = False) -> Path:
-    source_override = os.environ.get(LOOKINGGLASS_SOURCE_ENV)
+    source_override = os.environ.get(ALICE_WEB_SOURCE_ENV)
     if source_override:
         repo = Path(source_override).expanduser().resolve()
         validate_repo(repo)
@@ -137,7 +137,7 @@ def resolve_checkout_revision(
     if commit:
         if not COMMIT_SHA_RE.fullmatch(commit):
             raise SystemExit(
-                "Refusing to checkout LookingGlass because direct_url.json commit_id "
+                "Refusing to checkout Alice because direct_url.json commit_id "
                 "is not a full immutable commit SHA."
             )
         return commit, commit
@@ -148,10 +148,10 @@ def resolve_checkout_revision(
         return requested_revision, None
 
     raise SystemExit(
-        "Refusing to checkout LookingGlass without an immutable commit_id in direct_url.json. "
+        "Refusing to checkout Alice without an immutable commit_id in direct_url.json. "
         "Mutable branch/tag checkout can execute changed upstream code. Reinstall from a commit SHA, "
         f"or explicitly accept the risk with --allow-mutable-checkout or "
-        f"{LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT_ENV}=1."
+        f"{ALICE_WEB_ALLOW_MUTABLE_CHECKOUT_ENV}=1."
     )
 
 
@@ -160,7 +160,7 @@ def string_value(value: object) -> str | None:
 
 
 def mutable_checkout_allowed(allow_mutable_checkout: bool) -> bool:
-    env_value = os.environ.get(LOOKINGGLASS_ALLOW_MUTABLE_CHECKOUT_ENV, "")
+    env_value = os.environ.get(ALICE_WEB_ALLOW_MUTABLE_CHECKOUT_ENV, "")
     return allow_mutable_checkout or env_value.lower() in {
         "1",
         "true",
@@ -199,13 +199,13 @@ def clone_checkout(repo_url: str, revision: str, commit: str | None, target: Pat
 def validate_repo(repo: Path) -> None:
     missing = [name for name in ["package.json", "package-lock.json", "test/a3p-writer.test.ts"] if not (repo / name).exists()]
     if missing:
-        raise SystemExit(f"{repo} is not a LookingGlass checkout; missing {', '.join(missing)}")
+        raise SystemExit(f"{repo} is not an Alice checkout; missing {', '.join(missing)}")
 
 
 def cache_root() -> Path:
     base = os.environ.get("XDG_CACHE_HOME")
     root = Path(base).expanduser() if base else Path.home() / ".cache"
-    return root / "lookingglass" / "uvx-checkouts"
+    return root / "alice-web" / "uvx-checkouts"
 
 
 def safe_cache_name(repo_url: str, revision: str) -> str:

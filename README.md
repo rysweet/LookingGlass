@@ -1,9 +1,15 @@
-# LookingGlass — Alice 3 for the Web
+# Alice 3 for the Web
 
-LookingGlass is a TypeScript port of [Alice 3](https://www.alice.org), the
-educational programming environment, designed to run in a web browser. It
-reimplements the core Alice subsystems — Tweedle language, AST, story API,
-scene graph, renderer, and IDE — as a modern web application.
+This repository contains Alice for the web: a TypeScript port of
+[Alice 3](https://www.alice.org), the educational programming environment,
+designed to run in a browser. It reimplements the core Alice subsystems —
+Tweedle language, AST, story API, scene graph, renderer, and IDE — as a modern
+web application.
+
+The GitHub repository/project nickname is **LookingGlass**. That nickname
+identifies this repository and migration wrapper only; the product, runtime,
+package, API, generated metadata, and user-facing app are **Alice** /
+`alice-web`.
 
 ## Quick start
 
@@ -23,7 +29,8 @@ Start the REST API server (used by the eatme test suite):
 
 ```bash
 npm run build:server
-npm run serve
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
+npm run serve -- --api-token "$ALICE_LOCAL_API_TOKEN"
 ```
 
 ## What's implemented
@@ -181,10 +188,11 @@ The server exposes endpoints used by the [eatme](https://github.com/rysweet/eatm
 test suite for automated end-to-end testing. See the
 [API reference](./docs/api-reference.md) for request and response details.
 
-The LookingGlass identity contract is documented in
-[docs/lookingglass-identity.md](./docs/lookingglass-identity.md), including the
-package name, CLI command, runtime string, generated metadata, and compatibility
-terms that intentionally remain Alice-branded.
+The Alice identity boundary is documented in
+[docs/alice-identity-boundary.md](./docs/alice-identity-boundary.md), including
+the product name, package name, CLI command, runtime string, generated metadata,
+API header names, environment variables, and the limited places where the
+LookingGlass repository nickname is appropriate.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -203,8 +211,9 @@ terms that intentionally remain Alice-branded.
 | `/api/events/fire` | POST | Fire an event |
 
 Mutating local API requests must use `Content-Type: application/json`. When
-served from the CLI, include the startup `localApiToken` in the
-`X-LookingGlass-Local-Api-Token` header. Browser-originated mutations are accepted only
+served from the CLI, set `ALICE_LOCAL_API_TOKEN` before startup, pass it with
+`--api-token "$ALICE_LOCAL_API_TOKEN"`, and include the same value in the
+`X-Alice-Local-Api-Token` header. Browser-originated mutations are accepted only
 from local origins.
 
 ## Testing

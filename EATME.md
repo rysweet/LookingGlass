@@ -1,14 +1,15 @@
-# LookingGlass identity for eatme integration
+# Alice identity for eatme integration
 
-LookingGlass can produce the same proof artifact JSON files that Java Alice
-produces, allowing the eatme harness to validate it as a comparison target
-alongside the original Java Alice.
+Alice for the web can produce the same proof artifact JSON files that Java
+Alice produces, allowing the eatme harness to validate it as a comparison
+target alongside the original Java Alice. LookingGlass is only the GitHub
+repository/project nickname for this migration repository.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/rysweet/alice-web-prototype.git lookingglass
-cd lookingglass
+git clone https://github.com/rysweet/alice-web-prototype.git alice-web
+cd alice-web
 npm install
 npm run build:server
 
@@ -30,7 +31,7 @@ npm run serve -- [options]
 Installed or linked package:
 
 ```
-lookingglass serve [options]
+alice-web serve [options]
 
 Options:
   --port <number>           Port to listen on (default: 3000)
@@ -39,9 +40,9 @@ Options:
   --api-token <token>       Token required by mutating local API requests
 ```
 
-When `serve` starts without `--api-token`, it generates a per-server
-`localApiToken` and prints it in the startup JSON. Include that value in the
-`X-LookingGlass-Local-Api-Token` header for every mutating API request.
+Pass a local-only token with `--api-token` and include the same value in the
+`X-Alice-Local-Api-Token` header for every mutating API request. Do not log or
+commit token values.
 
 ## API Endpoints
 
@@ -52,7 +53,7 @@ response reference.
 Returns process status. Used by eatme for `process_started` assertion.
 
 ### `POST /api/launch`
-Start or initialize LookingGlass with a project.
+Start or initialize Alice with a project.
 ```json
 { "project": "/path/to/starter.a3p" }
 ```
@@ -152,11 +153,12 @@ A `typescript` target entry has been added to
 
 To use:
 ```bash
-export LOOKINGGLASS_TYPESCRIPT_HOME=/path/to/lookingglass
-export LOOKINGGLASS_TYPESCRIPT_API_URL=http://localhost:3000
+export ALICE_WEB_URL=http://localhost:3000
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
 ```
 
-Use `LOOKINGGLASS_*` names in eatme target configuration and harness scripts.
+Use `ALICE_WEB_URL` and `ALICE_LOCAL_API_TOKEN` in eatme target configuration
+and harness scripts.
 
 ## Gadugi Integration Test Scenarios
 
@@ -184,7 +186,7 @@ scenario documentation, schema reference, and writing guide.
 src/
   evidence-writer.ts    — Writes JSON proof artifacts matching Java schemas
   server.ts             — Express HTTP API server
-  cli.ts                — CLI entry point (npm run serve -- ..., lookingglass serve ...)
+  cli.ts                — CLI entry point (npm run serve -- ..., alice-web serve ...)
   a3p-parser.ts         — .a3p ZIP/XML parser + joint/bbox/texture extraction
   animation.ts          — Pure-functional tween engine (4 easings, Vec3/Quat/scalar)
   project-io.ts         — Full .a3p archive read/write (manifest, resources, thumbnail)

@@ -299,11 +299,11 @@ export class IdeMenuBarModel {
   getAboutDialog(): AboutDialogModel {
     return {
       applicationName:
-        this.aboutOverrides.applicationName ?? "LookingGlass",
+        this.aboutOverrides.applicationName ?? "Alice",
       version: this.aboutOverrides.version ?? "0.10.0",
       summary:
         this.aboutOverrides.summary
-        ?? "Prototype menu bar model for file, edit, window, and help actions.",
+        ?? "Alice menu bar model for file, edit, window, and help actions.",
       helpTopicIds:
         this.aboutOverrides.helpTopicIds
         ?? listHelpTopics().map((topic) => topic.id),

@@ -27,18 +27,24 @@ It takes an `AliceProject` in, returns an `ExecutionResult` out.
 ```bash
 # Build and start the server
 npm run build:server
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
 node dist-server/cli.js serve \
   --port 3000 \
   --evidence-dir ./evidence \
+  --api-token "$ALICE_LOCAL_API_TOKEN" \
   --project /path/to/starter.a3p
 
 # Launch the project
 curl -X POST http://localhost:3000/api/launch \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"project": "/path/to/starter.a3p"}'
 
 # Execute the world — runs all methods through the Tweedle VM
-curl -X POST http://localhost:3000/api/world/run
+curl -X POST http://localhost:3000/api/world/run \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{}'
 ```
 
 Response:

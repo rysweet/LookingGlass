@@ -45,7 +45,7 @@ describe("server API", () => {
     it("returns running status", async () => {
       const res = await request(app).get("/api/health").expect(200);
       expect(res.body.status).toBe("running");
-      expect(res.body.runtime).toBe("lookingglass-typescript-web");
+      expect(res.body.runtime).toBe("alice-web");
       expect(typeof res.body.pid).toBe("number");
     });
 

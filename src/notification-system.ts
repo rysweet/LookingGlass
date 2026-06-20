@@ -19,7 +19,7 @@ export interface NotificationStorage {
   removeItem(key: string): void;
 }
 
-const HISTORY_STORAGE_KEY = "lookingglass.notifications.history";
+const HISTORY_STORAGE_KEY = "alice-web.notifications.history";
 const LEGACY_HISTORY_STORAGE_KEY = "alice-web.notifications.history";
 
 function cloneNotification(notification: NotificationRecord): NotificationRecord {

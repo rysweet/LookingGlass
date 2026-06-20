@@ -34,7 +34,7 @@ export interface PersistedThemeState {
   customTheme?: ThemeDefinition | null;
 }
 
-const DEFAULT_STORAGE_KEY = "lookingglass.theme";
+const DEFAULT_STORAGE_KEY = "alice-web.theme";
 const LEGACY_STORAGE_KEY = "alice-web.theme";
 
 function cloneVariables(values: ThemeVariableValues): ThemeVariableValues {

@@ -7,7 +7,7 @@ import {
   type UserPreferences,
 } from "../src/preferences";
 
-const STORAGE_KEY = "lookingglass.preferences.test";
+const STORAGE_KEY = "alice-web.preferences.test";
 
 beforeEach(() => {
   localStorage.clear();
@@ -109,13 +109,13 @@ describe("Preferences", () => {
     });
   });
 
-  it("migrates legacy default storage into the LookingGlass key", () => {
+  it("uses the Alice web default storage key", () => {
     localStorage.setItem("alice-web.preferences", JSON.stringify({ theme: "light" }));
 
     const prefs = new Preferences();
 
     expect(prefs.get("theme")).toBe("light");
-    expect(localStorage.getItem("lookingglass.preferences")).toBe(
+    expect(localStorage.getItem("alice-web.preferences")).toBe(
       localStorage.getItem("alice-web.preferences"),
     );
   });

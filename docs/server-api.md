@@ -1,6 +1,6 @@
 # Server API
 
-The server API is the Express layer that lets `eatme`, outside-in tests, and local scripts drive LookingGlass workflows over HTTP.
+The server API is the Express layer that lets `eatme`, outside-in tests, and local scripts drive Alice workflows over HTTP.
 
 Contract source: server API tests, `EATME.md`, and observed HTTP behavior.
 
@@ -24,7 +24,8 @@ Build the server and start it on localhost:
 ```bash
 npm install
 npm run build:server
-npm run serve -- --port 3000 --evidence-dir ./evidence
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
+npm run serve -- --port 3000 --evidence-dir ./evidence --api-token "$ALICE_LOCAL_API_TOKEN"
 ```
 
 Check that the process is accepting API requests:
@@ -41,11 +42,11 @@ Response:
   "launched": false,
   "pid": 12345,
   "uptime": 1.25,
-  "runtime": "lookingglass-typescript-web"
+  "runtime": "alice-web"
 }
 ```
 
-The `runtime` value is the LookingGlass runtime identity.
+The `runtime` value is the Alice web runtime identity.
 
 `pid` and `uptime` are dynamic. Tests and clients should assert their types, not fixed values.
 
@@ -57,15 +58,17 @@ The local checkout CLI accepts these options through the npm script:
 npm run serve -- \
   --port 3000 \
   --evidence-dir ./evidence \
+  --api-token "$ALICE_LOCAL_API_TOKEN" \
   --project ./fixtures/starter.a3p
 ```
 
-The installed or linked package exposes the same options through `lookingglass`:
+The installed or linked package exposes the same options through `alice-web`:
 
 ```bash
-lookingglass serve \
+alice-web serve \
   --port 3000 \
   --evidence-dir ./evidence \
+  --api-token "$ALICE_LOCAL_API_TOKEN" \
   --project ./fixtures/starter.a3p
 ```
 
@@ -74,6 +77,7 @@ lookingglass serve \
 | `--port <1-65535>` | no | `3000` | TCP port bound on `127.0.0.1` |
 | `--evidence-dir <dir>` | no | `./evidence` | Directory for JSON proof artifacts, generated `.a3p` files, and screenshots |
 | `--project <file.a3p>` | no | none | Starter project used by `POST /api/launch` when the request body does not provide `project` |
+| `--api-token <token>` | yes for CLI-served mutating requests | none | Local-only secret sent in `X-Alice-Local-Api-Token`; provide it from `ALICE_LOCAL_API_TOKEN` |
 
 Print the resolved configuration without starting a server:
 
@@ -87,13 +91,13 @@ Example output:
 {
   "command": "print-config",
   "port": 3100,
-  "evidenceDir": "/workspace/lookingglass/tmp/evidence",
+  "evidenceDir": "/workspace/alice-web/tmp/evidence",
   "project": null,
-  "runtime": "lookingglass-typescript-web"
+  "runtime": "alice-web"
 }
 ```
 
-The `runtime` value is part of the LookingGlass identity contract.
+The `runtime` value is part of the Alice identity boundary.
 
 For large local builds, set Node's heap limit before running build or test commands:
 
@@ -138,8 +142,8 @@ Each call to `createServer()` creates a separate server context. Mutable project
 The public API contract is defined by the existing tests, `EATME.md`, and observed server behavior. Response field names, status codes, schema versions, and artifact names are stable.
 
 See [API reference](./api-reference.md) and
-[LookingGlass identity](./lookingglass-identity.md) for endpoint-by-endpoint
-request, response, and runtime identity details. The server exposes these
+[Alice identity boundary](./alice-identity-boundary.md) for endpoint-by-endpoint
+request, response, API header, and runtime identity details. The server exposes these
 routes:
 
 | Method | Route | Success response | Main side effect |
@@ -165,8 +169,8 @@ Bad request responses use HTTP `400` with an `error` field. Unhandled server err
 ```
 
 Mutating local API routes require `Content-Type: application/json`. CLI-served
-instances also require the per-server startup token in the
-`X-LookingGlass-Local-Api-Token` header and reject non-local `Host` or browser
+instances also require the token passed at startup with `--api-token` in the
+`X-Alice-Local-Api-Token` header and reject non-local `Host` or browser
 `Origin` headers.
 
 ## Evidence artifacts
@@ -288,13 +292,21 @@ Start the API server:
 
 ```bash
 npm run build:server
-node dist-server/cli.js serve --port 3000 --evidence-dir ./evidence
+export ALICE_LOCAL_API_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))')"
+node dist-server/cli.js serve --port 3000 --evidence-dir ./evidence --api-token "$ALICE_LOCAL_API_TOKEN"
+```
+
+Use the same token value when sending mutating requests:
+
+```bash
+export ALICE_LOCAL_API_TOKEN="<same value used to start alice-web>"
 ```
 
 Create a project from the Snow template:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/new \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"templateId":"snow","projectName":"WinterStory"}'
 ```
@@ -303,6 +315,7 @@ Add a biped object:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/scene/add-object \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"className":"org.lgna.story.SBiped","name":"bunny"}'
 ```
@@ -311,6 +324,7 @@ Append an edit proof to `scene.myFirstMethod`:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/code/edit-procedure \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"procedureSelector":"scene.myFirstMethod","editSpec":"append-comment:move bunny forward"}'
 ```
@@ -319,6 +333,7 @@ Run the world:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/world/run \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```
@@ -327,6 +342,7 @@ Save the project:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/save \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"saveSelector":"scene.myFirstMethod"}'
 ```
@@ -335,7 +351,7 @@ Capture a screenshot:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/screenshot \
-  -H "X-LookingGlass-Local-Api-Token: $LOOKINGGLASS_LOCAL_API_TOKEN" \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{}'
 ```

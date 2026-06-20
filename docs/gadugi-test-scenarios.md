@@ -170,7 +170,7 @@ steps:
       done;
       test "$READY" = 1;
       node -e "const fs=require(\"fs\"); const d=JSON.parse(fs.readFileSync(process.argv[1], \"utf8\")); if (d.status !== \"running\") throw new Error(\"health failed\");" "$HEALTH_JSON";
-      curl -fsS -X POST "http://127.0.0.1:$PORT/api/launch" -H "X-LookingGlass-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{}" >"$LAUNCH_JSON";
+      curl -fsS -X POST "http://127.0.0.1:$PORT/api/launch" -H "X-Alice-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{}" >"$LAUNCH_JSON";
       node -e "const fs=require(\"fs\"); const d=JSON.parse(fs.readFileSync(process.argv[1], \"utf8\")); if (d.status !== \"launched\") throw new Error(\"launch failed\");" "$LAUNCH_JSON";
       kill "$SERVER_PID";
       wait "$SERVER_PID" 2>/dev/null || true;
@@ -208,7 +208,7 @@ that the server can parse and render it.
 
 Flow:
 
-1. Start the server with `node dist-server/cli.js serve --project "$A3P_FILE"`.
+1. Start the server with `node dist-server/cli.js serve --project "$A3P_FILE" --api-token "$API_TOKEN"`.
 2. Poll `/api/health` until the server reports `status: "running"`.
 3. `POST /api/launch` with the project path.
 4. Assert `status: "launched"`, a non-empty `projectName`, and at least two
@@ -225,7 +225,7 @@ world through the Tweedle VM.
 
 Flow:
 
-1. Start the server with `node dist-server/cli.js serve --project "$A3P_FILE"`.
+1. Start the server with `node dist-server/cli.js serve --project "$A3P_FILE" --api-token "$API_TOKEN"`.
 2. Launch the project through `/api/launch`.
 3. `POST /api/world/run`.
 4. Assert `status: "completed"`.
@@ -241,7 +241,7 @@ entities, checks validation behavior, and captures a render.
 
 Flow:
 
-1. Start the server with `node dist-server/cli.js serve` without a project.
+1. Start the server with `node dist-server/cli.js serve --api-token "$API_TOKEN"` without a project.
 2. `POST /api/launch` with `{}` and assert the default ground and camera exist.
 3. Add a biped named `bunny`.
 4. Add a prop named `tree`.
@@ -260,7 +260,7 @@ negative validation cases.
 
 Flow:
 
-1. Start the server with `node dist-server/cli.js serve` without a project.
+1. Start the server with `node dist-server/cli.js serve --api-token "$API_TOKEN"` without a project.
 2. Launch the default scene.
 3. Register `sceneActivated`, `keyPress`, and `proximity` handlers.
 4. Add `bunny` and `cat` before proximity registration.
@@ -281,7 +281,7 @@ round-trip behavior.
 
 Flow:
 
-1. Start the server with `node dist-server/cli.js serve` without a project.
+1. Start the server with `node dist-server/cli.js serve --api-token "$API_TOKEN"` without a project.
 2. Launch the default project.
 3. `POST /api/code/edit-procedure` with
    `append-comment:gadugi-round-trip-proof`.
