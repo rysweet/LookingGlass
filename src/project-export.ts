@@ -8,6 +8,11 @@ import {
   type HtmlExportOptions,
 } from "./export-html.js";
 import { assertSafeWritablePath } from "./project-io/path-security.js";
+import {
+  generateTypeScriptSource,
+  type TypeScriptSource,
+  type TypeScriptSourceManifest,
+} from "./code-generation/typescript-source.js";
 
 export interface ProjectExportResource {
   path: string;
@@ -69,6 +74,12 @@ export interface PackagedProject {
     resourceCount: number;
     generatedEntries: string[];
   };
+  entryNames: string[];
+}
+
+export interface TypeScriptSourceArchive {
+  archive: Uint8Array;
+  manifest: TypeScriptSourceManifest;
   entryNames: string[];
 }
 
@@ -206,6 +217,35 @@ export class ProjectPackager {
   }
 }
 
+export class TypeScriptExporter {
+  constructor(
+    private readonly generator: (project: AliceProject) => TypeScriptSource = generateTypeScriptSource,
+  ) {
+  }
+
+  async export(project: AliceProject): Promise<TypeScriptSourceArchive> {
+    const generated = this.generator(project);
+    validateGeneratedSource(generated);
+
+    const zip = new JSZip();
+    const packageEntries = buildTypeScriptPackageEntries(generated);
+    for (const entry of packageEntries) {
+      addDeterministicZipFile(zip, `alice-web-typescript-source/${entry.path}`, entry.content);
+    }
+
+    const archive = await zip.generateAsync({
+      type: "uint8array",
+      compression: "DEFLATE",
+      compressionOptions: { level: 9 },
+    });
+    return {
+      archive,
+      manifest: generated.manifest,
+      entryNames: Object.keys(zip.files).sort(),
+    };
+  }
+}
+
 function buildResourceScript(resources: Record<string, string>): string {
   if (Object.keys(resources).length === 0) {
     return "";
@@ -217,6 +257,119 @@ function addZipFile(zip: JSZip, path: string, bytes: Uint8Array | string): strin
   const safePath = assertSafeWritablePath(path);
   zip.file(safePath, bytes);
   return safePath;
+}
+
+function addDeterministicZipFile(zip: JSZip, path: string, bytes: Uint8Array | string): string {
+  const safePath = assertSafeWritablePath(path);
+  zip.file(safePath, bytes, {
+    createFolders: false,
+    date: new Date(0),
+  });
+  return safePath;
+}
+
+function validateGeneratedSource(generated: TypeScriptSource): void {
+  if (generated.entries.length === 0) {
+    throw new Error("TypeScript source export cannot create an empty archive.");
+  }
+
+  const seen = new Set<string>();
+  for (const entry of generated.entries) {
+    const safePath = assertSafeWritablePath(entry.path);
+    if (safePath !== entry.path) {
+      throw new Error(`TypeScript source entry path changed during validation: ${entry.path}`);
+    }
+    if (seen.has(entry.path)) {
+      throw new Error(`TypeScript source export contains duplicate entry: ${entry.path}`);
+    }
+    if (entry.content.trim().length === 0) {
+      throw new Error(`TypeScript source export contains empty entry: ${entry.path}`);
+    }
+    seen.add(entry.path);
+  }
+
+  if (generated.manifest.files.length !== generated.entries.length) {
+    throw new Error("TypeScript source manifest files must match generated entries.");
+  }
+  for (const file of generated.manifest.files) {
+    if (!seen.has(file)) {
+      throw new Error(`TypeScript source manifest references missing entry: ${file}`);
+    }
+  }
+}
+
+function buildTypeScriptPackageEntries(generated: TypeScriptSource): TypeScriptSourceEntry[] {
+  const entries: TypeScriptSourceEntry[] = [
+    { path: "manifest.json", content: `${JSON.stringify(generated.manifest, null, 2)}\n` },
+    { path: "package.json", content: `${JSON.stringify(createTypeScriptPackageJson(generated.manifest), null, 2)}\n` },
+    { path: "tsconfig.json", content: `${JSON.stringify(createTypeScriptTsconfig(), null, 2)}\n` },
+    { path: "README.md", content: createTypeScriptReadme(generated.manifest) },
+    ...generated.entries,
+  ];
+  return entries.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+interface TypeScriptSourceEntry {
+  path: string;
+  content: string;
+}
+
+function createTypeScriptPackageJson(manifest: TypeScriptSourceManifest): Record<string, unknown> {
+  return {
+    name: "alice-web-typescript-source",
+    private: true,
+    type: "module",
+    description: "Alice web TypeScript source export for an Alice project.",
+    scripts: {
+      typecheck: "tsc --noEmit",
+    },
+    devDependencies: {
+      typescript: "^5.7.0",
+    },
+    alice: {
+      product: manifest.product,
+      runtime: manifest.runtime,
+      projectName: manifest.projectName,
+      entryPoint: manifest.entryPoint,
+    },
+  };
+}
+
+function createTypeScriptTsconfig(): Record<string, unknown> {
+  return {
+    compilerOptions: {
+      target: "ES2022",
+      module: "NodeNext",
+      moduleResolution: "NodeNext",
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+    },
+    include: ["src/**/*.ts"],
+  };
+}
+
+function createTypeScriptReadme(manifest: TypeScriptSourceManifest): string {
+  return [
+    "# Alice web TypeScript source export",
+    "",
+    `Project: ${manifest.projectName}`,
+    "",
+    "This archive contains readable TypeScript source generated from an Alice project.",
+    "It is intended for source handoff, review, and type-checking outside the running Alice web server.",
+    "",
+    "## Contents",
+    "",
+    "- `manifest.json` describes the deterministic export metadata.",
+    "- `src/project.ts` assembles the generated Alice project.",
+    "- `src/scene.ts` describes scene objects and runtime call recording.",
+    "- `src/procedures/*.ts` contains generated Alice procedure and function source.",
+    "- `src/runtime.ts` contains the small local runtime shim and explicit unsupported-behavior error.",
+    "",
+    "Run `npm install` and `npm run typecheck` in this directory to type-check the generated source.",
+    "Unsupported Alice runtime behavior throws `UnsupportedAliceRuntimeBehavior` instead of being silently omitted.",
+    "",
+  ].join("\n");
 }
 
 function validateResourcePath(resource: ProjectExportResource): ProjectExportResource {

@@ -95,5 +95,8 @@ Project IO preserves the existing `.a3p` behavior:
   conventions, size limits, path rules, and thumbnail-generation options.
 - Follow the [round-trip tutorial](./tutorial-project-io-round-trip.md) to load,
   inspect, modify, and save an `.a3p` file.
+- See the [TypeScript source export](./typescript-source-export.md)
+  contract for the future readable generated `.ts` source handoff. This is
+  separate from `.a3p` project archive IO.
 
 Last updated for the refactored Project IO facade and internal module split.

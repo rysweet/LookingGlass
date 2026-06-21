@@ -363,6 +363,43 @@ Example response:
 }
 ```
 
+## `GET /api/projects/current/export/typescript`
+
+Download the current Alice project as a TypeScript source handoff archive.
+
+```bash
+curl -fS http://127.0.0.1:3000/api/projects/current/export/typescript \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -o alice-web-typescript-source.zip
+```
+
+Success response:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/zip
+Content-Disposition: attachment; filename="alice-web-typescript-source.zip"
+Cache-Control: no-store
+```
+
+The archive will be rooted at `alice-web-typescript-source/` and contain
+`manifest.json`, `package.json`, `tsconfig.json`, `README.md`, and readable
+generated `src/**/*.ts` files for project metadata, scene objects, procedures,
+and explicit unsupported-runtime behavior.
+
+The export must use the same current-project state as save and run flows.
+Projects created from templates, loaded from `.a3p`, and changed through live
+server API edits must export the merged current state.
+
+Error response when nothing has been launched yet:
+
+```json
+{ "error": "Not launched. Call POST /api/launch first." }
+```
+
+See [TypeScript source export](./typescript-source-export.md) for the
+archive layout, generated source conventions, and implementation contract.
+
 ## `POST /api/world/run`
 
 Run the current project through the Tweedle VM.

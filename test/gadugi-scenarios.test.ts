@@ -12,6 +12,12 @@ type ScenarioSpec = {
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const gadugiDir = resolve(repoRoot, "gadugi");
+const gadugiTestBin = resolve(
+  repoRoot,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "gadugi-test.cmd" : "gadugi-test",
+);
 
 const scenarioSpecs: ScenarioSpec[] = [
   {
@@ -78,6 +84,20 @@ const scenarioSpecs: ScenarioSpec[] = [
       "saved-project.a3p",
       "server-2.log",
       "sceneObjectCount",
+    ],
+  },
+  {
+    file: "06-typescript-source-export.yaml",
+    name: "TypeScript Source Export Handoff",
+    flowTokens: [
+      "/api/launch",
+      "/api/scene/add-object",
+      "/api/code/create-procedure",
+      "/api/code/edit-procedure",
+      "/api/projects/current/export/typescript",
+      "alice-web-typescript-source.zip",
+      "alice-web-typescript-source/src/project.ts",
+      "danceTogether",
     ],
   },
 ];
@@ -150,7 +170,7 @@ function executeTargets(yaml: string): string[] {
 }
 
 function runGadugi(args: string[]) {
-  return spawnSync("gadugi-test", args, {
+  return spawnSync(gadugiTestBin, args, {
     cwd: repoRoot,
     encoding: "utf8",
     env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=32768" },
@@ -163,7 +183,7 @@ function commandOutput(result: ReturnType<typeof runGadugi>): string {
 }
 
 describe("Gadugi scenario runner contract", () => {
-  it("keeps exactly the five documented Gadugi scenario files", () => {
+  it("keeps exactly the documented Gadugi scenario files", () => {
     const scenarioFiles = readdirSync(gadugiDir)
       .filter((file) => file.endsWith(".yaml"))
       .sort();

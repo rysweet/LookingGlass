@@ -58,31 +58,55 @@ export function createInitialServerState(): ServerState {
 }
 
 export function buildCurrentProject(state: ServerState): AliceProject {
-  if (state.parsedProject) return state.parsedProject;
-  return {
-    version: "3.10",
-    projectName: state.projectName,
-    sceneObjects: Array.from(state.sceneObjects.values()).map((o) => ({
-      name: o.name,
-      typeName: o.className,
+  const baseProject: AliceProject = state.parsedProject
+    ? cloneProject(state.parsedProject)
+    : {
+      version: "3.10",
+      projectName: state.projectName,
+      sceneObjects: [],
+      methods: [],
+    };
+
+  baseProject.projectName = state.projectName;
+
+  const sceneObjectsByName = new Map(baseProject.sceneObjects.map((object) => [object.name, object]));
+  for (const object of state.sceneObjects.values()) {
+    sceneObjectsByName.set(object.name, {
+      name: object.name,
+      typeName: object.className,
       resourceType: null,
-      position: null,
+      position: object.position,
       orientation: null,
       size: null,
-    })),
-    methods: Array.from(state.procedures.entries()).map(([name, stmts]) => ({
+    });
+  }
+  baseProject.sceneObjects = Array.from(sceneObjectsByName.values());
+
+  const methodsByName = new Map(baseProject.methods.map((method) => [method.name, method]));
+  for (const [name, statements] of state.procedures.entries()) {
+    if (state.parsedProject && statements.length === 0 && methodsByName.has(name)) {
+      continue;
+    }
+    const existing = methodsByName.get(name);
+    methodsByName.set(name, {
       name,
-      isFunction: false,
-      returnType: "void",
-      parameters: [],
-      statements: stmts.map((s) => ({
+      isFunction: existing?.isFunction ?? false,
+      returnType: existing?.returnType ?? "void",
+      parameters: existing?.parameters ?? [],
+      statements: statements.map((s) => ({
         kind: "MethodCall" as const,
         object: "this",
         method: s,
         arguments: [],
       })),
-    })),
-  };
+    });
+  }
+  baseProject.methods = Array.from(methodsByName.values());
+  return baseProject;
+}
+
+function cloneProject(project: AliceProject): AliceProject {
+  return JSON.parse(JSON.stringify(project)) as AliceProject;
 }
 
 export function seedDefaultSceneObjects(state: ServerState): void {

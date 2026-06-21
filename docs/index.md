@@ -82,6 +82,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Project IO](./project-io.md)
 - [Project IO API reference](./project-io-api.md)
 - [Project IO configuration](./project-io-configuration.md)
+- [TypeScript source export](./typescript-source-export.md) - source handoff reference
 - [Resource manager](./resource-manager.md)
 - [Scene graph](./scene-graph.md)
 - [Scene manager](./scene-manager.md)

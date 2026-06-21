@@ -7,7 +7,8 @@ shut the server down cleanly.
 
 The completed scenario set verifies Java Alice parity from the outside in:
 project open and rendering, Tweedle world execution, scene entity manipulation,
-event handling, and save/export round trips.
+event handling, and save/export round trips. The TypeScript source handoff
+export scenario is covered by the TypeScript source export handoff scenario.
 
 The camera workflow coverage adds browser and REST checks for camera movement,
 presets, markers, and first-person mode.
@@ -67,6 +68,10 @@ The `gadugi/*.yaml` files are level 3 integration tests. They exercise the
 built server process and REST API rather than importing TypeScript modules
 directly. Any future Gadugi camera scenario should follow the same execute-only
 pattern.
+
+`gadugi/06-typescript-source-export.yaml` covers TypeScript source export by
+creating/editing a project, downloading the source ZIP, and verifying
+archive/source contents.
 
 ## Compatibility gate
 
@@ -204,17 +209,20 @@ uses.
 | `/api/events/fire` | `POST` | 04 |
 | `/api/code/edit-procedure` | `POST` | 05 |
 | `/api/project/save` | `POST` | 05 |
-| `/api/camera/state` | `GET` | planned 06 |
-| `/api/camera/move` | `POST` | planned 06 |
-| `/api/camera/pan` | `POST` | planned 06 |
-| `/api/camera/zoom` | `POST` | planned 06 |
-| `/api/camera/focus` | `POST` | planned 06 |
-| `/api/camera/orbit` | `POST` | planned 06 |
-| `/api/camera/preset` | `POST` | planned 06 |
-| `/api/camera/mode` | `POST` | planned 06 |
-| `/api/camera/markers` | `GET`, `POST` | planned 06 |
-| `/api/camera/markers/:id/restore` | `POST` | planned 06 |
-| `/api/camera/markers/:id` | `DELETE` | planned 06 |
+| `/api/camera/state` | `GET` | planned camera Gadugi scenario |
+| `/api/camera/move` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/pan` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/zoom` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/focus` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/orbit` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/preset` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/mode` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/markers` | `GET`, `POST` | planned camera Gadugi scenario |
+| `/api/camera/markers/:id/restore` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/markers/:id` | `DELETE` | planned camera Gadugi scenario |
+
+`GET /api/projects/current/export/typescript` is covered by
+`gadugi/06-typescript-source-export.yaml`.
 
 ## Scenario details
 

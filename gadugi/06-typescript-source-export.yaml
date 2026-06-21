@@ -1,0 +1,60 @@
+# Level 3: TypeScript Source Export Handoff
+# Tests Alice web current-project export parity with Java/NetBeans source handoff intent.
+
+scenario:
+  name: "TypeScript Source Export Handoff"
+  description: |
+    Verifies the Alice web server can launch a current project, apply live
+    scene/procedure edits, download a TypeScript source handoff archive, and
+    inspect generated ZIP contents. The archive must use Alice/alice-web
+    identity, include source/project metadata, and avoid LookingGlass product
+    branding.
+  type: cli
+  level: 3
+
+  tags: [alice, integration, export, typescript, source-handoff, java-parity]
+
+  agents:
+    - name: cli
+      type: cli
+
+  prerequisites:
+    - "npm run build:server has been run"
+
+  steps:
+    - name: "Download and inspect TypeScript source export"
+      agent: cli
+      action: execute
+      target: >-
+        bash -lc 'set -euo pipefail;
+        PORT="${PORT:-3106}";
+        case "$PORT" in (*[!0-9]*|"") echo "PORT must be numeric" >&2; exit 2;; esac;
+        API_TOKEN="gadugi-local-api-token";
+        EVIDENCE_DIR="./evidence/06-typescript-source-export-$$";
+        EXPORT_ZIP="$EVIDENCE_DIR/alice-web-typescript-source.zip";
+        HEADER_FILE="$EVIDENCE_DIR/export.headers";
+        SERVER_LOG="$EVIDENCE_DIR/server.log";
+        SERVER_PID="";
+        rm -rf "$EVIDENCE_DIR";
+        mkdir -p "$EVIDENCE_DIR";
+        cleanup() { status=$?; if [ -n "${SERVER_PID:-}" ] && kill -0 "$SERVER_PID" 2>/dev/null; then kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; fi; rm -rf "$EVIDENCE_DIR"; exit "$status"; };
+        trap cleanup EXIT;
+        node dist-server/cli.js serve --port "$PORT" --evidence-dir "$EVIDENCE_DIR" --api-token "$API_TOKEN" >"$SERVER_LOG" 2>&1 &
+        SERVER_PID=$!;
+        READY=0;
+        for attempt in $(seq 1 50); do if curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then READY=1; break; fi; sleep 0.2; done;
+        test "$READY" = 1;
+        curl -fsS -X POST "http://127.0.0.1:$PORT/api/launch" -H "X-Alice-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{}" >/dev/null;
+        curl -fsS -X POST "http://127.0.0.1:$PORT/api/scene/add-object" -H "X-Alice-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{\"className\":\"org.lgna.story.SBiped\",\"name\":\"bunny\"}" >/dev/null;
+        curl -fsS -X POST "http://127.0.0.1:$PORT/api/code/create-procedure" -H "X-Alice-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{\"name\":\"danceTogether\"}" >/dev/null;
+        curl -fsS -X POST "http://127.0.0.1:$PORT/api/code/edit-procedure" -H "X-Alice-Local-Api-Token: $API_TOKEN" -H "Content-Type: application/json" -d "{\"procedureSelector\":\"scene.danceTogether\",\"editSpec\":\"append-statement:wave\"}" >/dev/null;
+        curl -fsS -D "$HEADER_FILE" "http://127.0.0.1:$PORT/api/projects/current/export/typescript" -o "$EXPORT_ZIP";
+        grep -qi "^Content-Type: application/zip" "$HEADER_FILE";
+        grep -qi "Content-Disposition: attachment; filename=\"\\?alice-web-typescript-source.zip\"\\?" "$HEADER_FILE";
+        grep -qi "^Cache-Control: no-store" "$HEADER_FILE";
+        node -e "const fs=require(\"fs\"); const JSZip=require(\"jszip\"); (async()=>{ const zip=await JSZip.loadAsync(fs.readFileSync(process.argv[1])); const names=Object.keys(zip.files).sort(); for (const required of [\"alice-web-typescript-source/manifest.json\", \"alice-web-typescript-source/package.json\", \"alice-web-typescript-source/src/project.ts\", \"alice-web-typescript-source/src/scene.ts\", \"alice-web-typescript-source/src/procedures/danceTogether.ts\"]) { if (!names.includes(required)) throw new Error(\"missing \"+required); } const text=(await Promise.all(names.filter((name)=>!zip.files[name].dir).map((name)=>zip.files[name].async(\"string\")))).join(\"\\n\"); if (!text.includes(\"alice-web\") || !text.includes(\"Alice\") || !text.includes(\"bunny\") || !text.includes(\"danceTogether\") || !text.includes(\"wave\")) throw new Error(\"archive content did not preserve current Alice project source\"); if (/lookingglass|placeholder/i.test(text)) throw new Error(\"archive contains identity drift or placeholder text\"); })().catch((error)=>{ console.error(error); process.exit(1); });" "$EXPORT_ZIP";
+        kill "$SERVER_PID";
+        wait "$SERVER_PID" 2>/dev/null || true;
+        SERVER_PID=""'
+      timeout: 45000
+      expected: ""
