@@ -511,8 +511,9 @@ async function handleSaveProject(): Promise<void> {
       console.error(error);
       setErrorMessage(error);
     }
+}
 
-    async function exportWebPackage(): Promise<void> {
+async function exportWebPackage(): Promise<void> {
       try {
         const project = ensureArchive().project;
         const response = await fetch("/api/project/export/web-package", {
@@ -530,9 +531,9 @@ async function handleSaveProject(): Promise<void> {
         console.error(error);
         setErrorMessage(error);
       }
-    }
+}
 
-    async function generateShareArtifacts(): Promise<void> {
+async function generateShareArtifacts(): Promise<void> {
       try {
         const project = ensureArchive().project;
         if (!lastWebPackageBase64) {
@@ -557,7 +558,6 @@ async function handleSaveProject(): Promise<void> {
       } catch (error) {
         console.error(error);
         setErrorMessage(error);
-      }
     }
 }
 

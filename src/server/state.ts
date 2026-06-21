@@ -79,13 +79,15 @@ export function buildCurrentProject(state: ServerState): AliceProject {
 
   const sceneObjectsByName = new Map(baseProject.sceneObjects.map((object) => [object.name, object]));
   for (const object of state.sceneObjects.values()) {
+    const existing = sceneObjectsByName.get(object.name);
     sceneObjectsByName.set(object.name, {
+      ...existing,
       name: object.name,
       typeName: object.className,
-      resourceType: null,
+      resourceType: existing?.resourceType ?? null,
       position: object.position,
-      orientation: null,
-      size: null,
+      orientation: existing?.orientation ?? null,
+      size: existing?.size ?? null,
     });
   }
   baseProject.sceneObjects = Array.from(sceneObjectsByName.values());

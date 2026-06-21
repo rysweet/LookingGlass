@@ -17,7 +17,7 @@ import {
 } from "./joint-system.js";
 import * as ProjectExport from "./project-export.js";
 import { writeProject, type AliceProjectArchive } from "./project-io.js";
-import type { JointNode } from "./story-api.js";
+import type { JointNode } from "./story-api";
 
 export type WorkflowResourceKind = "model" | "texture";
 
@@ -201,9 +201,12 @@ export function applyJointPose(
       throw new Error(`Unknown joint "${jointName}" for ${input.objectName}`);
     }
     validatePartialJointTransform(transform, jointName);
-    joint.currentTransform = {
-      position: transform.position ?? joint.currentTransform.position,
-      orientation: transform.orientation ?? joint.currentTransform.orientation,
+    object.joints[jointName] = {
+      ...joint,
+      currentTransform: {
+        position: transform.position ?? joint.currentTransform.position,
+        orientation: transform.orientation ?? joint.currentTransform.orientation,
+      },
     };
   }
   object.poses[input.poseName] = Object.fromEntries(
@@ -351,12 +354,13 @@ function validatePartialJointTransform(transform: Partial<JointTransform>, joint
 }
 
 function assertFiniteNumbers(
-  value: Record<string, unknown>,
+  value: object,
   keys: readonly string[],
   fieldName: string,
 ): void {
   for (const key of keys) {
-    if (typeof value[key] !== "number" || !Number.isFinite(value[key])) {
+    const field = (value as Record<string, unknown>)[key];
+    if (typeof field !== "number" || !Number.isFinite(field)) {
       throw new Error(`${fieldName}.${key} must be finite`);
     }
   }
