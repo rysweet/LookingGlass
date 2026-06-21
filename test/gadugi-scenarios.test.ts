@@ -80,6 +80,29 @@ const scenarioSpecs: ScenarioSpec[] = [
       "sceneObjectCount",
     ],
   },
+  {
+    file: "06-web-player-export-share-parity.yaml",
+    name: "Web Player Export Share Parity",
+    flowTokens: [
+      "/api/project/new",
+      "/api/project/export/web-package",
+      "alice-web.export-web-package-result/v1",
+      "packageBase64",
+      "manifest.json",
+      "share.json",
+      "preview.png",
+      "project/project.json",
+      "validation.json",
+      "window.AlicePlayer",
+      "alice-web-player",
+      "/api/project/validate-web-package",
+      "alice-web.validate-web-package-result/v1",
+      "entrypoint-playable",
+      "/api/project/share",
+      "alice-web.share-artifacts-result/v1",
+      "invalid-base64",
+    ],
+  },
 ];
 
 const unsupportedActions = [
@@ -150,7 +173,7 @@ function executeTargets(yaml: string): string[] {
 }
 
 function runGadugi(args: string[]) {
-  return spawnSync("gadugi-test", args, {
+  return spawnSync("npm", ["exec", "--", "gadugi-test", ...args], {
     cwd: repoRoot,
     encoding: "utf8",
     env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=32768" },
@@ -163,7 +186,7 @@ function commandOutput(result: ReturnType<typeof runGadugi>): string {
 }
 
 describe("Gadugi scenario runner contract", () => {
-  it("keeps exactly the five documented Gadugi scenario files", () => {
+  it("keeps exactly the six documented Gadugi scenario files", () => {
     const scenarioFiles = readdirSync(gadugiDir)
       .filter((file) => file.endsWith(".yaml"))
       .sort();

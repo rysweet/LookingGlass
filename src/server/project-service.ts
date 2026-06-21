@@ -3,6 +3,17 @@ import * as path from "path";
 import { parseA3P, type AliceProject } from "../a3p-parser.js";
 import { writeA3P } from "../a3p-writer/archive.js";
 import { createDefaultCameraWorkflowState } from "../camera-workflow.js";
+import {
+  exportWebPackage,
+  generateShareArtifacts,
+  validateWebPackage,
+  type ExportedWebPackage,
+  type ShareArtifacts,
+  type ShareArtifactsInput,
+  type ValidateWebPackageInput,
+  type WebPackageOptions,
+  type WebPackageValidation,
+} from "../project-export.js";
 import { executeProject, type LogEntry } from "../tweedle-vm.js";
 import { buildCurrentProject, seedDefaultSceneObjects, type ServerState } from "./state.js";
 import type { EvidenceService } from "./evidence-service.js";
@@ -30,6 +41,9 @@ export interface ProjectService {
     evidenceDir: string,
     evidenceService: EvidenceService,
   ): Promise<Record<string, unknown>>;
+  exportWebPackage(state: ServerState, input: WebPackageOptions): Promise<ExportedWebPackage>;
+  validateWebPackage(input: ValidateWebPackageInput): Promise<WebPackageValidation>;
+  generateShareArtifacts(input: ShareArtifactsInput): Promise<ShareArtifacts>;
 }
 
 type RequestedProjectLoadResult =
@@ -298,5 +312,17 @@ export const projectService: ProjectService = {
       ...runResult,
       evidenceArtifact: runEvidencePath,
     };
+  },
+
+  async exportWebPackage(state, input) {
+    return exportWebPackage(buildCurrentProject(state), input);
+  },
+
+  async validateWebPackage(input) {
+    return validateWebPackage(input);
+  },
+
+  async generateShareArtifacts(input) {
+    return generateShareArtifacts(input);
   },
 };
