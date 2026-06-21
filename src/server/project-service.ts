@@ -19,8 +19,10 @@ import {
 import { readProject, writeProject, type AliceProjectArchive } from "../project-io.js";
 import {
   applyAudioManifest,
+  createDefaultProjectAudioState,
   mergeAudioManifest,
   createEmptyProjectAudioState,
+  type ProjectAudioWorkflowState,
 } from "../project-audio.js";
 import { executeProject, type LogEntry } from "../tweedle-vm.js";
 import { jointStateSidecarPath, writeJointStateSidecar } from "./joint-state-sidecar.js";
@@ -167,10 +169,12 @@ export const projectService: ProjectService = {
       state.resources = new Map(loadResult.archive.resources);
       syncServerSceneObjectsFromProject(state, loadResult.project);
       state.projectAudio = applyAudioManifest(loadResult.archive.manifest);
+      state.aliceAudio = loadResult.archive.aliceAudio ?? createDefaultProjectAudioState();
     } else {
       state.projectArchive = null;
       state.resources = new Map();
       state.projectAudio = createEmptyProjectAudioState();
+      state.aliceAudio = createDefaultProjectAudioState();
     }
 
     state.launched = true;
@@ -289,7 +293,12 @@ export const projectService: ProjectService = {
 
     const currentProject = buildCurrentProject(state);
     const archive = archiveForCurrentProject(state, currentProject);
-    archive.manifest = mergeAudioManifest(archive.manifest, state.projectAudio);
+    if (hasProjectAudioWorkflowState(state.aliceAudio)) {
+      archive.aliceAudio = state.aliceAudio;
+    } else {
+      archive.manifest = mergeAudioManifest(archive.manifest, state.projectAudio);
+      delete archive.aliceAudio;
+    }
     const a3pBytes = await writeProject(archive, { generateThumbnailFromScene: false });
     await fs.promises.writeFile(savedProjectPath, a3pBytes);
 
@@ -324,6 +333,7 @@ export const projectService: ProjectService = {
         state.resources = new Map(archive.resources);
         state.parsedProject = archive.project;
         state.projectAudio = applyAudioManifest(archive.manifest);
+        state.aliceAudio = archive.aliceAudio ?? createDefaultProjectAudioState();
       } catch (err) {
         throw new ProjectRunError("Failed to parse .a3p before running the world.", {
           cause: err instanceof Error ? err : undefined,
@@ -430,4 +440,14 @@ function archiveForCurrentProject(state: ServerState, project: AliceProject): Al
       migrationSteps: [],
     },
   };
+}
+
+function hasProjectAudioWorkflowState(state: ProjectAudioWorkflowState): boolean {
+  return (
+    state.resources.length > 0 ||
+    state.cues.length > 0 ||
+    state.activeCueIds.length > 0 ||
+    state.background.resourceId !== null ||
+    state.background.enabled
+  );
 }

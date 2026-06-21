@@ -21,13 +21,17 @@ send `Content-Type: application/json`. When using the CLI server, set
 `ALICE_LOCAL_API_TOKEN` before startup, pass it with `--api-token`, and send the
 same value as `X-Alice-Local-Api-Token`.
 
+Read-only `GET /api/audio/formats` does not require launch or the local API
+token. `GET /api/audio/state` uses the same local API token as the camera state
+routes when the server is started with `--api-token`.
+
 ## Endpoint summary
 
 Rows under `/api/camera/*` are implemented camera workflow routes. See
 [Camera workflow endpoints](#camera-workflow-endpoints) for the shared REST and
 TypeScript contract. Rows labeled web-package feature contract define the
-implemented export/share routes; the other rows describe the current REST API
-surface.
+implemented export/share routes. `/api/audio/*` exposes the audio workflow; see
+[Audio workflow endpoints](#audio-workflow-endpoints).
 
 | Endpoint | Method | Purpose |
 | --- | --- | --- |
@@ -1101,6 +1105,78 @@ Example response:
 
 If rendering fails, the server writes a placeholder PNG and returns a JSON
 response that explains that fallback.
+
+## Audio workflow endpoints
+
+The audio workflow endpoints manage Alice project audio resources, background
+audio, cue definitions, and cue activity. `GET /api/audio/state` and all
+mutating `/api/audio/*` routes require `X-Alice-Local-Api-Token` when the server
+is started with `--api-token`.
+
+Endpoint summary:
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/api/audio/state` | `GET` | Read current project audio state |
+| `/api/audio/resources` | `POST` | Add or replace an audio resource |
+| `/api/audio/background` | `POST` | Configure background audio |
+| `/api/audio/cues` | `POST` | Add or replace an audio cue |
+| `/api/audio/cues/:id/play` | `POST` | Mark an audio cue as playing |
+| `/api/audio/cues/:id/stop` | `POST` | Mark an audio cue as stopped |
+| `/api/audio/cues/:id` | `DELETE` | Remove an audio cue |
+
+Request to read audio state:
+
+```bash
+curl http://127.0.0.1:3000/api/audio/state \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN"
+```
+
+Request to set background audio:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/audio/background \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"resourceId":"theme","enabled":true,"loop":true,"volume":0.35,"pan":0}'
+```
+
+Response shape:
+
+```json
+{
+  "schema_version": "eatme.alice-audio-workflow-state/v1",
+  "status": "ok",
+  "operation": "set-background",
+  "audio": {
+    "manifestVersion": "alice-web.audio-manifest/v1",
+    "resources": [
+      {
+        "id": "theme",
+        "name": "theme.wav",
+        "path": "resources/audio/theme.wav",
+        "format": "wav",
+        "sizeBytes": 44,
+        "duration": 0,
+        "decodeStatus": "decode-unavailable"
+      }
+    ],
+    "background": {
+      "resourceId": "theme",
+      "enabled": true,
+      "loop": true,
+      "volume": 0.35,
+      "pan": 0
+    },
+    "cues": [],
+    "activeCueIds": []
+  }
+}
+```
+
+See [Audio](./audio.md) for the full state schema, resource upload request,
+background and cue request bodies, TypeScript exports, evidence artifacts, and
+validation rules.
 
 ## Camera workflow endpoints
 
