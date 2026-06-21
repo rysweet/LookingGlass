@@ -145,7 +145,10 @@ The public API contract is defined by the existing tests, `EATME.md`, and observ
 See [API reference](./api-reference.md) and
 [Alice identity boundary](./alice-identity-boundary.md) for endpoint-by-endpoint
 request, response, API header, and runtime identity details. The table includes
-implemented routes, including `/api/camera/*`:
+implemented routes, including `/api/camera/*`. Imported model and texture asset
+routes are a target feature contract documented in
+[Imported model and texture assets](./imported-models-and-textures.md), not part
+of this implemented route table until their route implementation lands:
 
 | Method | Route | Success response | Main side effect |
 | --- | --- | --- | --- |
@@ -336,6 +339,12 @@ project has no loaded scene objects and resets camera workflow state to the
 default Alice home view. Creating a project from a template replaces the active
 project state, resets camera workflow state, and marks the server launched.
 
+The imported asset feature will extend this state with imported model and
+texture descriptors, scene object model resource IDs, surface material bindings,
+and one active archive resource map for parsed and imported bytes. The target
+design uses the same resource map seeded from `readProject()` and passed to
+`writeProject()` so imported bytes cannot drift from loaded archive resources.
+
 ## Route responsibility map
 
 `src/server.ts` is the composition entry point. It creates the Express app, creates one server context, registers focused route modules, and installs the global error handler.
@@ -353,6 +362,11 @@ project state, resets camera workflow state, and marks the server launched.
 | Camera workflow | `src/camera-workflow.ts` | Serializable camera state, movement math, presets, markers, and validation |
 | Camera routes | `src/server/routes/camera-routes.ts` | HTTP translation and route-level token guard for `/api/camera/*` |
 | Routes | `src/server/routes/*.ts` | Translate HTTP requests and responses to service calls |
+
+The imported asset feature will add `src/server/routes/asset-routes.ts` for
+model and texture uploads. Those target routes use the same per-server state and
+Alice API identity as the rest of the local API, with a 25 MiB JSON body limit
+because base64 model and texture uploads can exceed the general API route limit.
 
 Route handlers stay thin: they read request data, call the relevant state or service helper, choose the HTTP status code, and return JSON.
 
@@ -391,6 +405,11 @@ curl -X POST http://127.0.0.1:3000/api/scene/add-object \
   -H 'Content-Type: application/json' \
   -d '{"className":"org.lgna.story.SBiped","name":"bunny"}'
 ```
+
+The imported asset workflow will extend this tutorial with texture import and
+surface binding steps. See
+[Import a model and apply a custom texture](./tutorial-import-model-and-apply-texture.md)
+for the target workflow.
 
 Append an edit proof to `scene.myFirstMethod`:
 

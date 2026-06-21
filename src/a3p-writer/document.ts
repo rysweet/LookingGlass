@@ -40,6 +40,7 @@ export function buildProjectXml(project: AliceProject, baseXmlText: string | nul
   const doc = parseXmlString(baseXmlText ?? MINIMAL_PROJECT_XML_TEMPLATE);
   const root = doc.documentElement;
   setPropertyText(doc, root, "name", project.projectName || "Program");
+  syncImportedAssets(doc, root, project);
 
   const typeNodes = getNamedUserTypeNodes(doc);
   const sceneTypeNode = findSceneTypeNode(typeNodes);
@@ -115,6 +116,8 @@ function fieldFromSceneObject(object: AliceObject): AliceFieldDefinition {
     typeName: object.typeName,
     resourceType: object.resourceType,
     initializer: object.resourceType ?? null,
+    ...(object.modelResourceId ? { modelResourceId: object.modelResourceId } : {}),
+    ...(object.materialBindings ? { materialBindings: object.materialBindings } : {}),
   };
 }
 
@@ -145,6 +148,7 @@ function updateFieldNode(doc: Document, fieldNode: Element, desired: AliceFieldD
   setPropertyText(doc, fieldNode, "name", desired.name);
   if (desired.typeName) setTypeProperty(doc, fieldNode, "valueType", desired.typeName);
   if (desired.resourceType) setResourceInitializer(doc, fieldNode, desired.resourceType);
+  syncFieldImportedAssetMetadata(doc, fieldNode, desired);
 }
 
 function syncMethods(doc: Document, typeNode: Element, desiredMethods: AliceMethod[]): void {
@@ -409,7 +413,69 @@ function createFieldNode(doc: Document, field: AliceFieldDefinition): Element {
   appendStringProperty(doc, fieldNode, "name", field.name);
   appendTypeProperty(doc, fieldNode, "valueType", field.typeName || "java.lang.Object");
   if (field.resourceType) setResourceInitializer(doc, fieldNode, field.resourceType);
+  syncFieldImportedAssetMetadata(doc, fieldNode, field);
   return fieldNode;
+}
+
+function syncImportedAssets(doc: Document, root: Element, project: AliceProject): void {
+  const assets = project.importedAssets ?? [];
+  let existing = directChild(root, "imported-assets");
+  if (assets.length === 0) {
+    if (existing) {
+      root.removeChild(existing);
+    }
+    return;
+  }
+
+  if (!existing) {
+    existing = doc.createElement("imported-assets");
+    root.appendChild(existing);
+  }
+  while (existing.firstChild) existing.removeChild(existing.firstChild);
+
+  for (const asset of assets) {
+    const assetNode = doc.createElement("imported-asset");
+    assetNode.setAttribute("id", asset.id);
+    assetNode.setAttribute("kind", asset.kind);
+    assetNode.setAttribute("name", asset.name);
+    assetNode.setAttribute("fileName", asset.fileName);
+    assetNode.setAttribute("resourcePath", asset.resourcePath);
+    assetNode.setAttribute("contentType", asset.contentType);
+    assetNode.setAttribute("byteLength", String(asset.byteLength));
+    existing.appendChild(assetNode);
+  }
+}
+
+function syncFieldImportedAssetMetadata(doc: Document, fieldNode: Element, desired: AliceFieldDefinition): void {
+  if ("modelResourceId" in desired && typeof desired.modelResourceId === "string" && desired.modelResourceId) {
+    fieldNode.setAttribute("modelResourceId", desired.modelResourceId);
+  } else {
+    fieldNode.removeAttribute("modelResourceId");
+  }
+
+  const existing = directChild(fieldNode, "material-bindings");
+  if (existing) {
+    fieldNode.removeChild(existing);
+  }
+
+  const materialBindings = "materialBindings" in desired && Array.isArray(desired.materialBindings)
+    ? desired.materialBindings
+    : [];
+  if (materialBindings.length === 0) {
+    return;
+  }
+
+  const bindingsNode = doc.createElement("material-bindings");
+  for (const binding of materialBindings) {
+    if (binding.target !== "surface" || !binding.textureResourceId) continue;
+    const bindingNode = doc.createElement("material-binding");
+    bindingNode.setAttribute("target", binding.target);
+    bindingNode.setAttribute("textureResourceId", binding.textureResourceId);
+    bindingsNode.appendChild(bindingNode);
+  }
+  if (bindingsNode.childNodes.length > 0) {
+    fieldNode.appendChild(bindingsNode);
+  }
 }
 
 function setResourceInitializer(doc: Document, fieldNode: Element, resourceType: string): void {

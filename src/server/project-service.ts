@@ -9,6 +9,7 @@ import { executeProject, type LogEntry } from "../tweedle-vm.js";
 import { jointStateSidecarPath, writeJointStateSidecar } from "./joint-state-sidecar.js";
 import { buildCurrentProject, seedDefaultSceneObjects, type ServerState } from "./state.js";
 import type { EvidenceService } from "./evidence-service.js";
+import { readProject } from "../project-io.js";
 
 export type LaunchProjectResult =
   | { ok: true }
@@ -44,7 +45,7 @@ export interface TypeScriptExportResult {
 }
 
 type RequestedProjectLoadResult =
-  | { ok: true; project: AliceProject; projectName: string }
+  | { ok: true; project: AliceProject; projectName: string; resources: Map<string, Uint8Array> }
   | { ok: false; error: string };
 
 function getErrorCode(error: unknown): string | null {
@@ -86,12 +87,14 @@ async function loadRequestedProject(
   if (!readResult.ok) return readResult;
 
   try {
-    const project = await parseA3P(readResult.data);
+    const archive = await readProject(readResult.data);
+    const project = archive.project;
     const fileProjectName = path.basename(resolvedProjectFile, ".a3p");
     return {
       ok: true,
       project,
       projectName: userFacingProjectName(project.projectName, fileProjectName),
+      resources: archive.resources,
     };
   } catch {
     return { ok: false, error: `project file is corrupt or unsupported: ${resolvedProjectFile}` };
@@ -136,6 +139,9 @@ export const projectService: ProjectService = {
       if (!loadResult.ok) return loadResult;
       parsedProject = loadResult.project;
       projectName = loadResult.projectName;
+      state.projectResources = new Map(loadResult.resources);
+    } else {
+      state.projectResources.clear();
     }
 
     state.launched = true;
@@ -203,7 +209,7 @@ export const projectService: ProjectService = {
     }
     const currentProjectBytes = sourceProjectPath
       ? null
-      : await writeA3P(buildCurrentProject(state));
+      : await writeA3P(buildCurrentProject(state), { resources: state.projectResources });
     await evidenceService.writeEditedProjectArtifact(
       sourceProjectPath,
       evidenceDir,
@@ -253,7 +259,7 @@ export const projectService: ProjectService = {
     const savedProjectPath = path.join(saveDir, savedProjectFilename);
 
     const currentProject = buildCurrentProject(state);
-    const a3pBytes = await writeA3P(currentProject);
+    const a3pBytes = await writeA3P(currentProject, { resources: state.projectResources });
     await fs.promises.writeFile(savedProjectPath, a3pBytes);
 
     const saveArtifactFilename = "desktop-save-operation-result.json";

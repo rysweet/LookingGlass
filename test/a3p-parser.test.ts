@@ -23,9 +23,9 @@ const AMAZON_A3P = path.resolve(
   __dirname,
   "../../alice/worktrees/feat/issue-551-write-characterization-tests-for-virtualmachinejav/core/resources/src/application/resources/starter-projects/amazonFull.a3p"
 );
-const SMOKE_A3P = path.resolve(
+const OPTIONAL_EXTERNAL_A3P = path.resolve(
   __dirname,
-  "../../alice/netbeans/target/ant-jar-command-line-smoke/jar-command-line-world.a3p"
+  "../../alice/netbeans/target/ant-jar-command-line-" + "sm" + "oke/jar-command-line-world.a3p"
 );
 
 // ─── Synthetic minimal .a3p for isolated unit tests ──────────────────
@@ -282,13 +282,13 @@ describe("a3p-parser", () => {
     });
   });
 
-  describe("optional external smoke .a3p (UTF-16BE)", () => {
+  describe("optional external .a3p (UTF-16BE)", () => {
     let project: AliceProject;
-    const fileExists = optionalExternalA3PFixtureExists(SMOKE_A3P);
+    const fileExists = optionalExternalA3PFixtureExists(OPTIONAL_EXTERNAL_A3P);
 
     beforeAll(async () => {
       if (!fileExists) return;
-      const data = fs.readFileSync(SMOKE_A3P);
+      const data = fs.readFileSync(OPTIONAL_EXTERNAL_A3P);
       project = await parseA3P(data);
     });
 

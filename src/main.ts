@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { parseA3P, type AliceObject, type AliceProject } from "./a3p-parser";
+import { writeA3P } from "./a3p-writer/browser";
 import {
   applyCameraPreset,
   createDefaultCameraWorkflowState,
@@ -13,6 +14,11 @@ import {
   type CameraPreset,
   type CameraWorkflowState,
 } from "./camera-workflow";
+import {
+  applyTextureBinding,
+  importedAssetName,
+  importProjectAsset,
+} from "./imported-project-assets";
 import { buildScene } from "./scene-builder";
 import { disposeSceneResources } from "./scene-disposal";
 
@@ -25,6 +31,14 @@ function requireElement<T extends HTMLElement>(id: string, ctor: abstract new (.
 }
 
 const fileInput = requireElement("file-input", HTMLInputElement);
+const importModelInput = requireElement("import-model-input", HTMLInputElement);
+const importedModelList = requireElement("imported-model-list", HTMLUListElement);
+const importTextureInput = requireElement("import-texture-input", HTMLInputElement);
+const importedTextureList = requireElement("imported-texture-list", HTMLUListElement);
+const createShapeButton = requireElement("create-shape-button", HTMLButtonElement);
+const applyTextureButton = requireElement("apply-texture-button", HTMLButtonElement);
+const selectedObjectMaterial = requireElement("selected-object-material", HTMLElement);
+const saveProjectButton = requireElement("save-project-button", HTMLButtonElement);
 const objectList = requireElement("object-list", HTMLUListElement);
 const status = requireElement("status", HTMLElement);
 const canvas = requireElement("viewport", HTMLCanvasElement);
@@ -46,6 +60,9 @@ let currentScene: THREE.Scene | null = null;
 let currentCamera: THREE.PerspectiveCamera | null = null;
 let controls: OrbitControls | null = null;
 let lastProject: AliceProject | null = null;
+let selectedObjectName: string | null = null;
+let boxCounter = 0;
+const importedResourceBytes = new Map<string, Uint8Array>();
 let cameraWorkflow: CameraWorkflowState = createDefaultCameraWorkflowState();
 
 function describeObject(obj: AliceObject): string {
@@ -80,9 +97,62 @@ function renderObjectList(project: AliceProject): void {
   clearObjectList();
   for (const object of project.sceneObjects) {
     const item = document.createElement("li");
+    item.tabIndex = 0;
     item.textContent = describeObject(object);
+    item.addEventListener("click", () => selectObject(project, object.name));
+    item.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectObject(project, object.name);
+      }
+    });
     objectList.appendChild(item);
   }
+}
+
+function renderImportedAssets(project: AliceProject): void {
+  importedModelList.replaceChildren();
+  importedTextureList.replaceChildren();
+
+  for (const asset of project.importedAssets ?? []) {
+    const item = document.createElement("li");
+    item.textContent = asset.name;
+    if (asset.kind === "model") {
+      importedModelList.appendChild(item);
+    } else {
+      importedTextureList.appendChild(item);
+    }
+  }
+}
+
+function renderSelectedObjectMaterial(project: AliceProject): void {
+  if (!selectedObjectName) {
+    selectedObjectMaterial.textContent = "No object selected";
+    return;
+  }
+
+  const object = project.sceneObjects.find((candidate) => candidate.name === selectedObjectName);
+  if (!object) {
+    selectedObjectName = null;
+    selectedObjectMaterial.textContent = "No object selected";
+    return;
+  }
+
+  const surfaceBinding = object.materialBindings?.find((binding) => binding.target === "surface");
+  selectedObjectMaterial.textContent = surfaceBinding
+    ? `${object.name}: ${importedAssetName(project, surfaceBinding.textureResourceId)}`
+    : `${object.name}: no texture`;
+}
+
+function renderProjectState(project: AliceProject): void {
+  renderObjectList(project);
+  renderImportedAssets(project);
+  renderSelectedObjectMaterial(project);
+}
+
+function selectObject(project: AliceProject, objectName: string): void {
+  selectedObjectName = objectName;
+  renderSelectedObjectMaterial(project);
 }
 
 function resizeRenderer(): void {
@@ -222,6 +292,20 @@ async function loadProjectFromFile(file: File): Promise<AliceProject> {
   return parseA3P(buffer);
 }
 
+function ensureEditableProject(): AliceProject {
+  if (!lastProject) {
+    lastProject = {
+      version: "3.10.0.0",
+      projectName: "Alice Imported Assets",
+      sceneObjects: [],
+      methods: [],
+      importedAssets: [],
+    };
+  }
+  lastProject.importedAssets ??= [];
+  return lastProject;
+}
+
 async function handleFileSelection(): Promise<void> {
   const file = await readSelectedFile(fileInput);
   if (!file) {
@@ -234,7 +318,8 @@ async function handleFileSelection(): Promise<void> {
   try {
     const project = await loadProjectFromFile(file);
     lastProject = project;
-    renderObjectList(project);
+    selectedObjectName = null;
+    renderProjectState(project);
     applyScene(project);
     setStatusMessage(describeProject(project));
   } catch (error) {
@@ -248,6 +333,121 @@ function describeLastProject(): string {
     return "No project loaded";
   }
   return `${lastProject.projectName}: ${lastProject.sceneObjects.length} objects`;
+}
+
+async function importSelectedAsset(input: HTMLInputElement, kind: "model" | "texture"): Promise<void> {
+  const file = await readSelectedFile(input);
+  if (!file) {
+    return;
+  }
+
+  try {
+    const project = ensureEditableProject();
+    const asset = importProjectAsset({
+      project,
+      resources: importedResourceBytes,
+      kind,
+      fileName: file.name,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    });
+    renderProjectState(project);
+    applyScene(project);
+    setStatusMessage(`Imported Alice ${kind} "${asset.name}".`);
+  } catch (error) {
+    console.error(error);
+    setErrorMessage(error);
+  } finally {
+    input.value = "";
+  }
+}
+
+function createBox(): void {
+  const project = ensureEditableProject();
+  const name = nextBoxName(project);
+  project.sceneObjects.push({
+    name,
+    typeName: "org.lgna.story.SBox",
+    resourceType: null,
+    position: { x: 0, y: 0.5, z: 0 },
+    orientation: null,
+    size: { width: 1, height: 1, depth: 1 },
+  });
+  selectedObjectName = name;
+  renderProjectState(project);
+  applyScene(project);
+  setStatusMessage(`Created Alice box "${name}".`);
+}
+
+function nextBoxName(project: AliceProject): string {
+  while (project.sceneObjects.some((object) => object.name === (boxCounter === 0 ? "box" : `box${boxCounter + 1}`))) {
+    boxCounter += 1;
+  }
+  const name = boxCounter === 0 ? "box" : `box${boxCounter + 1}`;
+  boxCounter += 1;
+  return name;
+}
+
+function applyImportedTextureToSelectedObject(): void {
+  if (!lastProject || !selectedObjectName) {
+    setErrorMessage(new Error("Select an Alice scene object before applying a texture."));
+    return;
+  }
+
+  const texture = lastProject.importedAssets?.find((asset) => asset.kind === "texture");
+  if (!texture) {
+    setErrorMessage(new Error("Import an Alice texture before applying it."));
+    return;
+  }
+
+  try {
+    applyTextureBinding(lastProject, {
+      objectName: selectedObjectName,
+      textureResourceId: texture.id,
+      target: "surface",
+    });
+    renderProjectState(lastProject);
+    applyScene(lastProject);
+    setStatusMessage(`Applied Alice texture "${texture.name}".`);
+  } catch (error) {
+    console.error(error);
+    setErrorMessage(error);
+  }
+}
+
+async function saveCurrentProject(): Promise<void> {
+  if (!lastProject) {
+    setErrorMessage(new Error("No Alice project is ready to save."));
+    return;
+  }
+
+  try {
+    const bytes = await writeA3P(lastProject, { resources: importedResourceBytes });
+    const downloadBytes = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(downloadBytes).set(bytes);
+    const blob = new Blob([downloadBytes], {
+      type: "application/vnd.alice.a3p",
+    });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `${safeProjectFilename(lastProject.projectName)}.a3p`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setStatusMessage(`Saved Alice project "${lastProject.projectName}".`);
+  } catch (error) {
+    console.error(error);
+    setErrorMessage(error);
+  }
+}
+
+function safeProjectFilename(projectName: string): string {
+  return projectName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "alice-project";
 }
 
 function installWindowHandlers(): void {
@@ -265,6 +465,22 @@ function installWindowHandlers(): void {
 function installInputHandlers(): void {
   fileInput.addEventListener("change", () => {
     void handleFileSelection();
+  });
+
+  importModelInput.addEventListener("change", () => {
+    void importSelectedAsset(importModelInput, "model");
+  });
+
+  importTextureInput.addEventListener("change", () => {
+    void importSelectedAsset(importTextureInput, "texture");
+  });
+
+  createShapeButton.addEventListener("click", createBox);
+
+  applyTextureButton.addEventListener("click", applyImportedTextureToSelectedObject);
+
+  saveProjectButton.addEventListener("click", () => {
+    void saveCurrentProject();
   });
 
   cameraMoveForward.addEventListener("click", () => {
@@ -307,6 +523,7 @@ function initializeApplication(): void {
   installWindowHandlers();
   installInputHandlers();
   renderCameraWorkflow();
+  renderProjectState(ensureEditableProject());
   animate();
   setStatusMessage("Choose an .a3p file to begin.");
   setCameraStatusMessage("Camera ready.");

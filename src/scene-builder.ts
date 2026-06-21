@@ -433,7 +433,7 @@ function createPropPlaceholder(obj: AliceObject): THREE.Mesh {
 
   // BoxGeometry varies per object — cannot cache
   const geo = markSceneOwnedGeometry(new THREE.BoxGeometry(w, h, d));
-  const mat = obj.typeName.includes("SProp") ? propMat() : modelMat();
+  const mat = materialForObject(obj, obj.typeName.includes("SProp") ? propMat() : modelMat());
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
 
@@ -443,12 +443,26 @@ function createPropPlaceholder(obj: AliceObject): THREE.Mesh {
 }
 
 function createGenericPlaceholder(obj: AliceObject): THREE.Mesh {
-  const mesh = new THREE.Mesh(sphereGeo(), defaultMat());
+  const mesh = new THREE.Mesh(sphereGeo(), materialForObject(obj, defaultMat()));
   mesh.castShadow = true;
 
   applyTransform(mesh, obj);
   mesh.name = obj.name;
   return mesh;
+}
+
+function materialForObject(obj: AliceObject, fallback: THREE.MeshLambertMaterial): THREE.MeshLambertMaterial {
+  const surfaceBinding = obj.materialBindings?.find((binding) => binding.target === "surface");
+  if (!surfaceBinding) {
+    return fallback;
+  }
+
+  const material = fallback.clone();
+  markSceneOwnedMaterials(material);
+  material.color = new THREE.Color(0xffffff);
+  material.name = `${obj.name}-surface-${surfaceBinding.textureResourceId}`;
+  material.userData.textureResourceId = surfaceBinding.textureResourceId;
+  return material;
 }
 
 function applyTransform(mesh: THREE.Object3D, obj: AliceObject): void {

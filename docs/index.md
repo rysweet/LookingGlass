@@ -34,7 +34,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 | Story API and scene model | Represents scenes, entities, events, joints, and runtime behavior | [Story API](./story-api.md), [Joint manipulation](./joint-manipulation.md), [planned Story API public barrel topology](./story-api-public-barrels.md), [SScene listener methods](./sscene-listener-methods.md), [Event system](./event-system.md), [Collision detection](./collision-detection.md) |
 | Rendering | Builds and draws 3D scenes in the browser | [Scene graph](./scene-graph.md), [Scene rendering](./scene-rendering.md), [Scene manager](./scene-manager.md), [camera workflow usage](./camera-workflow-usage.md), [camera workflow API](./camera-workflow-api.md) |
 | IDE workflows | Supports editing, running, and curriculum tasks | [IDE operations](./ide-operations.md), [Grading pipeline](./grading-pipeline.md) |
-| Assets and resources | Loads models, images, audio, and project files | [Creating, using, and testing 3D character assets](./creating-using-testing-3d-character-assets.md), [Model resources](./model-resources.md), [Open-asset pipeline](./open-asset-pipeline.md), [Resource manager](./resource-manager.md), [Project IO](./project-io.md), [Image editor](./image-editor.md), [Audio](./audio.md) |
+| Assets and resources | Loads models, images, audio, textures, and project files | [Target imported asset workflow](./tutorial-import-model-and-apply-texture.md), [Imported model and texture target contract](./imported-models-and-textures.md), [Creating, using, and testing 3D character assets](./creating-using-testing-3d-character-assets.md), [Model resources](./model-resources.md), [Open-asset pipeline](./open-asset-pipeline.md), [Resource manager](./resource-manager.md), [Project IO](./project-io.md), [Image editor](./image-editor.md), [Audio](./audio.md) |
 | eatme integration | Exposes HTTP endpoints and scenario-friendly workflows | [API reference](./api-reference.md), [Server API](./server-api.md), [camera workflow API](./camera-workflow-api.md), [Gadugi test scenarios](./gadugi-test-scenarios.md) |
 | External service integration | Wraps outbound HTTP and WebSocket calls behind retryable adapters | [External service integration](./external-service-integration.md) |
 
@@ -45,6 +45,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Getting started](./getting-started.md)
 - [Verify a local Alice server](./tutorial-alice-server-workflow.md)
 - [Building your first Alice application](./tutorial-building-your-first-alice-app.md)
+- [Target imported asset workflow](./tutorial-import-model-and-apply-texture.md)
 - [Adding open-source 3D models](./tutorial-adding-3d-models.md)
 - [Creating, using, and testing 3D character assets](./creating-using-testing-3d-character-assets.md)
 - [Round-trip an `.a3p` project with Project IO](./tutorial-project-io-round-trip.md)
@@ -77,6 +78,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Grading pipeline](./grading-pipeline.md)
 - [Image editor](./image-editor.md)
 - [Alice identity boundary](./alice-identity-boundary.md)
+- [Imported model and texture target contract](./imported-models-and-textures.md)
 - [Joint manipulation](./joint-manipulation.md)
 - [Creating, using, and testing 3D character assets](./creating-using-testing-3d-character-assets.md)
 - [Model resources](./model-resources.md)

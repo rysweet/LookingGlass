@@ -70,6 +70,7 @@ export async function parseA3PFromZip(
     jointHierarchy: extractJointHierarchy(nodeIndex.jointImplementations),
     boundingBoxes: extractBoundingBoxes(nodeIndex.modelResourceInfos),
     textureRefs: extractTextureRefs(nodeIndex.textureReferences, zip),
+    importedAssets: extractImportedAssets(doc),
   };
 
   attachA3PSource(project, {
@@ -80,6 +81,38 @@ export async function parseA3PFromZip(
   });
 
   return project;
+}
+
+function extractImportedAssets(doc: Document): AliceProject["importedAssets"] {
+  const importedAssetsRoot = doc.getElementsByTagName("imported-assets")[0];
+  if (!importedAssetsRoot) return [];
+
+  const assets: NonNullable<AliceProject["importedAssets"]> = [];
+  const assetNodes = importedAssetsRoot.getElementsByTagName("imported-asset");
+  for (let index = 0; index < assetNodes.length; index += 1) {
+    const node = assetNodes[index];
+    const id = node.getAttribute("id");
+    const kind = node.getAttribute("kind");
+    const name = node.getAttribute("name");
+    const fileName = node.getAttribute("fileName");
+    const resourcePath = node.getAttribute("resourcePath");
+    const contentType = node.getAttribute("contentType");
+    const byteLengthText = node.getAttribute("byteLength");
+    const byteLength = byteLengthText === null ? NaN : Number.parseInt(byteLengthText, 10);
+    if (
+      id &&
+      (kind === "model" || kind === "texture") &&
+      name &&
+      fileName &&
+      resourcePath &&
+      contentType &&
+      Number.isSafeInteger(byteLength) &&
+      byteLength >= 0
+    ) {
+      assets.push({ id, kind, name, fileName, resourcePath, contentType, byteLength });
+    }
+  }
+  return assets;
 }
 
 async function readTextFile(

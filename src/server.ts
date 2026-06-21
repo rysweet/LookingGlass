@@ -1,5 +1,6 @@
 import express from "express";
 import { createServerContext, type ServerOptions } from "./server/context.js";
+import { registerAssetRoutes } from "./server/routes/asset-routes.js";
 import { registerCodeRoutes } from "./server/routes/code-routes.js";
 import { registerCameraRoutes } from "./server/routes/camera-routes.js";
 import { registerEventRoutes } from "./server/routes/event-routes.js";
@@ -63,7 +64,7 @@ export function createServer(options: ServerOptions): express.Express {
   const context = createServerContext(options);
 
   app.use(createLocalApiProtectionMiddleware(context.localApiSecurity));
-  app.use(express.json({ limit: "1mb" }));
+  app.use(express.json({ limit: "40mb" }));
   app.use((req, res, next) => {
     if (requestHasBody(req) && req.body === undefined) {
       res.status(400).json({ error: "request body must be JSON" });
@@ -75,6 +76,7 @@ export function createServer(options: ServerOptions): express.Express {
   registerLaunchRoutes(app, context);
   registerHealthRoutes(app, context);
   registerCameraRoutes(app, context);
+  registerAssetRoutes(app, context);
   registerSceneRoutes(app, context);
   registerJointRoutes(app, context);
   registerCodeRoutes(app, context);

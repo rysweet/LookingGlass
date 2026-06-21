@@ -19,9 +19,11 @@ export {
   type A3PMethodSourceMetadata,
   type A3PSourceMetadata,
   type AliceFieldDefinition,
+  type AliceMaterialBinding,
   type AliceMethod,
   type AliceObject,
   type AliceProject,
   type AliceStatement,
   type AliceTypeDefinition,
+  type ImportedProjectAsset,
 } from "./a3p-parser/types.js";

@@ -32,6 +32,7 @@ export interface ServerState {
   sceneObjects: Map<string, SceneObject>;
   procedures: Map<string, string[]>;
   parsedProject: AliceProject | null;
+  projectResources: Map<string, Uint8Array>;
   cameraWorkflow: CameraWorkflowState;
   eventSystem: EventSystem;
   templateLibrary: TemplateLibrary;
@@ -50,6 +51,7 @@ export function createInitialServerState(): ServerState {
     sceneObjects,
     procedures: new Map([["myFirstMethod", []]]),
     parsedProject: null,
+    projectResources: new Map(),
     cameraWorkflow: createDefaultCameraWorkflowState(),
     eventSystem: new EventSystem({
       hasObject: (name) => sceneObjects.has(name),
@@ -74,13 +76,15 @@ export function buildCurrentProject(state: ServerState): AliceProject {
 
   const sceneObjectsByName = new Map(baseProject.sceneObjects.map((object) => [object.name, object]));
   for (const object of state.sceneObjects.values()) {
+    const existing = sceneObjectsByName.get(object.name);
     sceneObjectsByName.set(object.name, {
+      ...existing,
       name: object.name,
       typeName: object.className,
-      resourceType: null,
+      resourceType: existing?.resourceType ?? null,
       position: object.position,
-      orientation: null,
-      size: null,
+      orientation: existing?.orientation ?? null,
+      size: existing?.size ?? null,
     });
   }
   baseProject.sceneObjects = Array.from(sceneObjectsByName.values());

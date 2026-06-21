@@ -43,6 +43,7 @@ export const templateService: TemplateService = {
     await fs.promises.writeFile(newProjectPath, a3pBytes);
 
     state.parsedProject = project;
+    state.projectResources.clear();
     state.projectName = project.projectName;
     state.projectPath = newProjectPath;
     state.cameraWorkflow = createDefaultCameraWorkflowState();

@@ -10,6 +10,7 @@ import {
 import { extractStatements } from "./statements.js";
 import type {
   AliceFieldDefinition,
+  AliceMaterialBinding,
   AliceMethod,
   AliceObject,
   AliceTypeDefinition,
@@ -89,6 +90,12 @@ function extractFieldDefinitions(typeNode: Element, keyMap: Map<string, Element>
       typeName: extractFieldValueType(field, keyMap),
       resourceType: extractResourceType(field, keyMap),
       initializer: summarizeInitializer(field, keyMap),
+      ...(field.getAttribute("modelResourceId")
+        ? { modelResourceId: field.getAttribute("modelResourceId") ?? undefined }
+        : {}),
+      ...(extractMaterialBindings(field).length > 0
+        ? { materialBindings: extractMaterialBindings(field) }
+        : {}),
     });
   }
 
@@ -160,7 +167,30 @@ function parseUserField(field: Element, keyMap: Map<string, Element>): AliceObje
   }
 
   const resourceType = extractResourceType(field, keyMap);
-  return { name, typeName, resourceType, position: null, orientation: null, size: null };
+  const object: AliceObject = { name, typeName, resourceType, position: null, orientation: null, size: null };
+  const modelResourceId = field.getAttribute("modelResourceId");
+  if (modelResourceId) {
+    object.modelResourceId = modelResourceId;
+  }
+  const materialBindings = extractMaterialBindings(field);
+  if (materialBindings.length > 0) {
+    object.materialBindings = materialBindings;
+  }
+  return object;
+}
+
+function extractMaterialBindings(field: Element): AliceMaterialBinding[] {
+  const bindings: AliceMaterialBinding[] = [];
+  const bindingNodes = field.getElementsByTagName("material-binding");
+  for (let index = 0; index < bindingNodes.length; index += 1) {
+    const node = bindingNodes[index];
+    const target = node.getAttribute("target");
+    const textureResourceId = node.getAttribute("textureResourceId");
+    if (target === "surface" && textureResourceId) {
+      bindings.push({ target, textureResourceId });
+    }
+  }
+  return bindings;
 }
 
 function enrichFromMethods(sceneType: Element, objects: AliceObject[], keyMap: Map<string, Element>): void {
