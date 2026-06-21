@@ -1,10 +1,16 @@
 import * as fs from "fs";
 import * as path from "path";
-import { parseA3P, type AliceProject } from "../a3p-parser.js";
+import type { AliceProject } from "../a3p-parser.js";
 import { writeA3P } from "../a3p-writer/archive.js";
 import { createDefaultCameraWorkflowState } from "../camera-workflow.js";
+import { readProject, writeProject, type AliceProjectArchive } from "../project-io.js";
 import { executeProject, type LogEntry } from "../tweedle-vm.js";
-import { buildCurrentProject, seedDefaultSceneObjects, type ServerState } from "./state.js";
+import {
+  buildCurrentProject,
+  seedDefaultSceneObjects,
+  syncServerSceneObjectsFromProject,
+  type ServerState,
+} from "./state.js";
 import type { EvidenceService } from "./evidence-service.js";
 
 export type LaunchProjectResult =
@@ -33,7 +39,7 @@ export interface ProjectService {
 }
 
 type RequestedProjectLoadResult =
-  | { ok: true; project: AliceProject; projectName: string }
+  | { ok: true; archive: AliceProjectArchive; project: AliceProject; projectName: string }
   | { ok: false; error: string };
 
 function getErrorCode(error: unknown): string | null {
@@ -75,10 +81,12 @@ async function loadRequestedProject(
   if (!readResult.ok) return readResult;
 
   try {
-    const project = await parseA3P(readResult.data);
+    const archive = await readProject(readResult.data);
+    const project = archive.project;
     const fileProjectName = path.basename(resolvedProjectFile, ".a3p");
     return {
       ok: true,
+      archive,
       project,
       projectName: userFacingProjectName(project.projectName, fileProjectName),
     };
@@ -116,6 +124,12 @@ export const projectService: ProjectService = {
       if (!loadResult.ok) return loadResult;
       parsedProject = loadResult.project;
       projectName = loadResult.projectName;
+      state.projectArchive = loadResult.archive;
+      state.resources = new Map(loadResult.archive.resources);
+      syncServerSceneObjectsFromProject(state, loadResult.project);
+    } else {
+      state.projectArchive = null;
+      state.resources = new Map();
     }
 
     state.launched = true;
@@ -233,7 +247,8 @@ export const projectService: ProjectService = {
     const savedProjectPath = path.join(saveDir, savedProjectFilename);
 
     const currentProject = buildCurrentProject(state);
-    const a3pBytes = await writeA3P(currentProject);
+    const archive = archiveForCurrentProject(state, currentProject);
+    const a3pBytes = await writeProject(archive, { generateThumbnailFromScene: false });
     await fs.promises.writeFile(savedProjectPath, a3pBytes);
 
     const saveArtifactFilename = "desktop-save-operation-result.json";
@@ -259,7 +274,10 @@ export const projectService: ProjectService = {
     if (!state.parsedProject && state.projectPath) {
       try {
         const data = await fs.promises.readFile(state.projectPath);
-        state.parsedProject = await parseA3P(data);
+        const archive = await readProject(data);
+        state.projectArchive = archive;
+        state.resources = new Map(archive.resources);
+        state.parsedProject = archive.project;
       } catch (err) {
         throw new ProjectRunError("Failed to parse .a3p before running the world.", {
           cause: err instanceof Error ? err : undefined,
@@ -300,3 +318,30 @@ export const projectService: ProjectService = {
     };
   },
 };
+
+function archiveForCurrentProject(state: ServerState, project: AliceProject): AliceProjectArchive {
+  if (state.projectArchive) {
+    return {
+      ...state.projectArchive,
+      project,
+      resources: state.resources,
+    };
+  }
+
+  return {
+    project,
+    manifest: null,
+    resources: state.resources,
+    resourceEntries: [],
+    thumbnail: null,
+    versionInfo: {
+      originalAliceVersion: project.version,
+      detectedAliceVersion: project.version,
+      manifestVersion: null,
+      xmlVersion: null,
+      versionSource: "default",
+      migrated: false,
+      migrationSteps: [],
+    },
+  };
+}

@@ -5,6 +5,7 @@ import {
   createDefaultCameraWorkflowState,
   type CameraWorkflowState,
 } from "../camera-workflow.js";
+import type { AliceProjectArchive } from "../project-io.js";
 
 export interface Position {
   x: number;
@@ -32,6 +33,8 @@ export interface ServerState {
   procedures: Map<string, string[]>;
   parsedProject: AliceProject | null;
   cameraWorkflow: CameraWorkflowState;
+  projectArchive: AliceProjectArchive | null;
+  resources: Map<string, Uint8Array>;
   eventSystem: EventSystem;
   templateLibrary: TemplateLibrary;
 }
@@ -49,6 +52,8 @@ export function createInitialServerState(): ServerState {
     procedures: new Map([["myFirstMethod", []]]),
     parsedProject: null,
     cameraWorkflow: createDefaultCameraWorkflowState(),
+    projectArchive: null,
+    resources: new Map(),
     eventSystem: new EventSystem({
       hasObject: (name) => sceneObjects.has(name),
       getObjectPosition: (name) => sceneObjects.get(name)?.position ?? null,
@@ -59,6 +64,17 @@ export function createInitialServerState(): ServerState {
 
 export function buildCurrentProject(state: ServerState): AliceProject {
   if (state.parsedProject) return state.parsedProject;
+  return buildProjectFromState(state);
+}
+
+export function ensureCurrentProject(state: ServerState): AliceProject {
+  if (!state.parsedProject) {
+    state.parsedProject = buildProjectFromState(state);
+  }
+  return state.parsedProject;
+}
+
+function buildProjectFromState(state: ServerState): AliceProject {
   return {
     version: "3.10",
     projectName: state.projectName,
@@ -85,6 +101,24 @@ export function buildCurrentProject(state: ServerState): AliceProject {
   };
 }
 
+export function addSceneObjectToCurrentProject(
+  state: ServerState,
+  input: { name: string; className: string },
+): void {
+  const project = ensureCurrentProject(state);
+  if (project.sceneObjects.some((object) => object.name === input.name)) {
+    return;
+  }
+  project.sceneObjects.push({
+    name: input.name,
+    typeName: input.className,
+    resourceType: null,
+    position: null,
+    orientation: null,
+    size: null,
+  });
+}
+
 export function seedDefaultSceneObjects(state: ServerState): void {
   if (state.sceneObjects.size !== 0) return;
 
@@ -100,6 +134,17 @@ export function seedDefaultSceneObjects(state: ServerState): void {
   };
   state.sceneObjects.set("ground", ground);
   state.sceneObjects.set("camera", camera);
+}
+
+export function syncServerSceneObjectsFromProject(state: ServerState, project: AliceProject): void {
+  state.sceneObjects.clear();
+  for (const object of project.sceneObjects) {
+    state.sceneObjects.set(object.name, {
+      name: object.name,
+      className: object.typeName,
+      position: object.position ?? { ...DEFAULT_POSITION },
+    });
+  }
 }
 
 export function parseMethodParams(
