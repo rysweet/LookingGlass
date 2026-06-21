@@ -2,6 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { parseA3P, type AliceProject } from "../a3p-parser.js";
 import { writeA3P } from "../a3p-writer/archive.js";
+import { TypeScriptExporter } from "../project-export.js";
+import type { TypeScriptSourceManifest } from "../code-generation.js";
 import { executeProject, type LogEntry } from "../tweedle-vm.js";
 import { buildCurrentProject, seedDefaultSceneObjects, type ServerState } from "./state.js";
 import type { EvidenceService } from "./evidence-service.js";
@@ -29,6 +31,14 @@ export interface ProjectService {
     evidenceDir: string,
     evidenceService: EvidenceService,
   ): Promise<Record<string, unknown>>;
+  exportTypeScript(state: ServerState): Promise<TypeScriptExportResult>;
+}
+
+export interface TypeScriptExportResult {
+  filename: "alice-web-typescript-source.zip";
+  contentType: "application/zip";
+  archive: Buffer;
+  manifest: TypeScriptSourceManifest;
 }
 
 type RequestedProjectLoadResult =
@@ -98,6 +108,15 @@ export class ProjectRunError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "ProjectRunError";
+  }
+}
+
+export class ProjectExportError extends Error {
+  readonly status = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ProjectExportError";
   }
 }
 
@@ -295,6 +314,21 @@ export const projectService: ProjectService = {
     return {
       ...runResult,
       evidenceArtifact: runEvidencePath,
+    };
+  },
+
+  async exportTypeScript(state) {
+    if (!state.launched) {
+      throw new ProjectExportError("Not launched. Call POST /api/launch first before exporting the current project.");
+    }
+
+    const currentProject = buildCurrentProject(state);
+    const exported = await new TypeScriptExporter().export(currentProject);
+    return {
+      filename: "alice-web-typescript-source.zip",
+      contentType: "application/zip",
+      archive: Buffer.from(exported.archive),
+      manifest: exported.manifest,
     };
   },
 };

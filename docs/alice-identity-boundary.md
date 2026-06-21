@@ -227,6 +227,9 @@ environment variables, local paths, or repository names.
 | `runtime` | `alice-web` | `/api/health`, `print-config`, run-world results, runtime metadata |
 | `source` | `alice-web` | Evidence artifacts that identify the implementation source |
 | HTML `generator` meta | `Alice export-html` | Exported HTML documents |
+| TypeScript source archive filename | `alice-web-typescript-source.zip` | Downloaded TypeScript source handoff |
+| TypeScript source archive root | `alice-web-typescript-source/` | ZIP entry root for generated TypeScript handoff |
+| TypeScript source manifest `schemaVersion` | `alice-web.typescript-source-manifest/v1` | Generated TypeScript source `manifest.json` |
 | glTF/glb source generator | `Alice` | Asset pipeline source metadata before glTF serialization |
 | `author` | `Alice` | Generated package/export metadata when an author field is emitted |
 | `code_editor_backing` | `alice-web` | Code-edit proof artifacts |
@@ -296,4 +299,5 @@ asserts that:
 - [Verify a local Alice server](./tutorial-alice-server-workflow.md)
 - [Server API](./server-api.md)
 - [API reference](./api-reference.md)
+- [TypeScript source export](./typescript-source-export.md)
 - [Getting started](./getting-started.md)

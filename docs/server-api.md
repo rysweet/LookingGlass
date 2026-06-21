@@ -173,6 +173,19 @@ instances also require the token passed at startup with `--api-token` in the
 `X-Alice-Local-Api-Token` header and reject non-local `Host` or browser
 `Origin` headers.
 
+### TypeScript source export route
+
+`GET /api/projects/current/export/typescript` downloads the current Alice
+project as an Alice-branded ZIP rooted at `alice-web-typescript-source/`. It is
+read-only, but it can expose project source, so keep serving it through the same
+local API surface as current-project operations.
+
+The response sets `Content-Type: application/zip`,
+`Content-Disposition: attachment; filename="alice-web-typescript-source.zip"`,
+and `Cache-Control: no-store`. See
+[TypeScript source export](./typescript-source-export.md) for archive
+contents and generated-source conventions.
+
 ## Evidence artifacts
 
 Evidence output is rooted at `--evidence-dir`. The server writes these stable artifact names:

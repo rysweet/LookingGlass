@@ -7,7 +7,8 @@ shut the server down cleanly.
 
 The completed scenario set verifies Java Alice parity from the outside in:
 project open and rendering, Tweedle world execution, scene entity manipulation,
-event handling, and save/export round trips.
+event handling, and save/export round trips. The TypeScript source handoff
+export scenario is covered by the TypeScript source export handoff scenario.
 
 ## Quick start
 
@@ -59,8 +60,12 @@ NODE_OPTIONS=--max-old-space-size=32768 gadugi-test run -d gadugi
 | `gadugi/04-event-system.yaml` | `Event System` | Register events, fire matching and non-matching events, reject invalid input |
 | `gadugi/05-save-export-roundtrip.yaml` | `Save / Export Round-Trip` | Edit a project, save it, relaunch, and verify the saved project opens |
 
-The files are level 3 integration tests. They exercise the built server process
+These files are level 3 integration tests. They exercise the built server process
 and REST API rather than importing TypeScript modules directly.
+
+`gadugi/06-typescript-source-export.yaml` covers TypeScript source export by
+creating/editing a project, downloading the source ZIP, and verifying
+archive/source contents.
 
 ## Compatibility gate
 
@@ -198,6 +203,9 @@ uses.
 | `/api/events/fire` | `POST` | 04 |
 | `/api/code/edit-procedure` | `POST` | 05 |
 | `/api/project/save` | `POST` | 05 |
+
+`GET /api/projects/current/export/typescript` is covered by
+`gadugi/06-typescript-source-export.yaml`.
 
 ## Scenario details
 
