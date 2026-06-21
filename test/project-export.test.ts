@@ -6,6 +6,7 @@ import {
   HTMLExporter,
   ProjectPackager,
   ScreenshotCapture,
+  TypeScriptExporter,
   VideoExporter,
 } from "../src/project-export.js";
 import { ProjectIoError } from "../src/project-io.js";
@@ -103,5 +104,98 @@ describe("project-export", () => {
 
     await expect(packaging).rejects.toBeInstanceOf(ProjectIoError);
     await expect(packaging).rejects.toMatchObject({ code: "unsafe-path" });
+  });
+
+  it("TypeScriptExporter creates a deterministic Alice web source handoff archive", async () => {
+    const first = await new TypeScriptExporter().export(createProjectFixture());
+    const second = await new TypeScriptExporter().export(createProjectFixture());
+    const zip = await JSZip.loadAsync(first.archive);
+
+    expect(first.manifest).toMatchObject({
+      schemaVersion: "alice-web.typescript-source-manifest/v1",
+      product: "alice-web",
+      runtime: "Alice",
+      projectName: "Round 84 Demo",
+      entryPoint: "src/project.ts",
+    });
+    expect(first.entryNames).toEqual(second.entryNames);
+    expect(first.entryNames).toEqual([...first.entryNames].sort());
+    expect(first.entryNames.every((name) => name.startsWith("alice-web-typescript-source/"))).toBe(true);
+    expect(first.entryNames).toContain("alice-web-typescript-source/manifest.json");
+    expect(first.entryNames).toContain("alice-web-typescript-source/package.json");
+    expect(first.entryNames).toContain("alice-web-typescript-source/tsconfig.json");
+    expect(first.entryNames).toContain("alice-web-typescript-source/README.md");
+    expect(first.entryNames).toContain("alice-web-typescript-source/src/project.ts");
+    expect(first.entryNames).toContain("alice-web-typescript-source/src/scene.ts");
+
+    const manifest = JSON.parse(
+      await zip.file("alice-web-typescript-source/manifest.json")!.async("string"),
+    );
+    const packageJson = JSON.parse(
+      await zip.file("alice-web-typescript-source/package.json")!.async("string"),
+    );
+    const tsconfig = JSON.parse(
+      await zip.file("alice-web-typescript-source/tsconfig.json")!.async("string"),
+    );
+    const readme = await zip.file("alice-web-typescript-source/README.md")!.async("string");
+    const source = await zip.file("alice-web-typescript-source/src/project.ts")!.async("string");
+
+    expect(manifest.files).toEqual(expect.arrayContaining(["src/project.ts", "src/scene.ts"]));
+    expect(packageJson).toMatchObject({
+      name: "alice-web-typescript-source",
+      private: true,
+      type: "module",
+    });
+    expect(packageJson.scripts).toEqual({ typecheck: "tsc --noEmit" });
+    expect(tsconfig.compilerOptions.noEmit).toBe(true);
+    expect(readme).toContain("Alice web TypeScript source export");
+    expect(source).toContain("Round 84 Demo");
+    expect(`${JSON.stringify(manifest)}\n${JSON.stringify(packageJson)}\n${readme}\n${source}`).not.toMatch(/lookingglass/i);
+  });
+
+  it("TypeScriptExporter rejects empty generated source entries", async () => {
+    const exporter = new TypeScriptExporter(() => ({
+      manifest: {
+        schemaVersion: "alice-web.typescript-source-manifest/v1",
+        product: "alice-web",
+        runtime: "Alice",
+        projectName: "Empty",
+        entryPoint: "src/project.ts",
+        files: [],
+        sourceFileCount: 0,
+        sceneObjectCount: 0,
+        procedureCount: 0,
+        unsupportedBehaviorCount: 0,
+      },
+      entries: [],
+    }));
+
+    await expect(exporter.export(createProjectFixture())).rejects.toThrow(/empty/i);
+  });
+
+  it.each([
+    "../escape.ts",
+    "/absolute.ts",
+    "src\\backslash.ts",
+    "src/../escape.ts",
+  ])("TypeScriptExporter rejects unsafe generated entry path %s", async (path) => {
+    const exporter = new TypeScriptExporter(() => ({
+      manifest: {
+        schemaVersion: "alice-web.typescript-source-manifest/v1",
+        product: "alice-web",
+        runtime: "Alice",
+        projectName: "Unsafe",
+        entryPoint: "src/project.ts",
+        files: [path],
+        sourceFileCount: 1,
+        sceneObjectCount: 0,
+        procedureCount: 0,
+        unsupportedBehaviorCount: 0,
+      },
+      entries: [{ path, content: "export {};\n" }],
+    }));
+
+    await expect(exporter.export(createProjectFixture())).rejects.toBeInstanceOf(ProjectIoError);
+    await expect(exporter.export(createProjectFixture())).rejects.toMatchObject({ code: "unsafe-path" });
   });
 });

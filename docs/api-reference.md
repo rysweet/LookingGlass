@@ -23,6 +23,10 @@ same value as `X-Alice-Local-Api-Token`.
 
 ## Endpoint summary
 
+Rows under `/api/camera/*` are implemented camera workflow routes. See
+[Camera workflow endpoints](#camera-workflow-endpoints) for the shared REST and
+TypeScript contract.
+
 | Endpoint | Method | Purpose |
 | --- | --- | --- |
 | `/api/health` | `GET` | Check that the server is alive |
@@ -36,6 +40,18 @@ same value as `X-Alice-Local-Api-Token`.
 | `/api/project/save` | `POST` | Save the current project and proof artifact |
 | `/api/world/run` | `POST` | Run the cached project through the Tweedle VM |
 | `/api/screenshot` | `POST` | Render the current scene to a PNG file |
+| `/api/camera/state` | `GET` | Read the active camera workflow state |
+| `/api/camera/move` | `POST` | Move the active camera |
+| `/api/camera/pan` | `POST` | Pan the active camera |
+| `/api/camera/zoom` | `POST` | Zoom the active camera |
+| `/api/camera/focus` | `POST` | Focus the active camera on a target |
+| `/api/camera/orbit` | `POST` | Orbit around the active target |
+| `/api/camera/preset` | `POST` | Apply a named camera view |
+| `/api/camera/mode` | `POST` | Switch orbit or first-person camera mode |
+| `/api/camera/markers` | `GET` | List saved camera markers |
+| `/api/camera/markers` | `POST` | Save a camera marker |
+| `/api/camera/markers/:id/restore` | `POST` | Restore a camera marker |
+| `/api/camera/markers/:id` | `DELETE` | Delete a camera marker |
 | `/api/events/register` | `POST` | Register an event handler |
 | `/api/events/fire` | `POST` | Fire an event and report which handlers ran |
 
@@ -215,6 +231,44 @@ Example response:
 }
 ```
 
+## Joint manipulation endpoints
+
+The joint endpoints expose object joints, biped joints, joint arrays, poses,
+animation queueing, sidecar persistence, and runtime verification. Use
+[Joint manipulation](./joint-manipulation.md) for request bodies, response
+shapes, sidecar schema, canonical biped aliases, and invalid-joint error
+behavior.
+
+Endpoint summary:
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/api/scene/add-jointed-object` | `POST` | Add a custom object with explicit joints |
+| `/api/joints/:objectName` | `GET` | Read joint state, poses, arrays, and queued animations |
+| `/api/joints/:objectName/arrays` | `POST` | Define or replace a persisted joint array |
+| `/api/joints/:objectName/pose` | `POST` | Apply and optionally name a joint pose |
+| `/api/joints/:objectName/animate` | `POST` | Queue a joint or joint-array animation |
+| `/api/world/run` | `POST` | Keeps current run fields and adds joint verification when queued joint work executes |
+
+Minimal sequence:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/joints/alice/arrays \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"leftArm","joints":["LEFT_SHOULDER","LEFT_ELBOW","LEFT_WRIST","LEFT_HAND"]}'
+
+curl -X POST http://127.0.0.1:3000/api/joints/alice/animate \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"target":{"jointArray":"leftArm"},"durationMs":750,"style":"gentle","to":{"orientation":{"x":0,"y":0,"z":0.707,"w":0.707}}}'
+
+curl -X POST http://127.0.0.1:3000/api/world/run \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
 ## `POST /api/code/edit-procedure`
 
 ```bash
@@ -347,6 +401,43 @@ Example response:
 }
 ```
 
+## `GET /api/projects/current/export/typescript`
+
+Download the current Alice project as a TypeScript source handoff archive.
+
+```bash
+curl -fS http://127.0.0.1:3000/api/projects/current/export/typescript \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -o alice-web-typescript-source.zip
+```
+
+Success response:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/zip
+Content-Disposition: attachment; filename="alice-web-typescript-source.zip"
+Cache-Control: no-store
+```
+
+The archive will be rooted at `alice-web-typescript-source/` and contain
+`manifest.json`, `package.json`, `tsconfig.json`, `README.md`, and readable
+generated `src/**/*.ts` files for project metadata, scene objects, procedures,
+and explicit unsupported-runtime behavior.
+
+The export must use the same current-project state as save and run flows.
+Projects created from templates, loaded from `.a3p`, and changed through live
+server API edits must export the merged current state.
+
+Error response when nothing has been launched yet:
+
+```json
+{ "error": "Not launched. Call POST /api/launch first." }
+```
+
+See [TypeScript source export](./typescript-source-export.md) for the
+archive layout, generated source conventions, and implementation contract.
+
 ## `POST /api/world/run`
 
 Run the current project through the Tweedle VM.
@@ -408,6 +499,45 @@ Example response:
 
 If rendering fails, the server writes a placeholder PNG and returns a JSON
 response that explains that fallback.
+
+## Camera workflow endpoints
+
+Camera workflow endpoints move the Alice camera, apply standard views, save and
+restore markers, and switch first-person mode. All `/api/camera/*` routes
+require `X-Alice-Local-Api-Token` when the server is started with
+`--api-token`, including read routes.
+
+Move the camera forward:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/camera/move \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"forward":2}'
+```
+
+Example response shape:
+
+```json
+{
+  "schema_version": "eatme.alice-camera-workflow-state/v1",
+  "status": "ok",
+  "operation": "move",
+  "camera": {
+    "mode": "orbit",
+    "position": { "x": 0, "y": 5, "z": 18 },
+    "target": { "x": 0, "y": 1, "z": -2 },
+    "fieldOfViewDegrees": 60,
+    "activePreset": null
+  },
+  "markers": [],
+  "activeMarkerId": null
+}
+```
+
+See [Camera workflow API](./camera-workflow-api.md) for the full state schema,
+request bodies, marker lifecycle routes, TypeScript exports, and validation
+rules.
 
 ## `POST /api/events/register`
 

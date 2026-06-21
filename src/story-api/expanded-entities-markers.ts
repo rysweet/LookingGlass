@@ -264,7 +264,20 @@ export class SJointedModel extends SModel {
   }
 
   strikePose(pose: Record<string, Partial<{ position: Position; orientation: Orientation }>>): void {
-    this.jointedModelImp.strikePose(pose);
+    const canonicalPose: Record<string, Partial<{ position: Position; orientation: Orientation }>> = {};
+    const unknownJoints: string[] = [];
+    for (const [name, transform] of Object.entries(pose)) {
+      const resolvedName = this.#resolveJointName(name);
+      if (!this.jointedModelImp.getJointImplementation(resolvedName)) {
+        unknownJoints.push(name);
+        continue;
+      }
+      canonicalPose[resolvedName] = transform;
+    }
+    if (unknownJoints.length > 0) {
+      throw new TypeError(`Unknown joint names: ${unknownJoints.join(", ")}`);
+    }
+    this.jointedModelImp.strikePose(canonicalPose);
   }
 }
 

@@ -31,6 +31,9 @@ All public types, classes, and helper functions are exposed through
 [Story API public barrel topology](./story-api-public-barrels.md) for the import
 contract and module ownership rules.
 
+For joint hierarchy access and the joint server contract, see
+[Joint manipulation](./joint-manipulation.md).
+
 ## Quick Start
 
 ```typescript

@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context.js";
 import { DEFAULT_POSITION } from "../state.js";
+import { registerSceneObjectJointsIfSupported } from "./joint-routes.js";
 import {
   readJsonObjectBody,
   readOptionalStringField,
@@ -8,7 +9,7 @@ import {
 } from "../validation.js";
 
 export function registerSceneRoutes(app: Express, context: ServerContext): void {
-  app.post("/api/scene/add-object", (req, res) => {
+  app.post("/api/scene/add-object", async (req, res, next) => {
     const body = readJsonObjectBody(req.body);
     if (!body.ok) {
       res.status(400).json({ error: body.error });
@@ -34,6 +35,13 @@ export function registerSceneRoutes(app: Express, context: ServerContext): void 
       className: className.value,
       position: { ...DEFAULT_POSITION },
     });
+
+    try {
+      await registerSceneObjectJointsIfSupported(context, objectName, className.value);
+    } catch (error) {
+      next(error);
+      return;
+    }
 
     const artifactPath = context.evidenceService.recordSceneObjectAdded(
       context.evidenceDir,
