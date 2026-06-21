@@ -40,6 +40,7 @@ surface.
 | `/api/code/create-function` | `POST` | Create a function in the current project state |
 | `/api/code/edit-procedure` | `POST` | Append a procedure edit proof |
 | `/api/project/save` | `POST` | Save the current project and proof artifact |
+| `/api/projects/current/export/typescript` | `GET` | Download the current project as an Alice web TypeScript source ZIP |
 | `/api/project/export/web-package` | `POST` | Web-package feature contract: export the active project as a runnable `alice-web` ZIP package |
 | `/api/project/share` | `POST` | Web-package feature contract: generate share artifacts linked to a validated exported package |
 | `/api/project/validate-web-package` | `POST` | Web-package feature contract: validate an exported `alice-web` ZIP package |
@@ -234,6 +235,44 @@ Example response:
   "sceneFieldCountAfter": 3,
   "evidenceArtifact": "evidence/scene-object-added.json"
 }
+```
+
+## Joint manipulation endpoints
+
+The joint endpoints expose object joints, biped joints, joint arrays, poses,
+animation queueing, sidecar persistence, and runtime verification. Use
+[Joint manipulation](./joint-manipulation.md) for request bodies, response
+shapes, sidecar schema, canonical biped aliases, and invalid-joint error
+behavior.
+
+Endpoint summary:
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/api/scene/add-jointed-object` | `POST` | Add a custom object with explicit joints |
+| `/api/joints/:objectName` | `GET` | Read joint state, poses, arrays, and queued animations |
+| `/api/joints/:objectName/arrays` | `POST` | Define or replace a persisted joint array |
+| `/api/joints/:objectName/pose` | `POST` | Apply and optionally name a joint pose |
+| `/api/joints/:objectName/animate` | `POST` | Queue a joint or joint-array animation |
+| `/api/world/run` | `POST` | Keeps current run fields and adds joint verification when queued joint work executes |
+
+Minimal sequence:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/joints/alice/arrays \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"leftArm","joints":["LEFT_SHOULDER","LEFT_ELBOW","LEFT_WRIST","LEFT_HAND"]}'
+
+curl -X POST http://127.0.0.1:3000/api/joints/alice/animate \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"target":{"jointArray":"leftArm"},"durationMs":750,"style":"gentle","to":{"orientation":{"x":0,"y":0,"z":0.707,"w":0.707}}}'
+
+curl -X POST http://127.0.0.1:3000/api/world/run \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{}'
 ```
 
 ## `POST /api/code/edit-procedure`
@@ -587,6 +626,43 @@ absolute paths, parent traversal, backslash traversal, duplicate required
 entries, excessive package size, excessive file count, missing required files,
 wrong schema identity, wrong runtime identity, unsafe `canonicalUrl` values, and
 generated metadata that uses repository nickname identity.
+
+## `GET /api/projects/current/export/typescript`
+
+Download the current Alice project as a TypeScript source handoff archive.
+
+```bash
+curl -fS http://127.0.0.1:3000/api/projects/current/export/typescript \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -o alice-web-typescript-source.zip
+```
+
+Success response:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/zip
+Content-Disposition: attachment; filename="alice-web-typescript-source.zip"
+Cache-Control: no-store
+```
+
+The archive will be rooted at `alice-web-typescript-source/` and contain
+`manifest.json`, `package.json`, `tsconfig.json`, `README.md`, and readable
+generated `src/**/*.ts` files for project metadata, scene objects, procedures,
+and explicit unsupported-runtime behavior.
+
+The export must use the same current-project state as save and run flows.
+Projects created from templates, loaded from `.a3p`, and changed through live
+server API edits must export the merged current state.
+
+Error response when nothing has been launched yet:
+
+```json
+{ "error": "Not launched. Call POST /api/launch first." }
+```
+
+See [TypeScript source export](./typescript-source-export.md) for the
+archive layout, generated source conventions, and implementation contract.
 
 ## `POST /api/world/run`
 

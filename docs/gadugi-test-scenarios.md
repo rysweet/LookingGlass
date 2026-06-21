@@ -5,10 +5,10 @@ prototype. They use the installed `gadugi-test` runner to start the local REST
 API server, drive real HTTP user flows with `curl`, assert JSON responses, and
 shut the server down cleanly.
 
-The completed scenario set verifies Java Alice parity and Alice web package
-parity from the outside in: project open and rendering, Tweedle world execution,
-scene entity manipulation, event handling, save/export round trips, and runnable
-web player export/share/validation.
+The completed scenario set verifies Java Alice parity and Alice web export flows
+from the outside in: project open and rendering, Tweedle world execution, scene
+entity manipulation, event handling, save/export round trips, TypeScript source
+handoff, and web player export/share/validation.
 
 The camera workflow coverage adds browser and REST checks for camera movement,
 presets, markers, and first-person mode.
@@ -62,6 +62,8 @@ NODE_OPTIONS=--max-old-space-size=32768 gadugi-test run -d gadugi
 | `gadugi/03-scene-entity-manipulation.yaml` | `Scene Entity Manipulation` | Launch a blank scene, add entities, reject invalid input, capture a render |
 | `gadugi/04-event-system.yaml` | `Event System` | Register events, fire matching and non-matching events, reject invalid input |
 | `gadugi/05-save-export-roundtrip.yaml` | `Save / Export Round-Trip` | Edit a project, save it, relaunch, and verify the saved project opens |
+| `gadugi/06-typescript-source-export.yaml` | `TypeScript Source Export Handoff` | Create and edit a project, download source, and verify the archive contents |
+| `gadugi/06-web-player-export-share-parity.yaml` | `Web Player Export Share Parity` | Export a web package, validate it, create share metadata, and reject bad package input |
 | `e2e/app-flow.spec.ts` | `Camera Workflow Parity` | Load the browser, move the camera, apply presets, save/restore/delete markers, switch first-person mode |
 
 The `gadugi/*.yaml` files are level 3 integration tests. They exercise the
@@ -69,9 +71,13 @@ built server process and REST API rather than importing TypeScript modules
 directly. Any future Gadugi camera scenario should follow the same execute-only
 pattern.
 
-The Web Player Export Share Parity scenario is the feature acceptance contract
-for the web-package routes. Add its YAML file with the route implementation so
-the inventory only lists runnable scenarios that exist in the worktree.
+`gadugi/06-typescript-source-export.yaml` covers TypeScript source export by
+creating/editing a project, downloading the source ZIP, and verifying
+archive/source contents.
+
+`gadugi/06-web-player-export-share-parity.yaml` covers the web-package routes by
+exporting a package, checking player identity, validating the package, and
+creating share metadata linked to the package bytes.
 
 ## Compatibility gate
 
@@ -209,17 +215,20 @@ uses.
 | `/api/events/fire` | `POST` | 04 |
 | `/api/code/edit-procedure` | `POST` | 05 |
 | `/api/project/save` | `POST` | 05 |
-| `/api/camera/state` | `GET` | planned 06 |
-| `/api/camera/move` | `POST` | planned 06 |
-| `/api/camera/pan` | `POST` | planned 06 |
-| `/api/camera/zoom` | `POST` | planned 06 |
-| `/api/camera/focus` | `POST` | planned 06 |
-| `/api/camera/orbit` | `POST` | planned 06 |
-| `/api/camera/preset` | `POST` | planned 06 |
-| `/api/camera/mode` | `POST` | planned 06 |
-| `/api/camera/markers` | `GET`, `POST` | planned 06 |
-| `/api/camera/markers/:id/restore` | `POST` | planned 06 |
-| `/api/camera/markers/:id` | `DELETE` | planned 06 |
+| `/api/camera/state` | `GET` | planned camera Gadugi scenario |
+| `/api/camera/move` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/pan` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/zoom` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/focus` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/orbit` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/preset` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/mode` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/markers` | `GET`, `POST` | planned camera Gadugi scenario |
+| `/api/camera/markers/:id/restore` | `POST` | planned camera Gadugi scenario |
+| `/api/camera/markers/:id` | `DELETE` | planned camera Gadugi scenario |
+
+`GET /api/projects/current/export/typescript` is covered by
+`gadugi/06-typescript-source-export.yaml`.
 
 The web-package feature contract adds outside-in coverage for
 `/api/project/export/web-package`, `/api/project/share`, and

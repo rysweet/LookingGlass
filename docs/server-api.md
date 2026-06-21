@@ -191,6 +191,19 @@ instances also require the token passed at startup with `--api-token` in the
 `X-Alice-Local-Api-Token` header and reject non-local `Host` or browser
 `Origin` headers.
 
+### TypeScript source export route
+
+`GET /api/projects/current/export/typescript` downloads the current Alice
+project as an Alice-branded ZIP rooted at `alice-web-typescript-source/`. It is
+read-only, but it can expose project source, so keep serving it through the same
+local API surface as current-project operations.
+
+The response sets `Content-Type: application/zip`,
+`Content-Disposition: attachment; filename="alice-web-typescript-source.zip"`,
+and `Cache-Control: no-store`. See
+[TypeScript source export](./typescript-source-export.md) for archive
+contents and generated-source conventions.
+
 Camera routes require `X-Alice-Local-Api-Token` on both read and mutation
 requests when the CLI server is started with `--api-token`.
 
@@ -214,6 +227,11 @@ Evidence output is rooted at `--evidence-dir`. The server writes these stable ar
 | Share package feature contract | `share.json`, preview reference, playable HTML reference, package filename, package byte size, and package SHA-256 digest |
 
 JSON artifacts are written with stable schema versions consumed by `eatme`. Dynamic values such as timestamps, file sizes, paths, run durations, process IDs, and uptime should be treated as runtime values.
+
+Joint manipulation routes write `alice-web/joint-state.json` and
+`project-save/alice-web/joint-state.json` sidecars outside `.a3p` archives. See
+[Joint manipulation](./joint-manipulation.md) for the sidecar schema and
+`POST /api/world/run` joint verification fields.
 
 Evidence writes are safe for concurrent requests. Atomic JSON writes use unique temporary files and replace the final artifact path only after serialization succeeds.
 

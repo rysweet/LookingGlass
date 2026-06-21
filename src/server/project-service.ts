@@ -2,6 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { parseA3P, type AliceProject } from "../a3p-parser.js";
 import { writeA3P } from "../a3p-writer/archive.js";
+import { TypeScriptExporter } from "../project-export.js";
+import type { TypeScriptSourceManifest } from "../code-generation.js";
 import { createDefaultCameraWorkflowState } from "../camera-workflow.js";
 import {
   exportWebPackage,
@@ -15,6 +17,7 @@ import {
   type WebPackageValidation,
 } from "../project-export.js";
 import { executeProject, type LogEntry } from "../tweedle-vm.js";
+import { jointStateSidecarPath, writeJointStateSidecar } from "./joint-state-sidecar.js";
 import { buildCurrentProject, seedDefaultSceneObjects, type ServerState } from "./state.js";
 import type { EvidenceService } from "./evidence-service.js";
 
@@ -44,6 +47,14 @@ export interface ProjectService {
   exportWebPackage(state: ServerState, input: WebPackageOptions): Promise<ExportedWebPackage>;
   validateWebPackage(input: ValidateWebPackageInput): Promise<WebPackageValidation>;
   generateShareArtifacts(input: ShareArtifactsInput): Promise<ShareArtifacts>;
+  exportTypeScript(state: ServerState): Promise<TypeScriptExportResult>;
+}
+
+export interface TypeScriptExportResult {
+  filename: "alice-web-typescript-source.zip";
+  contentType: "application/zip";
+  archive: Buffer;
+  manifest: TypeScriptSourceManifest;
 }
 
 type RequestedProjectLoadResult =
@@ -113,6 +124,15 @@ export class ProjectRunError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "ProjectRunError";
+  }
+}
+
+export class ProjectExportError extends Error {
+  readonly status = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ProjectExportError";
   }
 }
 
@@ -256,6 +276,9 @@ export const projectService: ProjectService = {
       targetPath ?? savedProjectPath,
       a3pBytes.length,
     );
+    if (state.jointState.listObjectNames().length > 0) {
+      await writeJointStateSidecar(saveDir, state.jointState);
+    }
 
     return {
       schema_version: "eatme.alice-project-save-result/v1",
@@ -290,6 +313,12 @@ export const projectService: ProjectService = {
       statementsExecuted = executionLog.length;
     }
 
+    const jointSidecarArtifact = jointStateSidecarPath(evidenceDir);
+    const jointRuntime = state.jointState.executePendingAnimations(jointSidecarArtifact);
+    if (state.jointState.listObjectNames().length > 0) {
+      await writeJointStateSidecar(evidenceDir, state.jointState);
+    }
+
     const runResult = {
       schema_version: "eatme.alice-run-world-result/v1",
       status: "completed",
@@ -304,6 +333,13 @@ export const projectService: ProjectService = {
         "visible rendering correctness",
         "desktop run-button proof",
       ],
+      ...(jointRuntime.animations.length > 0
+        ? {
+            runtime: "alice-web",
+            jointAnimations: jointRuntime.animations,
+            jointVerification: jointRuntime.verification,
+          }
+        : {}),
     };
 
     const runEvidencePath = await evidenceService.writeRunWorldResult(evidenceDir, runResult);
@@ -324,5 +360,20 @@ export const projectService: ProjectService = {
 
   async generateShareArtifacts(input) {
     return generateShareArtifacts(input);
+  },
+
+  async exportTypeScript(state) {
+    if (!state.launched) {
+      throw new ProjectExportError("Not launched. Call POST /api/launch first before exporting the current project.");
+    }
+
+    const currentProject = buildCurrentProject(state);
+    const exported = await new TypeScriptExporter().export(currentProject);
+    return {
+      filename: "alice-web-typescript-source.zip",
+      contentType: "application/zip",
+      archive: Buffer.from(exported.archive),
+      manifest: exported.manifest,
+    };
   },
 };

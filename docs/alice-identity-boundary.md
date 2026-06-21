@@ -233,6 +233,9 @@ environment variables, local paths, or repository names.
 | Web package schema | `alice-web.package/v1` | Exported ZIP `manifest.json` |
 | Share schema | `alice-web.share/v1` | Exported and API-generated share metadata |
 | Validation schema | `alice-web.validation/v1` | Exported package validation evidence |
+| TypeScript source archive filename | `alice-web-typescript-source.zip` | Downloaded TypeScript source handoff |
+| TypeScript source archive root | `alice-web-typescript-source/` | ZIP entry root for generated TypeScript handoff |
+| TypeScript source manifest `schemaVersion` | `alice-web.typescript-source-manifest/v1` | Generated TypeScript source `manifest.json` |
 | glTF/glb source generator | `Alice` | Asset pipeline source metadata before glTF serialization |
 | `author` | `Alice` | Generated package/export metadata when an author field is emitted |
 | `code_editor_backing` | `alice-web` | Code-edit proof artifacts |
@@ -306,4 +309,5 @@ asserts that:
 - [Verify a local Alice server](./tutorial-alice-server-workflow.md)
 - [Server API](./server-api.md)
 - [API reference](./api-reference.md)
+- [TypeScript source export](./typescript-source-export.md)
 - [Getting started](./getting-started.md)

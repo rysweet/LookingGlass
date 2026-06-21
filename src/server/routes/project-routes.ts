@@ -7,6 +7,18 @@ import {
 } from "../validation.js";
 
 export function registerProjectRoutes(app: Express, context: ServerContext): void {
+  app.get("/api/projects/current/export/typescript", async (_req, res, next) => {
+    try {
+      const exported = await context.projectService.exportTypeScript(context.state);
+      res.setHeader("Content-Type", exported.contentType);
+      res.setHeader("Content-Disposition", `attachment; filename="${exported.filename}"`);
+      res.setHeader("Cache-Control", "no-store");
+      res.send(exported.archive);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/api/project/save", async (req, res) => {
     const body = readJsonObjectBody(req.body);
     if (!body.ok) {

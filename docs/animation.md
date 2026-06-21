@@ -22,6 +22,9 @@ and the browser.
 
 Story entities (`move`, `turn`, `roll`, `resize`) and story properties can use
 these animations directly by supplying a duration and optional style.
+Joint poses and joint arrays use the same animation style names in queued joint
+animation requests; see [Joint manipulation](./joint-manipulation.md) for the
+joint animation request and verification contract.
 
 ## Quick Start
 
