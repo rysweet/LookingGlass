@@ -89,6 +89,7 @@ export * as AliceStringResources from "./alice-string-resources";
 export * as Materials from "./materials";
 export * as Menubar from "./menubar";
 export * as ModelResources from "./model-resources";
+export * as ModelTextureCameraJointExportWorkflow from "./model-texture-camera-joint-export-workflow";
 export * as ModelManagement from "./model-management";
 export * as MovementImplementation from "./movement-implementation";
 export * as MethodInvocation from "./method-invocation";

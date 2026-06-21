@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { parseA3P, type AliceObject, type AliceProject } from "./a3p-parser";
+import { type AliceObject, type AliceProject } from "./a3p-parser";
 import {
   applyCameraPreset,
   createDefaultCameraWorkflowState,
@@ -13,6 +13,16 @@ import {
   type CameraPreset,
   type CameraWorkflowState,
 } from "./camera-workflow";
+import {
+  applySurfaceTextureBinding,
+  createImportedProjectAsset,
+  type ImportedProjectAsset,
+} from "./imported-project-assets";
+import * as JointSystem from "./joint-system";
+import * as ProjectIo from "./project-io";
+import type * as ModelTextureCameraJointExportWorkflow from "./model-texture-camera-joint-export-workflow";
+import type * as ProjectExport from "./project-export";
+import type { AliceProjectArchive } from "./project-io";
 import { buildScene } from "./scene-builder";
 import { disposeSceneResources } from "./scene-disposal";
 import { detectWebXRCapabilities, type WebXREvidence } from "./webxr-capabilities";
@@ -41,7 +51,18 @@ function requireElement<T extends HTMLElement>(id: string, ctor: abstract new (.
 }
 
 const fileInput = requireElement("file-input", HTMLInputElement);
+const modelInput = requireElement("model-file-input", HTMLInputElement);
+const textureInput = requireElement("texture-file-input", HTMLInputElement);
+const createShapeButton = requireElement("create-shape-button", HTMLButtonElement);
+const applyTextureButton = requireElement("assign-texture-button", HTMLButtonElement);
+const saveProjectButton = requireElement("export-a3p-button", HTMLButtonElement);
+const exportWebPackageButton = requireElement("export-web-package-button", HTMLButtonElement);
+const shareWebPackageButton = requireElement("share-web-package-button", HTMLButtonElement);
 const objectList = requireElement("object-list", HTMLUListElement);
+const assetList = requireElement("asset-list", HTMLUListElement);
+const jointObjectSelect = requireElement("joint-object-select", HTMLSelectElement);
+const jointPoseName = requireElement("joint-pose-name", HTMLInputElement);
+const jointApplyPose = requireElement("joint-apply-pose", HTMLButtonElement);
 const status = requireElement("status", HTMLElement);
 const webXRStatus = requireElement("webxr-status", HTMLElement);
 const canvas = requireElement("viewport", HTMLCanvasElement);
@@ -73,11 +94,55 @@ let webXREvidence: readonly WebXREvidence[] = [];
 let webXRInvalidTargetMessage: string | undefined;
 let lastAnimationTime = 0;
 let cameraWorkflow: CameraWorkflowState = createDefaultCameraWorkflowState();
+let lastArchive: AliceProjectArchive | null = null;
+let selectedObjectName: string | null = null;
+let selectedTextureResourceId: string | null = null;
+let lastWebPackageBase64: string | null = null;
+const jointState = new JointSystem.JointStateStore();
+
+function createEmptyArchive(): AliceProjectArchive {
+  const project: AliceProject = {
+    version: "3.10.0.0",
+    projectName: "Program",
+    sceneObjects: [],
+    methods: [],
+    types: [],
+    importedAssets: [],
+  };
+  return {
+    project,
+    manifest: null,
+    resources: new Map(),
+    resourceEntries: [],
+    thumbnail: null,
+    versionInfo: {
+      originalAliceVersion: project.version,
+      detectedAliceVersion: project.version,
+      manifestVersion: null,
+      xmlVersion: null,
+      versionSource: "default",
+      migrated: false,
+      migrationSteps: [],
+    },
+  };
+}
+
+function ensureArchive(): AliceProjectArchive {
+  if (!lastArchive) {
+    lastArchive = createEmptyArchive();
+    lastProject = lastArchive.project;
+  }
+  return lastArchive;
+}
 
 function describeObject(obj: AliceObject): string {
   const shortType = obj.typeName.split(".").pop() ?? obj.typeName;
   const resource = obj.resourceType ? ` [${obj.resourceType.split(".").pop()}]` : "";
-  return `${obj.name} (${shortType})${resource}`;
+  const model = obj.modelResourceId ? " model: imported" : "";
+  const surfaceTexture = obj.materialBindings
+    ?.find((binding) => binding.target === "surface")?.textureResourceId;
+  const texture = surfaceTexture ? ` surface: ${surfaceTexture}` : "";
+  return `${obj.name} (${shortType})${resource}${model}${texture}`;
 }
 
 function describeProject(project: AliceProject): string {
@@ -107,7 +172,23 @@ function renderObjectList(project: AliceProject): void {
   for (const object of project.sceneObjects) {
     const item = document.createElement("li");
     item.textContent = describeObject(object);
+    item.dataset.objectName = object.name;
+    item.dataset.selected = object.name === selectedObjectName ? "true" : "false";
+    item.addEventListener("click", () => {
+      selectedObjectName = object.name;
+      renderObjectList(project);
+      setStatusMessage(`Selected ${object.name}`);
+    });
     objectList.appendChild(item);
+  }
+}
+
+function renderAssetList(project: AliceProject): void {
+  assetList.innerHTML = "";
+  for (const asset of project.importedAssets ?? []) {
+    const item = document.createElement("li");
+    item.textContent = `${asset.name} (${asset.kind}) ${asset.id}`;
+    assetList.appendChild(item);
   }
 }
 
@@ -145,7 +226,9 @@ function resetWebXRController(): void {
 
 function applyScene(project: AliceProject): void {
   resetWebXRController();
-  const { scene, camera, cameraConfig } = buildScene(project);
+  const { scene, camera, cameraConfig } = buildScene(project, {
+    resources: lastArchive?.resources,
+  });
   disposeSceneResources(currentScene);
   currentScene = scene;
   currentCamera = camera;
@@ -294,9 +377,9 @@ async function readSelectedFile(input: HTMLInputElement): Promise<File | null> {
   return input.files?.[0] ?? null;
 }
 
-async function loadProjectFromFile(file: File): Promise<AliceProject> {
+async function loadProjectFromFile(file: File): Promise<AliceProjectArchive> {
   const buffer = await file.arrayBuffer();
-  return parseA3P(buffer);
+  return ProjectIo.readProject(buffer);
 }
 
 async function handleFileSelection(): Promise<void> {
@@ -309,15 +392,286 @@ async function handleFileSelection(): Promise<void> {
   clearObjectList();
 
   try {
-    const project = await loadProjectFromFile(file);
-    lastProject = project;
-    renderObjectList(project);
-    applyScene(project);
-    setStatusMessage(describeProject(project));
+    const archive = await loadProjectFromFile(file);
+    lastArchive = archive;
+    lastProject = archive.project;
+    selectedTextureResourceId = latestTextureResourceId(archive.project);
+    renderProject(archive.project);
+    setStatusMessage(describeProject(archive.project));
   } catch (error) {
     console.error(error);
     setErrorMessage(error);
   }
+}
+
+async function handleModelImport(): Promise<void> {
+    const file = await readSelectedFile(modelInput);
+    if (!file) return;
+
+    try {
+      const archive = ensureArchive();
+      const creation = createImportedProjectAsset({
+        kind: "model",
+        fileName: file.name,
+        displayName: fileDisplayName(file.name),
+        bytes: new Uint8Array(await file.arrayBuffer()),
+      }, archive.project.importedAssets ?? []);
+      archive.project.importedAssets = [...(archive.project.importedAssets ?? []), creation.asset];
+      archive.resources.set(creation.archivePath, creation.resourceBytes);
+      addImportedModelObject(archive.project, creation.asset);
+      renderProject(archive.project);
+      setStatusMessage("Imported model");
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(error);
+    } finally {
+      modelInput.value = "";
+    }
+}
+
+async function handleTextureImport(): Promise<void> {
+    const file = await readSelectedFile(textureInput);
+    if (!file) return;
+
+    try {
+      const archive = ensureArchive();
+      const creation = createImportedProjectAsset({
+        kind: "texture",
+        fileName: file.name,
+        displayName: fileDisplayName(file.name),
+        bytes: new Uint8Array(await file.arrayBuffer()),
+      }, archive.project.importedAssets ?? []);
+      archive.project.importedAssets = [...(archive.project.importedAssets ?? []), creation.asset];
+      archive.resources.set(creation.archivePath, creation.resourceBytes);
+      selectedTextureResourceId = creation.asset.id;
+      renderProject(archive.project);
+      setStatusMessage("Imported texture");
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(error);
+    } finally {
+      textureInput.value = "";
+    }
+}
+
+function handleCreateShape(): void {
+    const archive = ensureArchive();
+    const name = uniqueSceneObjectName(archive.project, "box");
+    archive.project.sceneObjects.push({
+      name,
+      typeName: "org.lgna.story.SBox",
+      resourceType: null,
+      position: null,
+      orientation: null,
+      size: null,
+    });
+    selectedObjectName = name;
+    renderProject(archive.project);
+    setStatusMessage(`Created ${name}`);
+}
+
+function handleApplyTexture(): void {
+    const archive = ensureArchive();
+    const project = archive.project;
+    const object = selectedObjectName
+      ? project.sceneObjects.find((candidate) => candidate.name === selectedObjectName)
+      : null;
+
+    if (!object) {
+      setErrorMessage("Select or create a shape before applying a texture.");
+      return;
+    }
+
+    const textureResourceId = selectedTextureResourceId ?? latestTextureResourceId(project);
+    if (!textureResourceId) {
+      setErrorMessage("Import a texture before applying it to a shape.");
+      return;
+    }
+
+    Object.assign(object, applySurfaceTextureBinding(object, textureResourceId));
+    renderProject(project);
+    setStatusMessage(`Applied texture to ${object.name}`);
+}
+
+async function handleSaveProject(): Promise<void> {
+    try {
+      const archive = ensureArchive();
+      const bytes = await ProjectIo.writeProject(archive, { generateThumbnailFromScene: false });
+      const blobBytes = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(blobBytes).set(bytes);
+      const blob = new Blob([blobBytes], { type: "application/vnd.alice.project" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${archive.project.projectName || "alice-project"}.a3p`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setStatusMessage(`Saved ${archive.project.projectName || "project"}`);
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(error);
+    }
+}
+
+async function exportWebPackage(): Promise<void> {
+      try {
+        const project = ensureArchive().project;
+        const response = await fetch("/api/project/export/web-package", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: project.projectName || "Alice Project" }),
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const exported = await response.json() as ProjectExport.ExportedWebPackage;
+        lastWebPackageBase64 = exported.package.base64;
+        setStatusMessage(`Exported web package ${exported.package.filename}`);
+      } catch (error) {
+        console.error(error);
+        setErrorMessage(error);
+      }
+}
+
+async function generateShareArtifacts(): Promise<void> {
+      try {
+        const project = ensureArchive().project;
+        if (!lastWebPackageBase64) {
+          await exportWebPackage();
+        }
+        if (!lastWebPackageBase64) {
+          throw new Error("Export a web package before sharing.");
+        }
+        const response = await fetch("/api/project/share", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            packageBase64: lastWebPackageBase64,
+            title: project.projectName || "Alice Project",
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const shared = await response.json() as ProjectExport.ShareArtifacts;
+        setStatusMessage(`Prepared share package ${shared.artifacts.package}`);
+      } catch (error) {
+        console.error(error);
+        setErrorMessage(error);
+    }
+}
+
+function renderProject(project: AliceProject): void {
+    renderObjectList(project);
+    renderAssetList(project);
+    renderJointObjectOptions(project);
+    applyScene(project);
+}
+
+function renderJointObjectOptions(project: AliceProject): void {
+    jointObjectSelect.replaceChildren();
+    for (const object of project.sceneObjects) {
+      const option = document.createElement("option");
+      option.value = object.name;
+      option.textContent = object.name;
+      jointObjectSelect.appendChild(option);
+    }
+}
+
+function handleJointPoseApply(): void {
+    const archive = ensureArchive();
+    const objectName = jointObjectSelect.value || selectedObjectName;
+    const object = objectName
+      ? archive.project.sceneObjects.find((candidate) => candidate.name === objectName)
+      : null;
+    if (!object) {
+      setErrorMessage("Select an object before applying a joint pose.");
+      return;
+    }
+
+    try {
+      if (!jointState.hasObject(object.name)) {
+        const hierarchy = JointSystem.defaultJointHierarchyForClassName(object.typeName);
+        if (!hierarchy) {
+          throw new Error(`No default joint hierarchy is available for ${object.typeName}`);
+        }
+        jointState.registerObject({
+          objectName: object.name,
+          className: object.typeName,
+          hierarchy,
+        });
+      }
+      const firstJoint = Object.keys(jointState.getObjectSnapshot(object.name)?.joints ?? {})[0];
+      if (!firstJoint) {
+        throw new Error(`No joints are registered for ${object.name}`);
+      }
+      jointState.applyPose({
+        objectName: object.name,
+        poseName: jointPoseName.value.trim() || "pose",
+        joints: {
+          [firstJoint]: {
+            orientation: { x: 0, y: 0, z: 0, w: 1 },
+          },
+        },
+      });
+      setStatusMessage(`Applied joint pose to ${object.name}`);
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(error);
+    }
+}
+
+const ModelTextureCameraJointExportWorkflowBrowser = {
+    importModelAsset: handleModelImport,
+    importTextureAsset: handleTextureImport,
+    assignTextureToModel: handleApplyTexture,
+    exportWebPackage,
+    generateShareArtifacts,
+};
+
+function latestTextureResourceId(project: AliceProject): string | null {
+    const textures = (project.importedAssets ?? []).filter((asset) => asset.kind === "texture");
+    return textures.at(-1)?.id ?? null;
+}
+
+function fileDisplayName(fileName: string): string {
+    const extensionStart = fileName.lastIndexOf(".");
+    const base = extensionStart > 0 ? fileName.slice(0, extensionStart) : fileName;
+    return base.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function addImportedModelObject(project: AliceProject, asset: ImportedProjectAsset): void {
+    const name = uniqueSceneObjectName(project, camelCaseName(asset.name));
+    project.sceneObjects.push({
+      name,
+      typeName: "SModel",
+      resourceType: null,
+      position: null,
+      orientation: null,
+      size: null,
+      modelResourceId: asset.id,
+    });
+    selectedObjectName = name;
+}
+
+function uniqueSceneObjectName(project: AliceProject, baseName: string): string {
+    const existing = new Set(project.sceneObjects.map((object) => object.name));
+    let candidate = baseName || "object";
+    let suffix = 2;
+    while (existing.has(candidate)) {
+      candidate = `${baseName}${suffix}`;
+      suffix += 1;
+    }
+    return candidate;
+}
+
+function camelCaseName(value: string): string {
+    const words = value.match(/[A-Za-z0-9]+/g) ?? [];
+    if (words.length === 0) return "model";
+    return words.map((word, index) => {
+      const lower = word.toLowerCase();
+      return index === 0 ? lower : `${lower[0]?.toUpperCase() ?? ""}${lower.slice(1)}`;
+    }).join("");
 }
 
 function describeLastProject(): string {
@@ -377,6 +731,25 @@ function installInputHandlers(): void {
     );
     cameraMarkerName.value = "";
   });
+
+  modelInput.addEventListener("change", () => {
+    void ModelTextureCameraJointExportWorkflowBrowser.importModelAsset();
+  });
+  textureInput.addEventListener("change", () => {
+    void ModelTextureCameraJointExportWorkflowBrowser.importTextureAsset();
+  });
+  createShapeButton.addEventListener("click", handleCreateShape);
+  applyTextureButton.addEventListener("click", ModelTextureCameraJointExportWorkflowBrowser.assignTextureToModel);
+  saveProjectButton.addEventListener("click", () => {
+    void handleSaveProject();
+  });
+  exportWebPackageButton.addEventListener("click", () => {
+    void ModelTextureCameraJointExportWorkflowBrowser.exportWebPackage();
+  });
+  shareWebPackageButton.addEventListener("click", () => {
+    void ModelTextureCameraJointExportWorkflowBrowser.generateShareArtifacts();
+  });
+  jointApplyPose.addEventListener("click", handleJointPoseApply);
 }
 
 function renderWebXRPanel(state: WebXRSessionState = webXRController?.state ?? "idle"): void {
@@ -605,6 +978,7 @@ function initializeApplication(): void {
   installWindowHandlers();
   installInputHandlers();
   renderCameraWorkflow();
+  ensureArchive();
   renderer.setAnimationLoop(renderFrame);
   renderWebXRPanel();
   setStatusMessage("Choose an .a3p file to begin.");
