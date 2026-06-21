@@ -4,6 +4,7 @@ import { parseA3P, type AliceProject } from "../a3p-parser.js";
 import { writeA3P } from "../a3p-writer/archive.js";
 import { TypeScriptExporter } from "../project-export.js";
 import type { TypeScriptSourceManifest } from "../code-generation.js";
+import { createDefaultCameraWorkflowState } from "../camera-workflow.js";
 import { executeProject, type LogEntry } from "../tweedle-vm.js";
 import { buildCurrentProject, seedDefaultSceneObjects, type ServerState } from "./state.js";
 import type { EvidenceService } from "./evidence-service.js";
@@ -140,6 +141,7 @@ export const projectService: ProjectService = {
     state.projectPath = resolvedProjectFile;
     state.projectName = projectName;
     state.parsedProject = parsedProject;
+    state.cameraWorkflow = createDefaultCameraWorkflowState();
 
     seedDefaultSceneObjects(state);
     state.eventSystem.reset();
