@@ -192,6 +192,11 @@ Evidence output is rooted at `--evidence-dir`. The server writes these stable ar
 
 JSON artifacts are written with stable schema versions consumed by `eatme`. Dynamic values such as timestamps, file sizes, paths, run durations, process IDs, and uptime should be treated as runtime values.
 
+Joint manipulation routes write `alice-web/joint-state.json` and
+`project-save/alice-web/joint-state.json` sidecars outside `.a3p` archives. See
+[Joint manipulation](./joint-manipulation.md) for the sidecar schema and
+`POST /api/world/run` joint verification fields.
+
 Evidence writes are safe for concurrent requests. Atomic JSON writes use unique temporary files and replace the final artifact path only after serialization succeeds.
 
 ## Project path validation

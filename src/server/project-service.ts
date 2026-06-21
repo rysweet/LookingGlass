@@ -3,6 +3,7 @@ import * as path from "path";
 import { parseA3P, type AliceProject } from "../a3p-parser.js";
 import { writeA3P } from "../a3p-writer/archive.js";
 import { executeProject, type LogEntry } from "../tweedle-vm.js";
+import { jointStateSidecarPath, writeJointStateSidecar } from "./joint-state-sidecar.js";
 import { buildCurrentProject, seedDefaultSceneObjects, type ServerState } from "./state.js";
 import type { EvidenceService } from "./evidence-service.js";
 
@@ -240,6 +241,9 @@ export const projectService: ProjectService = {
       targetPath ?? savedProjectPath,
       a3pBytes.length,
     );
+    if (state.jointState.listObjectNames().length > 0) {
+      await writeJointStateSidecar(saveDir, state.jointState);
+    }
 
     return {
       schema_version: "eatme.alice-project-save-result/v1",
@@ -274,6 +278,12 @@ export const projectService: ProjectService = {
       statementsExecuted = executionLog.length;
     }
 
+    const jointSidecarArtifact = jointStateSidecarPath(evidenceDir);
+    const jointRuntime = state.jointState.executePendingAnimations(jointSidecarArtifact);
+    if (state.jointState.listObjectNames().length > 0) {
+      await writeJointStateSidecar(evidenceDir, state.jointState);
+    }
+
     const runResult = {
       schema_version: "eatme.alice-run-world-result/v1",
       status: "completed",
@@ -288,6 +298,13 @@ export const projectService: ProjectService = {
         "visible rendering correctness",
         "desktop run-button proof",
       ],
+      ...(jointRuntime.animations.length > 0
+        ? {
+            runtime: "alice-web",
+            jointAnimations: jointRuntime.animations,
+            jointVerification: jointRuntime.verification,
+          }
+        : {}),
     };
 
     const runEvidencePath = await evidenceService.writeRunWorldResult(evidenceDir, runResult);
