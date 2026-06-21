@@ -231,6 +231,44 @@ Example response:
 }
 ```
 
+## Joint manipulation endpoints
+
+The joint endpoints expose object joints, biped joints, joint arrays, poses,
+animation queueing, sidecar persistence, and runtime verification. Use
+[Joint manipulation](./joint-manipulation.md) for request bodies, response
+shapes, sidecar schema, canonical biped aliases, and invalid-joint error
+behavior.
+
+Endpoint summary:
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/api/scene/add-jointed-object` | `POST` | Add a custom object with explicit joints |
+| `/api/joints/:objectName` | `GET` | Read joint state, poses, arrays, and queued animations |
+| `/api/joints/:objectName/arrays` | `POST` | Define or replace a persisted joint array |
+| `/api/joints/:objectName/pose` | `POST` | Apply and optionally name a joint pose |
+| `/api/joints/:objectName/animate` | `POST` | Queue a joint or joint-array animation |
+| `/api/world/run` | `POST` | Keeps current run fields and adds joint verification when queued joint work executes |
+
+Minimal sequence:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/joints/alice/arrays \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"leftArm","joints":["LEFT_SHOULDER","LEFT_ELBOW","LEFT_WRIST","LEFT_HAND"]}'
+
+curl -X POST http://127.0.0.1:3000/api/joints/alice/animate \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"target":{"jointArray":"leftArm"},"durationMs":750,"style":"gentle","to":{"orientation":{"x":0,"y":0,"z":0.707,"w":0.707}}}'
+
+curl -X POST http://127.0.0.1:3000/api/world/run \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
 ## `POST /api/code/edit-procedure`
 
 ```bash

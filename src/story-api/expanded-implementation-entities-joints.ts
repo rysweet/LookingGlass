@@ -96,16 +96,18 @@ export class JointedModelImp extends ModelImp {
   }
 
   strikePose(pose: Record<string, Partial<{ position: Position; orientation: Orientation }>>): void {
+    const unknownJoints = Object.keys(pose).filter((name) => !this.getJointImplementation(name));
+    if (unknownJoints.length > 0) {
+      throw new TypeError(`Unknown joint names: ${unknownJoints.join(", ")}`);
+    }
+
     for (const [name, transform] of Object.entries(pose)) {
       const joint = this.getJointImplementation(name);
-      if (!joint) {
-        continue;
-      }
       if (transform.position) {
-        joint.position.setValue(transform.position);
+        joint!.position.setValue(transform.position);
       }
       if (transform.orientation) {
-        joint.orientation.setValue(transform.orientation);
+        joint!.orientation.setValue(transform.orientation);
       }
     }
   }

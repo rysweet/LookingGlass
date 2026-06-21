@@ -1,4 +1,5 @@
 import { EventSystem } from "../events.js";
+import { JointStateStore } from "../joint-system.js";
 import { TemplateLibrary } from "../project-templates.js";
 import type { AliceProject } from "../a3p-parser.js";
 import {
@@ -34,6 +35,7 @@ export interface ServerState {
   cameraWorkflow: CameraWorkflowState;
   eventSystem: EventSystem;
   templateLibrary: TemplateLibrary;
+  jointState: JointStateStore;
 }
 
 export const DEFAULT_POSITION: Position = { x: 0, y: 0, z: 0 };
@@ -54,6 +56,7 @@ export function createInitialServerState(): ServerState {
       getObjectPosition: (name) => sceneObjects.get(name)?.position ?? null,
     }),
     templateLibrary: new TemplateLibrary(),
+    jointState: new JointStateStore(),
   };
 }
 
