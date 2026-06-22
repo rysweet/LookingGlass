@@ -162,7 +162,8 @@ export/share/validation routes:
 | `POST` | `/api/code/create-procedure` | procedure creation summary | adds a procedure to current state |
 | `POST` | `/api/code/create-function` | function creation summary | adds a function to current state |
 | `POST` | `/api/code/edit-procedure` | `eatme.alice-first-lesson-code-editor-action-proof-result/v1` | writes edit proof and `edited-project.a3p` |
-| `POST` | `/api/project/save` | `eatme.alice-project-save-result/v1` | writes save proof and `project-save/saved-project.a3p` |
+| `POST` | `/api/project/save` | `eatme.alice-project-save-result/v1` | writes save proof, `project-save/saved-project.a3p`, and optional validated `targetPath` bytes |
+| `POST` | `/api/project/reopen` | reopen summary | reloads a validated `.a3p` file into current project state |
 | `GET` | `/api/projects/current/classes/:typeName/behavior` | `alice-web.reusable-class-behavior` package | reads one reusable Alice class behavior from current state |
 | `POST` | `/api/projects/current/classes/behavior` | `alice-web.class-behavior-import-result/v1` | imports one reusable Alice class behavior into current state |
 | `POST` | `/api/project/export/web-package` | `alice-web.export-web-package-result/v1` | web-package feature contract: returns a runnable `alice-web` ZIP package |
@@ -484,7 +485,16 @@ Save the project:
 curl -X POST http://127.0.0.1:3000/api/project/save \
   -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"saveSelector":"scene.myFirstMethod"}'
+  -d '{"saveSelector":"scene.myFirstMethod","targetPath":"./evidence/saved-project.a3p"}'
+```
+
+Reopen a saved project:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/project/reopen \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"project":"./evidence/saved-project.a3p"}'
 ```
 
 Capture a screenshot:

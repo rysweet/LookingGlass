@@ -47,6 +47,7 @@ implemented export/share routes. `/api/audio/*` exposes the audio workflow; see
 | `/api/code/create-function` | `POST` | Create a function in the current project state |
 | `/api/code/edit-procedure` | `POST` | Append a procedure edit proof |
 | `/api/project/save` | `POST` | Save the current project and proof artifact |
+| `/api/project/reopen` | `POST` | Reopen a saved `.a3p` through the validated project path rules |
 | `/api/projects/current/export/typescript` | `GET` | Download the current project as an Alice web TypeScript source ZIP |
 | `/api/projects/current/classes/:typeName/behavior` | `GET` | Download one reusable Alice class behavior package |
 | `/api/projects/current/classes/behavior` | `POST` | Import one reusable Alice class behavior package |
@@ -536,7 +537,7 @@ Request body:
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `saveSelector` | `string` | no | Label for the save action |
-| `targetPath` | `string` | no | Output path recorded in the proof artifact |
+| `targetPath` | `string` | no | Validated `.a3p` output path. When provided, the server writes the saved project bytes there and records that path in the proof artifact |
 
 Example response:
 
@@ -548,6 +549,36 @@ Example response:
   "saved_project_artifact": "saved-project.a3p",
   "save_artifact": "desktop-save-operation-result.json",
   "evidenceArtifact": "evidence/project-save/desktop-save-operation-result.json"
+}
+```
+
+## `POST /api/project/reopen`
+
+Reopen a previously saved `.a3p` file through the same project path validation
+used by launch. The path must resolve inside the server's allowed project
+directories.
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/project/reopen \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"project":"./evidence/saved-project.a3p"}'
+```
+
+Request body:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `project` | `string` | yes | Validated `.a3p` file path to reopen |
+
+Example response:
+
+```json
+{
+  "status": "reopened",
+  "project": "/absolute/path/to/evidence/saved-project.a3p",
+  "projectName": "Program",
+  "sceneObjectCount": 3
 }
 ```
 

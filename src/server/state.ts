@@ -127,23 +127,15 @@ export function buildCurrentProject(state: ServerState): AliceProject {
 }
 
 function mergeProcedureStatements(existing: AliceStatement[], methods: string[]): AliceStatement[] {
-  const merged = [...existing];
-  const existingMethods = new Set(
-    existing
-      .filter((statement) => statement.kind === "MethodCall" && typeof statement.method === "string")
-      .map((statement) => statement.method),
-  );
-  for (const method of methods) {
-    if (existingMethods.has(method)) continue;
-    merged.push({
-      kind: "MethodCall",
+  return [
+    ...existing,
+    ...methods.map((method) => ({
+      kind: "MethodCall" as const,
       object: "this",
       method,
       arguments: [],
-    });
-    existingMethods.add(method);
-  }
-  return merged;
+    })),
+  ];
 }
 
 function syncSceneTypeMethods(project: AliceProject, methods: AliceProject["methods"]): void {
@@ -216,12 +208,7 @@ export function syncServerSceneObjectsFromProject(state: ServerState, project: A
 
 export function syncServerProceduresFromProject(state: ServerState, project: AliceProject | null): void {
   state.procedures = project
-    ? new Map(project.methods.map((method) => [
-        method.name,
-        method.statements
-          .filter((statement) => statement.kind === "MethodCall" && typeof statement.method === "string")
-          .map((statement) => statement.method!),
-      ]))
+    ? new Map(project.methods.map((method) => [method.name, []]))
     : createDefaultProcedures();
 }
 

@@ -469,6 +469,12 @@ describe("server API", () => {
           editSpec: `append-comment:${secondEditMarker}`,
         })
         .expect(200);
+      await localPost(persistenceApp, "/api/code/edit-procedure")
+        .send({
+          procedureSelector: "scene.myFirstMethod",
+          editSpec: `append-comment:${secondEditMarker}`,
+        })
+        .expect(200);
       const secondSave = await localPost(persistenceApp, "/api/project/save")
         .send({
           saveSelector: "scene.myFirstMethod",
@@ -478,9 +484,9 @@ describe("server API", () => {
       expect(secondSave.body.status).toBe("saved");
       const resavedProject = await parseA3P(fs.readFileSync(savedProjectPath));
       const resavedMethod = resavedProject.methods.find((method) => method.name === "myFirstMethod");
-      expect(resavedMethod?.statements.map((statement) => statement.method)).toEqual(
-        expect.arrayContaining([editMarker, secondEditMarker]),
-      );
+      const resavedMethods = resavedMethod?.statements.map((statement) => statement.method);
+      expect(resavedMethods).toEqual(expect.arrayContaining([editMarker, secondEditMarker]));
+      expect(resavedMethods?.filter((method) => method === secondEditMarker)).toHaveLength(2);
 
       const exportRes = await request(persistenceApp)
         .get("/api/projects/current/export/typescript")
