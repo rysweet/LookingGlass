@@ -3,7 +3,7 @@ import { AnimationLoop, AnimationQueue } from "./animation-loop.js";
 import type { SceneGraph, SceneGraphNode } from "./scene-graph.js";
 import type { EntryPointExecutionOptions } from "./virtual-machine.js";
 import type { ExecutionResult, VMExecutionOptions } from "./tweedle-vm-core-types.js";
-import { executeProject, virtualMachine } from "./tweedle-vm-core-setup.js";
+import { executeEntryPoint, executeProject } from "./tweedle-vm-core-setup.js";
 import { VmSceneBridge } from "./vm-scene-bridge-core.js";
 import { createSceneGraphForProject } from "./vm-scene-bridge-registration.js";
 import type { VmSceneRuntimeOptions } from "./vm-scene-bridge-types.js";
@@ -43,7 +43,7 @@ export class VmSceneRuntime {
   }
 
   executeEntryPoint(options: EntryPointExecutionOptions, executionOptions: VMExecutionOptions = {}): ExecutionResult {
-    return virtualMachine.executeEntryPoint(
+    return executeEntryPoint(
       this.project,
       options,
       { ...executionOptions, sceneBridge: executionOptions.sceneBridge ?? this.bridge },

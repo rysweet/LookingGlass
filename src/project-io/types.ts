@@ -1,4 +1,5 @@
 import type { AliceProject } from "../a3p-parser.js";
+import type { AliceWorkflowState } from "../alice-workflow-state.js";
 import type { ProjectAudioWorkflowState } from "../project-audio.js";
 import type { ProjectResourceKind, ProjectVersionInfo } from "../project-migration.js";
 
@@ -55,6 +56,7 @@ export interface AliceProjectArchive {
   thumbnail: Uint8Array | null;
   versionInfo: ProjectVersionInfo;
   aliceAudio?: ProjectAudioWorkflowState;
+  aliceWorkflow?: AliceWorkflowState;
 }
 
 export interface WriteProjectOptions {

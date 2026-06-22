@@ -8,6 +8,7 @@ import type {
 import { runScopedStatements, runStatements } from "./tweedle-vm-core-setup.js";
 import { DoTogetherEvidence, MAX_LOOP_ITERATIONS, MAX_TOTAL_STEPS, VMException, VMState } from "./tweedle-vm-core-types.js";
 import { evaluateValue, numericValue, valueToString } from "./tweedle-vm-eval-core.js";
+import { AliceWorkflowStateError, resolveScorekeeperSourceName } from "./alice-workflow-state.js";
 import { cloneObjectMap, cloneScopes, mergeStateFromBranch } from "./tweedle-vm-stack-debug.js";
 import { popScope, pushScope, scopeAssign, scopeLookup, scopeSet } from "./tweedle-vm-stack-scope.js";
 
@@ -90,6 +91,7 @@ export function execDoTogether(stmt: AliceStatement, state: VMState): void {
       returnValues: state.returnValues,
       listenerMap: state.listenerMap,
       sceneBridge: state.sceneBridge,
+      aliceWorkflowRuntime: state.aliceWorkflowRuntime,
       debugRuntime: state.debugRuntime,
     };
     runScopedStatements([branchStatement], branchState);
@@ -340,6 +342,7 @@ export function execVariableDeclaration(stmt: AliceStatement, state: VMState): v
   });
 
   scopeSet(state, name, value);
+  updateWorkflowScoreValue(state, name, value);
 }
 
 export function execVariableAssignment(stmt: AliceStatement, state: VMState): void {
@@ -353,8 +356,8 @@ export function execVariableAssignment(stmt: AliceStatement, state: VMState): vo
     detail: `${name} = ${valueToString(value)}`,
   });
 
-  // Only update if variable exists in some scope; no-op if undeclared
   scopeAssign(state, name, value);
+  updateWorkflowScoreValue(state, name, value);
 }
 
 export function execEventListener(stmt: AliceStatement, state: VMState): void {
@@ -367,4 +370,24 @@ export function execEventListener(stmt: AliceStatement, state: VMState): void {
     detail: `register "${event}"`,
   });
   // Registered but not dispatched during VM run (per spec)
+}
+
+function updateWorkflowScoreValue(state: VMState, name: string, value: unknown): void {
+  const workflowRuntime = state.aliceWorkflowRuntime;
+  if (!workflowRuntime) {
+    return;
+  }
+  const sourceName = resolveScorekeeperSourceName(workflowRuntime.workflow, name);
+  if (!sourceName) {
+    return;
+  }
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    throw new AliceWorkflowStateError(
+      "invalid-score-value",
+      `aliceWorkflow.scorekeepers.${sourceName}`,
+      "runtime score value must be finite",
+    );
+  }
+  workflowRuntime.scoreValues.set(sourceName, numeric);
 }

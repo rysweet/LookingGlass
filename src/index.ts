@@ -5,6 +5,7 @@ export * as AccessibilityBridge from "./accessibility-bridge";
 export * as AccessibilityPatterns from "./accessibility-patterns";
 export * as AliceIdeState from "./alice-ide-state";
 export * as AliceEvidenceArtifact from "./alice-evidence-artifact";
+export * as AliceWorkflowState from "./alice-workflow-state";
 export * as AliceProgram from "./alice-program";
 export * as Analytics from "./analytics";
 export * as Animation from "./animation";

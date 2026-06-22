@@ -26,6 +26,16 @@ import {
   type CameraWorkflowState,
 } from "./camera-workflow";
 import {
+  addScorekeeper,
+  addTimekeeper,
+  bindVisibleWorkflowState,
+  createDefaultAliceWorkflowState,
+  createInitialScoreValues,
+  resolveVisibleWorkflowBindings,
+  type AliceWorkflowState,
+  type ResolvedVisibleWorkflowBinding,
+} from "./alice-workflow-state";
+import {
   applySurfaceTextureBinding,
   createImportedProjectAsset,
   type ImportedProjectAsset,
@@ -56,6 +66,7 @@ import {
   type WebXRSessionState,
 } from "./webxr-session";
 import { renderWebXRStatus, type WebXRButtonState } from "./webxr-ui";
+import { executeProject } from "./tweedle-vm";
 
 function requireElement<T extends HTMLElement>(id: string, ctor: abstract new (...args: never[]) => T): T {
   const element = document.getElementById(id);
@@ -93,6 +104,17 @@ const cameraFirstPersonToggle = requireElement("camera-first-person-toggle", HTM
 const cameraMarkerName = requireElement("camera-marker-name", HTMLInputElement);
 const cameraSaveMarker = requireElement("camera-save-marker", HTMLButtonElement);
 const cameraMarkerList = requireElement("camera-marker-list", HTMLUListElement);
+const scoreTimeStatus = requireElement("score-time-status", HTMLElement);
+const scorekeeperName = requireElement("scorekeeper-name", HTMLInputElement);
+const scorekeeperInitialValue = requireElement("scorekeeper-initial-value", HTMLInputElement);
+const addScorekeeperButton = requireElement("add-scorekeeper", HTMLButtonElement);
+const timekeeperName = requireElement("timekeeper-name", HTMLInputElement);
+const addTimekeeperButton = requireElement("add-timekeeper", HTMLButtonElement);
+const addVisibleScoreButton = requireElement("add-visible-score", HTMLButtonElement);
+const addVisibleTimeButton = requireElement("add-visible-time", HTMLButtonElement);
+const visibleScoreLabel = requireElement("visible-score-label", HTMLElement);
+const visibleTimeLabel = requireElement("visible-time-label", HTMLElement);
+const runWorldButton = requireElement("run-world", HTMLButtonElement);
 const workflowSource = requireElement("workflow-source", HTMLTextAreaElement);
 const runWorkflowButton = requireElement("run-workflow-button", HTMLButtonElement);
 const captureEvidenceButton = requireElement("capture-evidence-button", HTMLButtonElement);
@@ -144,6 +166,9 @@ let webXREvidence: readonly WebXREvidence[] = [];
 let webXRInvalidTargetMessage: string | undefined;
 let lastAnimationTime = 0;
 let cameraWorkflow: CameraWorkflowState = createDefaultCameraWorkflowState();
+let aliceWorkflow: AliceWorkflowState = createDefaultAliceWorkflowState();
+let workflowScoreValues = createInitialScoreValues(aliceWorkflow);
+let workflowElapsedSeconds = 0;
 let lastArchive: AliceProjectArchive | null = null;
 let selectedObjectName: string | null = null;
 let selectedTextureResourceId: string | null = null;
@@ -270,6 +295,10 @@ function renderEvidenceArtifactSummary(artifact: AliceEvidenceArtifact, actionLa
   const item = document.createElement("li");
   item.textContent = `${actionLabel}: ${summary.objectCount} ${summary.objectCount === 1 ? "object" : "objects"} captured.`;
   evidenceCaptureList.appendChild(item);
+}
+
+function setScoreTimeStatusMessage(message: string): void {
+  scoreTimeStatus.textContent = message;
 }
 
 function clearObjectList(): void {
@@ -446,6 +475,16 @@ function renderCameraWorkflow(): void {
   applyCameraWorkflowToViewport();
 }
 
+function renderScoreTimeWorkflow(bindings = resolveVisibleWorkflowBindings(aliceWorkflow, {
+  scoreValues: workflowScoreValues,
+  elapsedSeconds: workflowElapsedSeconds,
+})): void {
+  const scoreBinding = bindings.find((binding) => binding.kind === "score");
+  const timeBinding = bindings.find((binding) => binding.kind === "time");
+  visibleScoreLabel.textContent = scoreBinding?.text ?? "";
+  visibleTimeLabel.textContent = timeBinding?.text ?? "";
+}
+
 function updateCameraWorkflow(
   updater: () => CameraWorkflowState,
   successMessage: string,
@@ -457,6 +496,25 @@ function updateCameraWorkflow(
   } catch (error) {
     console.error(error);
     setCameraStatusMessage(`Camera error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function updateAliceWorkflow(
+  updater: () => AliceWorkflowState,
+  successMessage: string,
+): void {
+  try {
+    aliceWorkflow = updater();
+    workflowScoreValues = createInitialScoreValues(aliceWorkflow);
+    workflowElapsedSeconds = 0;
+    if (lastArchive) {
+      lastArchive.aliceWorkflow = aliceWorkflow;
+    }
+    renderScoreTimeWorkflow();
+    setScoreTimeStatusMessage(successMessage);
+  } catch (error) {
+    console.error(error);
+    setScoreTimeStatusMessage(`Score and time error: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -504,8 +562,12 @@ async function handleFileSelection(): Promise<void> {
     const archive = await loadProjectFromFile(file);
     lastArchive = archive;
     lastProject = archive.project;
+    aliceWorkflow = archive.aliceWorkflow ?? createDefaultAliceWorkflowState();
+    workflowScoreValues = createInitialScoreValues(aliceWorkflow);
+    workflowElapsedSeconds = 0;
     selectedTextureResourceId = latestTextureResourceId(archive.project);
     renderProject(archive.project);
+    renderScoreTimeWorkflow();
     setStatusMessage(describeProject(archive.project));
   } catch (error) {
     console.error(error);
@@ -978,6 +1040,7 @@ function renderProject(project: AliceProject): void {
     renderJointObjectOptions(project);
     applyScene(project);
     resetEvidenceWorkflow("Alice world ready for evidence capture.");
+    renderScoreTimeWorkflow();
 }
 
 function renderJointObjectOptions(project: AliceProject): void {
@@ -1186,6 +1249,12 @@ function installInputHandlers(): void {
     cameraMarkerName.value = "";
   });
 
+  addScorekeeperButton.addEventListener("click", handleAddScorekeeper);
+  addTimekeeperButton.addEventListener("click", handleAddTimekeeper);
+  addVisibleScoreButton.addEventListener("click", handleAddVisibleScoreBinding);
+  addVisibleTimeButton.addEventListener("click", handleAddVisibleTimeBinding);
+  runWorldButton.addEventListener("click", handleRunWorld);
+
   modelInput.addEventListener("change", () => {
     void ModelTextureCameraJointExportWorkflowBrowser.importModelAsset();
   });
@@ -1215,6 +1284,112 @@ function installInputHandlers(): void {
   shareEvidenceButton.addEventListener("click", () => {
     void handleShareEvidence();
   });
+}
+
+function handleAddScorekeeper(): void {
+  const requestedName = scorekeeperName.value.trim();
+  const parsedInitialValue = scorekeeperInitialValue.value.trim() === ""
+    ? 0
+    : Number(scorekeeperInitialValue.value);
+  updateAliceWorkflow(
+    () => addScorekeeper(aliceWorkflow, { name: requestedName, initialValue: parsedInitialValue }),
+    `Scorekeeper "${requestedName}" added.`,
+  );
+}
+
+function handleAddTimekeeper(): void {
+  const requestedName = timekeeperName.value.trim();
+  updateAliceWorkflow(
+    () => addTimekeeper(aliceWorkflow, { name: requestedName }),
+    `Timekeeper "${requestedName}" added.`,
+  );
+}
+
+function handleAddVisibleScoreBinding(): void {
+  const scorekeeper = aliceWorkflow.scorekeepers[0];
+  if (!scorekeeper) {
+    setScoreTimeStatusMessage("Add a scorekeeper before showing score.");
+    return;
+  }
+  updateAliceWorkflow(
+    () => bindVisibleWorkflowState(aliceWorkflow, {
+      id: "score-label",
+      kind: "score",
+      sourceName: scorekeeper.name,
+      target: "world-overlay",
+      label: "Score",
+      format: "integer",
+    }),
+    "Visible score added.",
+  );
+}
+
+function handleAddVisibleTimeBinding(): void {
+  const timekeeper = aliceWorkflow.timekeepers[0];
+  if (!timekeeper) {
+    setScoreTimeStatusMessage("Add a timekeeper before showing time.");
+    return;
+  }
+  updateAliceWorkflow(
+    () => bindVisibleWorkflowState(aliceWorkflow, {
+      id: "time-label",
+      kind: "time",
+      sourceName: timekeeper.name,
+      target: "world-overlay",
+      label: "Time",
+      format: "seconds-one-decimal",
+    }),
+    "Visible time added.",
+  );
+}
+
+function handleRunWorld(): void {
+  try {
+    const archive = ensureArchive();
+    archive.aliceWorkflow = aliceWorkflow;
+    ensureScoreTimeRunMethod(archive.project);
+    const execution = executeProject(archive.project, { aliceWorkflow });
+    workflowScoreValues = execution.scoreValues;
+    workflowElapsedSeconds = readElapsedSeconds(execution.visibleWorkflowBindings);
+    renderScoreTimeWorkflow(execution.visibleWorkflowBindings);
+    setScoreTimeStatusMessage("World run complete.");
+  } catch (error) {
+    console.error(error);
+    setScoreTimeStatusMessage(`Score and time error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function ensureScoreTimeRunMethod(project: AliceProject): void {
+  const scorekeeper = aliceWorkflow.scorekeepers[0];
+  if (!scorekeeper) {
+    throw new Error("Add a scorekeeper before running the world.");
+  }
+  const currentScore = workflowScoreValues.get(scorekeeper.name) ?? scorekeeper.initialValue;
+  const methodName = "aliceScoreTimeRun";
+  project.methods = project.methods.filter((method) => method.name !== methodName);
+  project.methods.push({
+    name: methodName,
+    isFunction: false,
+    returnType: "void",
+    parameters: [],
+    statements: [
+      {
+        kind: "VariableDeclaration",
+        name: scorekeeper.name,
+        varType: "WholeNumber",
+        value: String(currentScore),
+      },
+      {
+        kind: "VariableAssignment",
+        name: scorekeeper.name,
+        value: `${scorekeeper.name} + 10`,
+      },
+    ],
+  });
+}
+
+function readElapsedSeconds(bindings: readonly ResolvedVisibleWorkflowBinding[]): number {
+  return bindings.find((binding) => binding.kind === "time")?.value ?? 0;
 }
 
 function renderWebXRPanel(state: WebXRSessionState = webXRController?.state ?? "idle"): void {
@@ -1443,12 +1618,14 @@ function initializeApplication(): void {
   installWindowHandlers();
   installInputHandlers();
   renderCameraWorkflow();
+  renderScoreTimeWorkflow();
   ensureArchive();
   renderer.setAnimationLoop(renderFrame);
   renderWebXRPanel();
   setStatusMessage("Choose an .a3p file to begin.");
   setCameraStatusMessage("Camera ready.");
   resetEvidenceWorkflow("Load an Alice world to capture evidence.");
+  setScoreTimeStatusMessage("Score and time ready.");
   void refreshCapabilityStatus();
 }
 

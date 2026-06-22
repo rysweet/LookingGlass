@@ -230,7 +230,11 @@ export class TweedleVM {
       args: options.arguments ?? [],
     });
     this.environment = execution.environment;
-    return execution.result;
+    return {
+      ...execution.result,
+      scoreValues: new Map(),
+      visibleWorkflowBindings: [],
+    };
   }
 
   createDebugSession(mainDeclaration: ClassDecl, options: TweedleExecutionOptions = {}): TweedleDebugSession {
@@ -259,8 +263,13 @@ export class TweedleVM {
 
   dispatchEvent(eventName: string, payload: unknown = null): ExecutionResult {
     if (!this.environment) {
-      return { execution_log: [], returnValues: new Map() };
+      return { execution_log: [], returnValues: new Map(), scoreValues: new Map(), visibleWorkflowBindings: [] };
     }
-    return virtualMachine.dispatchEvent(this.environment, eventName, payload);
+    const result = virtualMachine.dispatchEvent(this.environment, eventName, payload);
+    return {
+      ...result,
+      scoreValues: new Map(),
+      visibleWorkflowBindings: [],
+    };
   }
 }
