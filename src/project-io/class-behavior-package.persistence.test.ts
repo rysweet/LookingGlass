@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import * as fs from "fs";
+import * as path from "path";
 import type { AliceProject, AliceTypeDefinition } from "../a3p-parser.js";
 import {
   readProject,
@@ -11,6 +13,9 @@ import {
   parseClassBehaviorPackage,
   serializeClassBehaviorPackage,
 } from "./class-behavior-package.js";
+
+const SOURCE_FIXTURE = path.resolve(process.cwd(), "test/fixtures/a3p/sanitized-scene.a3p");
+const TARGET_FIXTURE = path.resolve(process.cwd(), ".test-roundtrip/modified.a3p");
 
 function createBehaviorType(name = "SpinnerBehavior"): AliceTypeDefinition {
   return {
@@ -84,6 +89,43 @@ function createArchive(project: AliceProject): AliceProjectArchive {
 }
 
 describe("project-io/class-behavior-package persistence", () => {
+  it("persists real SanitizedBunny class behavior through package import and Alice project save/read", async () => {
+    const sourceArchive = await readProject(fs.readFileSync(SOURCE_FIXTURE));
+    const targetArchive = await readProject(fs.readFileSync(TARGET_FIXTURE));
+    const existingTypeNames = (targetArchive.project.types ?? []).map((type) => type.name);
+    const packageData = exportClassBehaviorPackage(sourceArchive.project, "SanitizedBunny");
+
+    expect(packageData.type).toMatchObject({
+      name: "SanitizedBunny",
+      superTypeName: "org.lgna.story.SBiped",
+      fields: [{ name: "nickname", typeName: "java.lang.String", initializer: null }],
+      constructors: [],
+    });
+    expect(packageData.type.methods?.map((method) => method.name)).toEqual(["hop"]);
+
+    const importResult = importClassBehaviorPackage(
+      targetArchive.project,
+      parseClassBehaviorPackage(serializeClassBehaviorPackage(packageData)),
+    );
+    const savedBytes = await writeProject(targetArchive, {
+      generateThumbnailFromScene: false,
+    });
+    const reopened = await readProject(savedBytes);
+    const reopenedType = reopened.project.types?.find((type) => type.name === "SanitizedBunny");
+
+    expect(importResult).toMatchObject({
+      importedName: "SanitizedBunny",
+      renamed: false,
+      replaced: false,
+      merged: false,
+    });
+    expect(reopened.project.types?.map((type) => type.name)).toEqual([
+      ...existingTypeNames,
+      "SanitizedBunny",
+    ]);
+    expect(reopenedType).toEqual(packageData.type);
+  });
+
   it("preserves exported and imported class behavior through package JSON and Alice project save/read", async () => {
     const sourceType = createBehaviorType();
     const sourceProject = createProject("Alice Source Project", [sourceType]);

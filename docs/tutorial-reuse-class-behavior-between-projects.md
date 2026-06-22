@@ -55,7 +55,7 @@ dependent classes into the receiving project.
 1. Open `MotionLibrary.a3p`.
 2. In **Class Behaviors**, select `SpinnerBehavior`.
 3. Choose **Export class behavior**.
-5. Save the downloaded file as:
+4. Save the downloaded file as:
 
 ```text
 SpinnerBehavior.alice-class-behavior.json

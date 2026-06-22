@@ -60,15 +60,18 @@ alice-web enforces these fixed limits before changing project state:
 | Limit | Value |
 | --- | --- |
 | Package JSON | 256 KiB |
-| Individual string value | 8 KiB |
+| Individual string value | 8,192 characters |
 | Fields per class | 200 |
 | Methods per class | 200 |
 | Constructors per class | 200 |
 | Parameters per method or constructor | 200 |
 | Statements per statement array | 200 |
-| Nested statement depth | 32 |
+| Nested package data depth | 32 |
 
 When a package exceeds a limit, the import must fail before changing the project.
+
+Names for types, fields, methods, constructors, and parameters must start with a
+letter or underscore and then use only letters, numbers, or underscores.
 
 ## Identity requirements
 

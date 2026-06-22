@@ -13,6 +13,7 @@ a separate TypeScript-only behavior model.
 - [TypeScript API](#typescript-api)
 - [HTTP API](#http-api)
 - [Conflict strategies](#conflict-strategies)
+- [Project persistence](#project-persistence)
 - [Validation requirements](#validation-requirements)
 - [Error contract](#error-contract)
 - [Related documentation](#related-documentation)
@@ -134,13 +135,17 @@ Example package:
 
 ## TypeScript API
 
-Package helpers live in `src/project-io/class-behavior-package.ts`.
+Package helpers live in `src/project-io/class-behavior-package.ts`. The browser
+workflow and server routes use these helpers so export, import, validation, and
+conflict handling stay consistent.
 
 ```typescript
 import {
   exportClassBehaviorPackage,
   importClassBehaviorPackage,
   parseClassBehaviorPackage,
+  serializeClassBehaviorPackage,
+  ClassBehaviorPackageError,
   type AliceClassBehaviorPackage,
   type ClassBehaviorConflictStrategy,
   type ClassBehaviorImportResult,
@@ -173,19 +178,30 @@ The function returns a package with:
 The function throws a typed package error when `project.types` does not contain
 `typeName`.
 
+### `serializeClassBehaviorPackage(packageData)`
+
+```typescript
+function serializeClassBehaviorPackage(
+  packageData: AliceClassBehaviorPackage,
+): string;
+```
+
+Validates the package and returns pretty-printed JSON ending with a newline. The
+serialized output is checked against the package size limit before it is returned.
+
 ### `parseClassBehaviorPackage(input)`
 
 ```typescript
 function parseClassBehaviorPackage(
-  input: string | unknown,
+  input: unknown,
 ): AliceClassBehaviorPackage;
 ```
 
 Parses and validates an untrusted package. `input` can be a JSON string or an
 already parsed value.
 
-Validation runs before a package is returned. Invalid packages throw a typed
-package error and do not modify project state.
+Validation runs before a package is returned. Invalid packages throw
+`ClassBehaviorPackageError` and do not modify project state.
 
 ### `importClassBehaviorPackage(project, packageData, options)`
 
@@ -345,9 +361,38 @@ When a member key matches, the package member replaces the existing member. When
 no member key matches, the existing member is preserved and the package member is
 appended in package order. Merge does not merge statement arrays member-by-member.
 
+## Project persistence
+
+Import changes the same `AliceProject.types` collection that Project IO writes
+into `.a3p` project XML.
+
+```typescript
+import { readFile, writeFile } from "node:fs/promises";
+import { readProject, writeProject } from "./src/project-io.js";
+import {
+  importClassBehaviorPackage,
+  parseClassBehaviorPackage,
+} from "./src/project-io/class-behavior-package.js";
+
+const archive = await readProject(await readFile("RobotDance.a3p"));
+const packageData = parseClassBehaviorPackage(
+  await readFile("SpinnerBehavior.alice-class-behavior.json", "utf8"),
+);
+
+importClassBehaviorPackage(archive.project, packageData, {
+  conflictStrategy: "rename",
+});
+
+await writeFile("RobotDance-with-spinner.a3p", await writeProject(archive));
+```
+
+Reading `RobotDance-with-spinner.a3p` returns the imported type in
+`archive.project.types` with its fields, constructors, methods, superclass name,
+and statement data intact.
+
 ## Validation requirements
 
-alice-web validates packages before import and before any project mutation:
+alice-web validates packages before import and before any project change:
 
 | Rule | Requirement |
 | --- | --- |
@@ -355,11 +400,11 @@ alice-web validates packages before import and before any project mutation:
 | Package version | `version` must be `1` |
 | Export identity | `exportedBy` must be `alice-web` |
 | Type shape | `type.name` is required; `fields`, `methods`, and `constructors` must be arrays when present |
-| Safe names | Type, field, method, constructor, and parameter names must be non-empty safe strings |
+| Safe names | Type, field, method, constructor, and parameter names must match `[A-Za-z_][A-Za-z0-9_]*` |
 | Size limit | Package JSON must be 256 KiB or smaller |
-| String limit | Individual string values must be limited to 8 KiB |
+| String limit | Individual string values must be limited to 8,192 characters |
 | Array limit | `fields`, `methods`, `constructors`, `parameters`, and statement arrays must each be limited to 200 entries |
-| Nesting limit | Nested statement data must be limited to 32 levels |
+| Nesting limit | Nested package data must be limited to 32 levels |
 | Dangerous keys | `__proto__`, `prototype`, and `constructor` keys must be rejected anywhere in the package |
 
 Import treats method and constructor bodies as data. It must never evaluate,
@@ -373,6 +418,9 @@ compile, dynamically import, or run package contents.
 | `400` | `missing-class-behavior` | The requested class behavior is not present in the current project |
 | `409` | `class-behavior-conflict` | The target project already has the class name and `reject` was requested |
 | `400` | `class-behavior-package-too-large` | The package JSON is too large |
+| `400` | `dangerous-class-behavior-key` | The package contains `__proto__`, `prototype`, or `constructor` |
+| `400` | `unsafe-class-behavior-name` | A type, field, method, constructor, or parameter name is not safe |
+| `400` | `unsupported-class-behavior-version` | The package version is not supported |
 
 ## Related documentation
 

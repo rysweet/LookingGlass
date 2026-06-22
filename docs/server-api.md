@@ -228,9 +228,9 @@ behavior package into the current project. The route accepts `rename`, `replace`
 Both routes use the current Alice project state and the same local API token
 policy as other current-project operations. See
 [Class behavior package API](./class-behavior-package-api.md) for the package
-schema, request bodies, response bodies, validation rules, and examples.
+format, request bodies, response bodies, validation rules, and examples.
 
-Camera routes require `X-Alice-Local-Api-Token` on both read and mutation
+Camera routes require `X-Alice-Local-Api-Token` on both read and write
 requests when the CLI server is started with `--api-token`.
 
 Read-only audio routes, including `GET /api/audio/formats` and
@@ -352,7 +352,7 @@ bodies, marker lifecycle, first-person behavior, and validation rules.
 Camera reads are protected when `--api-token` is configured. The camera routes
 use a route-level token guard so `GET /api/camera/state` and
 `GET /api/camera/markers` reject missing or invalid tokens the same way camera
-mutation routes do.
+write routes do.
 
 ## Server state model
 

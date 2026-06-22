@@ -165,6 +165,11 @@ function setStatusMessage(message: string): void {
   status.dataset.state = "ready";
 }
 
+function setLoadingMessage(message: string): void {
+  status.textContent = message;
+  status.dataset.state = "loading";
+}
+
 function setErrorMessage(error: unknown): void {
   status.textContent = `Error: ${error instanceof Error ? error.message : String(error)}`;
   status.dataset.state = "error";
@@ -431,8 +436,11 @@ async function handleFileSelection(): Promise<void> {
     return;
   }
 
-  status.textContent = `Loading ${file.name}...`;
+  setLoadingMessage(`Loading ${file.name}...`);
   clearObjectList();
+  assetList.replaceChildren();
+  classBehaviorSelect.replaceChildren();
+  classBehaviorList.replaceChildren();
 
   try {
     const archive = await loadProjectFromFile(file);

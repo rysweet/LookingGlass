@@ -3,7 +3,7 @@
 Use reusable class behavior packages to move one modified Alice class from the
 current project into another Alice project.
 
-alice-web uses `.alice-class-behavior.json` files. Each package stores one
+Alice uses `.alice-class-behavior.json` files. Each package stores one
 `AliceTypeDefinition`, which is the same project type data Alice reads and writes
 inside `.a3p` projects.
 
@@ -56,9 +56,9 @@ resources, or multiple coordinated classes.
 1. Open the source project.
 2. In **Class Behaviors**, select the reusable class behavior.
 3. Choose **Export class behavior**.
-5. Save the `.alice-class-behavior.json` file.
+4. Save the `.alice-class-behavior.json` file.
 
-Alice downloads a JSON file named after the selected class behavior. For example:
+The browser downloads a JSON file named after the selected class behavior. For example:
 
 ```text
 SpinnerBehavior.alice-class-behavior.json
@@ -76,8 +76,8 @@ the imported behavior into the `.a3p` file. Browser imports use the default
 
 ## Command line workflow
 
-The server API can export the selected class behavior from the current project
-and import it into another current project.
+The server API exports a class behavior from the project currently loaded by the
+server. Load or create the receiving project before calling the import route.
 
 Set a local API token and run the Alice server:
 
@@ -205,18 +205,19 @@ The reusable class behavior package preserves these fields from
 | Method bodies | Alice statement arrays, including nested bodies and expressions |
 
 The import writes this data back into the receiving project's `types`
-collection. Saving the project stores the imported behavior in the `.a3p` file.
+collection. Saving the project stores the imported behavior in the `.a3p` file,
+and reopening the saved project returns the same imported type data.
 
 ## Safe package handling
 
 Class behavior packages are untrusted JSON data. alice-web:
 
-- parse and validate package contents before the project changes
-- preserve package contents as data instead of evaluating, compiling,
+- parses and validates package contents before the project changes
+- preserves package contents as data instead of evaluating, compiling,
   dynamically importing, or running them
-- reject unsafe object keys such as `__proto__`, `prototype`, and `constructor`
-- reject oversized strings, oversized arrays, and excessive nesting
-- show import errors as text, not as HTML
+- rejects unsafe object keys such as `__proto__`, `prototype`, and `constructor`
+- rejects oversized strings, oversized arrays, and excessive nesting
+- shows import errors as text, not as HTML
 
 ## Troubleshooting
 

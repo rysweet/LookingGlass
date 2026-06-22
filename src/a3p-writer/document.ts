@@ -494,8 +494,28 @@ function setResourceInitializer(doc: Document, fieldNode: Element, resourceType:
 
 function setTypeProperty(doc: Document, parent: Element, propertyName: string, typeName: string): void {
   const property = ensureProperty(doc, parent, propertyName);
+  const existingNode = directChild(property, "node");
+  if (existingNode && existingNamedUserTypeMatches(existingNode, typeName)) {
+    return;
+  }
   while (property.firstChild) property.removeChild(property.firstChild);
   property.appendChild(createTypeNode(doc, typeName));
+}
+
+function existingNamedUserTypeMatches(typeNode: Element, typeName: string): boolean {
+  if (typeNode.getAttribute("type") !== "org.lgna.project.ast.NamedUserType") {
+    return false;
+  }
+  if (getPropertyText(typeNode, "name") === typeName) {
+    return true;
+  }
+  const superTypeNode = getPropertyNode(typeNode, "superType");
+  if (!superTypeNode) {
+    return false;
+  }
+  const superType = directChild(superTypeNode, "type")?.getAttribute("name")
+    ?? getPropertyText(superTypeNode, "name");
+  return superType === typeName;
 }
 
 function appendTypeProperty(doc: Document, parent: Element, propertyName: string, typeName: string): void {
