@@ -74,6 +74,7 @@ The audit source of truth is a committed TypeScript module:
 | Export | Required contract |
 | --- | --- |
 | `ALICE_ORG_HOWTO_INVENTORY` | Exactly 54 saved Alice.org HowTo entries. Each entry must have a stable `id`, human title, source label, and expected coverage area. |
+| `ALICE_HOWTO_SCENARIO_MAP` | One executable scenario for each inventory `id`. Each scenario declares a stable id, command that selects that id, user steps, expected output, and evidence records. |
 | `ALICE_HOWTO_COVERAGE_MAP` | One or more coverage records for each inventory `id`. Each record identifies an existing repository path and an evidence token that must be present in that path. |
 | `ALICE_HOWTO_WORDING_RULES` | Exact forbidden terms, allowed baseline exception, and jargon rules for generated audit evidence. |
 
@@ -117,6 +118,7 @@ Each check object uses this shape:
 | `alice-identity` | User-facing identity in audit evidence is `Alice`; CLI, package, and runtime identity are `alice-web`. |
 | `baseline-only` | The only comparison baseline value is `rysweet/RabbitHole origin/develop`; other names, branches, or local feature branches fail this check. |
 | `howto-inventory` | The saved Alice.org HowTo inventory contains exactly 54 unique entries and each entry has a coverage map record. |
+| `scenario-traceability` | Every inventory entry maps to exactly one executable scenario id with a command that selects that id, user steps, expected output, and evidence records. |
 | `coverage-evidence` | Every mapped path exists and contains the required evidence token. |
 | `wording` | `ALICE_HOWTO_WORDING_RULES` forbidden wording and unsupported jargon are absent from generated audit evidence. |
 
@@ -150,7 +152,7 @@ The scenario does the following:
 10. Asserts `baseline: "rysweet/RabbitHole origin/develop"`.
 11. Asserts `source.inventoryCount: 54`.
 12. Asserts `scope.name: "Alice.org HowTo coverage"`.
-13. Asserts the `howto-inventory`, `coverage-evidence`, and `wording` checks passed.
+13. Asserts the `howto-inventory`, `scenario-traceability`, `coverage-evidence`, and `wording` checks passed.
 14. Removes temporary evidence before exit.
 15. Avoids `PORT`, `/api/health`, `curl`, browser automation, and REST server startup.
 

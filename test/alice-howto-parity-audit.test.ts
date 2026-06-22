@@ -11,11 +11,20 @@ type InventoryEntry = {
   title: string;
   sourceLabel: string;
   coverageArea: string;
+  category: string;
 };
 
 type CoverageRecord = {
   path: string;
   evidenceToken: string;
+};
+
+type ExecutableScenario = {
+  scenarioId: string;
+  command: string;
+  userSteps: string[];
+  expectedOutput: string;
+  evidence: CoverageRecord[];
 };
 
 type WordingRules = {
@@ -59,6 +68,7 @@ async function loadInventoryModule() {
   return import(/* @vite-ignore */ modulePath) as Promise<{
     ALICE_ORG_HOWTO_INVENTORY: InventoryEntry[];
     ALICE_HOWTO_COVERAGE_MAP: Record<string, CoverageRecord[]>;
+    ALICE_HOWTO_SCENARIO_MAP: Record<string, ExecutableScenario>;
     ALICE_HOWTO_WORDING_RULES: WordingRules;
   }>;
 }
@@ -104,14 +114,33 @@ describe("Alice HowTo parity audit inventory contract", () => {
   });
 
   it("maps every inventory entry to existing repository evidence", async () => {
-    const { ALICE_ORG_HOWTO_INVENTORY, ALICE_HOWTO_COVERAGE_MAP } = await loadInventoryModule();
+    const { ALICE_ORG_HOWTO_INVENTORY, ALICE_HOWTO_COVERAGE_MAP, ALICE_HOWTO_SCENARIO_MAP } =
+      await loadInventoryModule();
 
     expect(Object.keys(ALICE_HOWTO_COVERAGE_MAP).sort()).toEqual(
+      ALICE_ORG_HOWTO_INVENTORY.map((entry) => entry.id).sort(),
+    );
+    expect(Object.keys(ALICE_HOWTO_SCENARIO_MAP).sort()).toEqual(
       ALICE_ORG_HOWTO_INVENTORY.map((entry) => entry.id).sort(),
     );
 
     for (const entry of ALICE_ORG_HOWTO_INVENTORY) {
       const coverage = ALICE_HOWTO_COVERAGE_MAP[entry.id];
+      const scenario = ALICE_HOWTO_SCENARIO_MAP[entry.id];
+
+      expect(scenario.scenarioId, `${entry.id} should have a stable executable scenario id`).toBe(
+        `alice-howto:${entry.id}`,
+      );
+      expect(scenario.command, `${entry.id} should declare how to execute the scenario`).toBe(
+        `npm test -- test/alice-howto-executable-scenarios.test.ts -t "${scenario.scenarioId}$"`,
+      );
+      expect(scenario.userSteps, `${entry.id} should describe user steps`).toEqual([
+        expect.stringContaining(entry.title),
+        expect.stringContaining(entry.category),
+        expect.stringContaining(scenario.scenarioId),
+      ]);
+      expect(scenario.expectedOutput, `${entry.id} should describe expected output`).toContain(entry.title);
+      expect(scenario.evidence).toEqual(coverage);
       expect(coverage, `${entry.id} should have coverage`).toEqual(expect.any(Array));
       expect(coverage.length, `${entry.id} should have at least one coverage record`).toBeGreaterThan(0);
 
@@ -178,7 +207,14 @@ describe("Alice HowTo parity audit result contract", () => {
     expect(result.scope.included.length).toBeGreaterThan(0);
     expect(result.scope.excluded).toEqual(expect.any(Array));
 
-    for (const id of ["alice-identity", "baseline-only", "howto-inventory", "coverage-evidence", "wording"]) {
+    for (const id of [
+      "alice-identity",
+      "baseline-only",
+      "howto-inventory",
+      "scenario-traceability",
+      "coverage-evidence",
+      "wording",
+    ]) {
       expect(result.checks.find((check) => check.id === id)?.status, `${id} should pass`).toBe("passed");
     }
   });

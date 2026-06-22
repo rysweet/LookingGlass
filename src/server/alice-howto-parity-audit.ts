@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import {
   ALICE_HOWTO_COVERAGE_MAP,
+  ALICE_HOWTO_SCENARIO_MAP,
   ALICE_HOWTO_WORDING_RULES,
   ALICE_ORG_HOWTO_INVENTORY,
   type AliceHowToCoverageRecord,
@@ -16,7 +17,13 @@ export type AuditCheckStatus = "passed" | "failed";
 export type AuditSummaryStatus = "passed" | "failed";
 
 export interface AliceHowToAuditCheck {
-  readonly id: "alice-identity" | "baseline-only" | "howto-inventory" | "coverage-evidence" | "wording";
+  readonly id:
+    | "alice-identity"
+    | "baseline-only"
+    | "howto-inventory"
+    | "scenario-traceability"
+    | "coverage-evidence"
+    | "wording";
   readonly status: AuditCheckStatus;
   readonly summary: string;
   readonly details?: readonly string[];
@@ -103,6 +110,7 @@ async function buildChecks(repoRoot: string): Promise<readonly AliceHowToAuditCh
     checkAliceIdentity("Alice", "alice-web"),
     checkBaseline(ALICE_HOWTO_WORDING_RULES.allowedBaseline),
     inventoryCheck,
+    checkScenarioTraceability(),
     evidenceCheck,
   ];
 
@@ -189,6 +197,48 @@ function checkInventory(): AliceHowToAuditCheck {
       details.length === 0
         ? "Saved HowTo inventory has 54 unique entries with mapped records."
         : "Saved HowTo inventory needs correction.",
+    ...(details.length > 0 ? { details } : {}),
+  };
+}
+
+function checkScenarioTraceability(): AliceHowToAuditCheck {
+  const ids = ALICE_ORG_HOWTO_INVENTORY.map((entry) => entry.id);
+  const scenarioIds = Object.keys(ALICE_HOWTO_SCENARIO_MAP);
+  const missingScenarios = ids.filter((id) => !ALICE_HOWTO_SCENARIO_MAP[id]);
+  const extraScenarios = scenarioIds.filter((id) => !ids.includes(id));
+  const invalidScenarios = ids.flatMap((id) => {
+    const scenario = ALICE_HOWTO_SCENARIO_MAP[id];
+    if (!scenario) {
+      return [];
+    }
+
+    const details = [
+      scenario.scenarioId === `alice-howto:${id}` ? undefined : `Scenario id mismatch: ${id}.`,
+      scenario.command.trim() === "" ? `Scenario command is empty: ${id}.` : undefined,
+      scenario.command.includes(`-t "${scenario.scenarioId}$"`)
+        ? undefined
+        : `Scenario command does not select its id exactly: ${id}.`,
+      scenario.userSteps.length === 0 || scenario.userSteps.some((step) => step.trim() === "")
+        ? `Scenario user steps are incomplete: ${id}.`
+        : undefined,
+      scenario.expectedOutput.trim() === "" ? `Scenario expected output is empty: ${id}.` : undefined,
+      scenario.evidence.length === 0 ? `Scenario evidence is empty: ${id}.` : undefined,
+    ];
+    return details.filter((detail): detail is string => detail !== undefined);
+  });
+  const details = [
+    ...missingScenarios.map((id) => `Missing executable scenario: ${id}.`),
+    ...extraScenarios.map((id) => `Executable scenario has no inventory entry: ${id}.`),
+    ...invalidScenarios,
+  ];
+
+  return {
+    id: "scenario-traceability",
+    status: details.length === 0 ? "passed" : "failed",
+    summary:
+      details.length === 0
+        ? "Every HowTo maps to one executable scenario with user steps and expected output."
+        : "Executable HowTo scenario traceability needs correction.",
     ...(details.length > 0 ? { details } : {}),
   };
 }

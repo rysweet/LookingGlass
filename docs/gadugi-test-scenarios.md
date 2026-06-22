@@ -253,7 +253,7 @@ steps:
       cleanup() { status=$?; rm -rf "$AUDIT_DIR"; exit "$status"; };
       trap cleanup EXIT;
       node dist-server/cli.js alice-howto-parity-audit --output "$AUDIT_JSON";
-      node -e "const fs=require(\"fs\"); const d=JSON.parse(fs.readFileSync(process.argv[1], \"utf8\")); if (d.product !== \"Alice\") throw new Error(\"product identity drift\"); if (d.runtime !== \"alice-web\") throw new Error(\"runtime identity drift\"); if (d.baseline !== \"rysweet/RabbitHole origin/develop\") throw new Error(\"baseline drift\"); if (d.source?.inventoryCount !== 54) throw new Error(\"inventory count drift\"); if (d.scope?.name !== \"Alice.org HowTo coverage\") throw new Error(\"scope drift\"); for (const id of [\"howto-inventory\", \"coverage-evidence\", \"wording\"]) { const check=d.checks?.find((item)=>item.id === id); if (!check || check.status !== \"passed\") throw new Error(`${id} check failed`); }" "$AUDIT_JSON"'
+      node -e "const fs=require(\"fs\"); const d=JSON.parse(fs.readFileSync(process.argv[1], \"utf8\")); if (d.product !== \"Alice\") throw new Error(\"product identity drift\"); if (d.runtime !== \"alice-web\") throw new Error(\"runtime identity drift\"); if (d.baseline !== \"rysweet/RabbitHole origin/develop\") throw new Error(\"baseline drift\"); if (d.source?.inventoryCount !== 54) throw new Error(\"inventory count drift\"); if (d.scope?.name !== \"Alice.org HowTo coverage\") throw new Error(\"scope drift\"); for (const id of [\"howto-inventory\", \"scenario-traceability\", \"coverage-evidence\", \"wording\"]) { const check=d.checks?.find((item)=>item.id === id); if (!check || check.status !== \"passed\") throw new Error(`${id} check failed`); }" "$AUDIT_JSON"'
     timeout: 60000
 ```
 
@@ -471,7 +471,7 @@ Flow:
 8. Assert the comparison baseline is `rysweet/RabbitHole origin/develop`.
 9. Assert `source.inventoryCount` is `54`.
 10. Assert the scope is `Alice.org HowTo coverage`.
-11. Assert the `howto-inventory`, `coverage-evidence`, and `wording` checks passed.
+11. Assert the `howto-inventory`, `scenario-traceability`, `coverage-evidence`, and `wording` checks passed.
 12. Remove the temporary audit directory.
 
 Run it directly:
