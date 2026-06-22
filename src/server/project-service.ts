@@ -8,6 +8,7 @@ import { createDefaultCameraWorkflowState } from "../camera-workflow.js";
 import {
   exportWebPackage,
   generateShareArtifacts,
+  isReservedWebPackagePath,
   validateWebPackage,
   type ExportedWebPackage,
   type ShareArtifacts,
@@ -407,8 +408,14 @@ export const projectService: ProjectService = {
   async exportWebPackage(state, input) {
     return exportWebPackage(buildCurrentProject(state), {
       ...input,
-      resources: Array.from(state.resources, ([path, bytes]) => ({ path, bytes }))
-        .filter((resource) => !SPECIAL_PROJECT_IO_PATHS.has(resource.path)),
+      resources: [
+        ...(input.resources ?? []),
+        ...Array.from(state.resources, ([path, bytes]) => ({ path, bytes }))
+          .filter((resource) =>
+            !SPECIAL_PROJECT_IO_PATHS.has(resource.path)
+            && !isReservedWebPackagePath(resource.path)
+          ),
+      ],
     });
   },
 

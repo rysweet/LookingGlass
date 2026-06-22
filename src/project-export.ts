@@ -35,6 +35,10 @@ const RESERVED_WEB_PACKAGE_PATHS = new Set<string>(REQUIRED_WEB_PACKAGE_FILES);
 const FORBIDDEN_IDENTITY_RE = /LookingGlass|lookingglass|alice-standalone-player/;
 const ENCODED_PATH_CONTROL_RE = /%(?:2e|2f|5c)/i;
 
+export function isReservedWebPackagePath(path: string): boolean {
+  return RESERVED_WEB_PACKAGE_PATHS.has(path);
+}
+
 export interface ProjectExportResource {
   path: string;
   bytes: Uint8Array | string;
