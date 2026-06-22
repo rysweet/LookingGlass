@@ -93,16 +93,8 @@ async function buildChecks(repoRoot: string): Promise<readonly AliceHowToAuditCh
   const inventoryCheck = checkInventory();
   const evidenceCheck = await checkCoverageEvidence(repoRoot);
   const checks: AliceHowToAuditCheck[] = [
-    {
-      id: "alice-identity",
-      status: "passed",
-      summary: "Product and runtime fields match required names.",
-    },
-    {
-      id: "baseline-only",
-      status: "passed",
-      summary: "Comparison field matches the approved upstream reference.",
-    },
+    checkAliceIdentity("Alice", "alice-web"),
+    checkBaseline(ALICE_HOWTO_WORDING_RULES.allowedBaseline),
     inventoryCheck,
     evidenceCheck,
   ];
@@ -126,6 +118,41 @@ async function buildChecks(repoRoot: string): Promise<readonly AliceHowToAuditCh
   });
   checks.push(checkWording(wordingProbe));
   return checks;
+}
+
+export function checkAliceIdentity(product: string, runtime: string): AliceHowToAuditCheck {
+  const details = [
+    product === "Alice" ? undefined : "Product field does not match the required name.",
+    runtime === "alice-web" ? undefined : "Runtime field does not match the required name.",
+  ].filter((detail): detail is string => detail !== undefined);
+
+  return {
+    id: "alice-identity",
+    status: details.length === 0 ? "passed" : "failed",
+    summary:
+      details.length === 0
+        ? "Product and runtime fields match required names."
+        : "Product and runtime fields need correction.",
+    ...(details.length > 0 ? { details } : {}),
+  };
+}
+
+export function checkBaseline(baseline: string): AliceHowToAuditCheck {
+  const details = [
+    baseline === ALICE_HOWTO_WORDING_RULES.allowedBaseline
+      ? undefined
+      : "Comparison field does not match the approved upstream reference.",
+  ].filter((detail): detail is string => detail !== undefined);
+
+  return {
+    id: "baseline-only",
+    status: details.length === 0 ? "passed" : "failed",
+    summary:
+      details.length === 0
+        ? "Comparison field matches the approved upstream reference."
+        : "Comparison field needs correction.",
+    ...(details.length > 0 ? { details } : {}),
+  };
 }
 
 function checkInventory(): AliceHowToAuditCheck {

@@ -47,6 +47,13 @@ type AuditResult = {
   };
 };
 
+type AuditCheck = {
+  id: string;
+  status: "passed" | "failed";
+  summary: string;
+  details?: string[];
+};
+
 async function loadInventoryModule() {
   const modulePath = "../src/server/alice-howto-parity-inventory";
   return import(/* @vite-ignore */ modulePath) as Promise<{
@@ -64,6 +71,8 @@ async function loadAuditModule() {
       pretty?: boolean;
       repoRoot?: string;
     }): Promise<AuditResult>;
+    checkAliceIdentity(product: string, runtime: string): AuditCheck;
+    checkBaseline(baseline: string): AuditCheck;
   }>;
 }
 
@@ -216,5 +225,101 @@ describe("Alice HowTo parity audit result contract", () => {
     ]) {
       expect(text, `audit evidence must not contain ${forbidden}`).not.toContain(forbidden);
     }
+  });
+});
+
+describe("Alice HowTo parity audit alice-identity check computation", () => {
+  it("passes when product and runtime match the canonical Alice names", async () => {
+    const { checkAliceIdentity } = await loadAuditModule();
+
+    const check = checkAliceIdentity("Alice", "alice-web");
+
+    expect(check.id).toBe("alice-identity");
+    expect(check.status).toBe("passed");
+    expect(check.summary).toBe("Product and runtime fields match required names.");
+    expect(check.details ?? []).toEqual([]);
+  });
+
+  it("fails when the product name differs from Alice", async () => {
+    const { checkAliceIdentity } = await loadAuditModule();
+
+    const check = checkAliceIdentity("NotAlice", "alice-web");
+
+    expect(check.id).toBe("alice-identity");
+    expect(check.status).toBe("failed");
+    expect(check.details?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("fails when the runtime name differs from alice-web", async () => {
+    const { checkAliceIdentity } = await loadAuditModule();
+
+    const check = checkAliceIdentity("Alice", "browser");
+
+    expect(check.id).toBe("alice-identity");
+    expect(check.status).toBe("failed");
+    expect(check.details?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("fails when both product and runtime differ", async () => {
+    const { checkAliceIdentity } = await loadAuditModule();
+
+    const check = checkAliceIdentity("NotAlice", "browser");
+
+    expect(check.status).toBe("failed");
+    expect(check.details?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("keeps identity failure details free of forbidden wording", async () => {
+    const { checkAliceIdentity } = await loadAuditModule();
+    const { ALICE_HOWTO_WORDING_RULES } = await loadInventoryModule();
+
+    const detailText = (checkAliceIdentity("NotAlice", "browser").details ?? []).join(" ");
+
+    for (const forbidden of [
+      ...ALICE_HOWTO_WORDING_RULES.forbiddenTerms,
+      ...ALICE_HOWTO_WORDING_RULES.forbiddenJargon,
+    ]) {
+      expect(detailText, `identity failure detail must not contain ${forbidden}`).not.toContain(forbidden);
+    }
+    expect(detailText).not.toContain("RabbitHole");
+  });
+});
+
+describe("Alice HowTo parity audit baseline-only check computation", () => {
+  it("passes for the canonical RabbitHole origin/develop baseline", async () => {
+    const { checkBaseline } = await loadAuditModule();
+    const { ALICE_HOWTO_WORDING_RULES } = await loadInventoryModule();
+
+    const check = checkBaseline(ALICE_HOWTO_WORDING_RULES.allowedBaseline);
+
+    expect(check.id).toBe("baseline-only");
+    expect(check.status).toBe("passed");
+    expect(check.summary).toBe("Comparison field matches the approved upstream reference.");
+    expect(check.details ?? []).toEqual([]);
+  });
+
+  it("fails when the baseline differs from the approved upstream reference", async () => {
+    const { checkBaseline } = await loadAuditModule();
+
+    const check = checkBaseline("some/other origin/main");
+
+    expect(check.id).toBe("baseline-only");
+    expect(check.status).toBe("failed");
+    expect(check.details?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("keeps baseline failure details free of forbidden wording and adds no baseline token", async () => {
+    const { checkBaseline } = await loadAuditModule();
+    const { ALICE_HOWTO_WORDING_RULES } = await loadInventoryModule();
+
+    const detailText = (checkBaseline("some/other origin/main").details ?? []).join(" ");
+
+    for (const forbidden of [
+      ...ALICE_HOWTO_WORDING_RULES.forbiddenTerms,
+      ...ALICE_HOWTO_WORDING_RULES.forbiddenJargon,
+    ]) {
+      expect(detailText, `baseline failure detail must not contain ${forbidden}`).not.toContain(forbidden);
+    }
+    expect(detailText).not.toContain("RabbitHole");
   });
 });
