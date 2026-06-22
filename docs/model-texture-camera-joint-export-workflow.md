@@ -204,6 +204,13 @@ import { ProjectExport } from "alice-web";
 const webPackage = await ProjectExport.exportWebPackage(archive.project, {
   title: archive.project.projectName,
   description: "Robot arm scene with a saved camera view.",
+  teacher: {
+    audience: "Middle school creative coding",
+    lessonFocus: "Reusable camera and joint-state lesson",
+    remix: "with-attribution",
+    tags: ["classroom", "remix"],
+    standards: ["CSTA 2-AP-10"],
+  },
 });
 
 const validation = await ProjectExport.validateWebPackage({
@@ -219,12 +226,20 @@ if (!validation.valid) {
 const shareArtifacts = await ProjectExport.generateShareArtifacts({
   packageBase64: webPackage.package.base64,
   title: archive.project.projectName,
+  teacher: {
+    audience: "Middle school creative coding",
+    lessonFocus: "Reusable camera and joint-state lesson",
+    remix: "with-attribution",
+  },
 });
 console.log(shareArtifacts.share.links.html);
 ```
 
 `ProjectExport.exportWebPackage()` creates the runnable `alice-web` ZIP package.
 `ProjectExport.generateShareArtifacts()` only accepts a package that validates.
+When `teacher` metadata is provided, `share.json` contains
+`alice-web.teacher-share/v1` metadata and validation evidence includes
+`teacher-share-metadata`.
 The existing `exportWebPackage(project)` function receives an `AliceProject`.
 The planned browser workflow must place imported resources, camera state, and
 joint state into the project payload or an explicit wrapper before export so the

@@ -160,6 +160,52 @@ const output = await writeProject(archive);
 See [[Imported model and texture assets](./imported-models-and-textures.md)
 for the full asset descriptor and scene binding contract.
 
+## Move modified class behavior between projects
+
+Class portability is bounded to parsed `AliceProject.types` behavior. It exports
+the selected type definition as an `alice-web.reusable-class-behavior` JSON
+package, validates the JSON, then imports it into another project with an
+explicit conflict policy.
+
+```typescript
+import {
+  exportClassBehaviorPackage,
+  importClassBehaviorPackage,
+  serializeClassBehaviorPackage,
+} from "./src/project-io.js";
+
+const exported = exportClassBehaviorPackage(sourceArchive.project, "SpinnerBehavior");
+const portableJson = serializeClassBehaviorPackage(exported);
+
+const result = importClassBehaviorPackage(
+  targetArchive.project,
+  portableJson,
+  { conflictStrategy: "rename" },
+);
+
+console.log(exported.evidence);
+console.log(result.evidence);
+```
+
+The runnable persistence test is:
+
+```text
+npm test -- src/project-io/class-behavior-package.persistence.test.ts
+```
+
+## Alice 2 migration boundary
+
+Project IO does not automatically convert Alice 2 worlds. Versions beginning
+with `2.` are detected as `alice-2-guidance-only`, XML is left unchanged, and
+the migration result records guidance that desktop Alice conversion is required
+before Alice web import.
+
+The runnable boundary test is:
+
+```text
+npm test -- test/project-migration.test.ts
+```
+
 ## Preserve project audio
 
 Project audio uses normal Project IO resource persistence. Audio bytes are stored

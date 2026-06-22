@@ -17,6 +17,14 @@ type WebPackageRequest = {
   title?: string;
   description?: string;
   canonicalUrl?: string;
+  teacher?: {
+    audience?: string;
+    lessonFocus?: string;
+    remix?: "allowed" | "with-attribution" | "not-allowed";
+    attribution?: string;
+    tags?: string[];
+    standards?: string[];
+  };
 };
 
 type PackageReference = {
@@ -65,6 +73,7 @@ type ShareArtifacts = {
     canonicalUrl?: string;
     package: PackageReference;
     links: Record<string, string>;
+    teacher?: Record<string, unknown>;
   };
   artifacts: Record<string, string>;
   validation: { valid: boolean; errors: unknown[] };
@@ -275,6 +284,7 @@ describe("project-export", () => {
     });
     expect(share.package).not.toHaveProperty("sha256");
     expect(share.package).not.toHaveProperty("sizeBytes");
+    expect(share).not.toHaveProperty("teacher");
 
     const validation = await readZipJson(zip, "validation.json");
     expect(validation).toMatchObject({
@@ -471,6 +481,58 @@ describe("project-export", () => {
         errors: [],
       },
     });
+  });
+
+  it("carries teacher community-sharing metadata through package export, validation, and share artifacts", async () => {
+    expect(projectExportApi.exportWebPackage).toBeTypeOf("function");
+    expect(projectExportApi.validateWebPackage).toBeTypeOf("function");
+    expect(projectExportApi.generateShareArtifacts).toBeTypeOf("function");
+
+    const teacher = {
+      audience: "Middle school creative coding",
+      lessonFocus: "Remix a reusable character behavior",
+      remix: "with-attribution" as const,
+      attribution: "Alice Example Teacher",
+      tags: ["classroom", "remix", "classroom"],
+      standards: ["CSTA 2-AP-10"],
+    };
+    const exported = await projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Teacher Share Pack",
+      description: "Reusable classroom handoff.",
+      teacher,
+    });
+    const zip = await JSZip.loadAsync(decodePackage(exported.package.base64));
+    const shareJson = await readZipJson(zip, "share.json");
+    const validationJson = await readZipJson(zip, "validation.json");
+    const validation = await projectExportApi.validateWebPackage!({
+      packageBase64: exported.package.base64,
+    });
+    const share = await projectExportApi.generateShareArtifacts!({
+      packageBase64: exported.package.base64,
+      title: "Community Remix Pack",
+      teacher: {
+        ...teacher,
+        tags: ["gallery", "remix"],
+      },
+    });
+
+    expect(shareJson.teacher).toEqual({
+      schemaVersion: "alice-web.teacher-share/v1",
+      audience: "Middle school creative coding",
+      lessonFocus: "Remix a reusable character behavior",
+      remix: "with-attribution",
+      attribution: "Alice Example Teacher",
+      tags: ["classroom", "remix"],
+      standards: ["CSTA 2-AP-10"],
+    });
+    expect(validationJson.evidence).toEqual(expect.arrayContaining(["teacher-share-metadata"]));
+    expect(validation.evidence).toEqual(expect.arrayContaining(["teacher-share-metadata"]));
+    expect(share.share.teacher).toMatchObject({
+      schemaVersion: "alice-web.teacher-share/v1",
+      tags: ["gallery", "remix"],
+      remix: "with-attribution",
+    });
+    expect(share.share.teacher).not.toHaveProperty("title");
   });
 
   it("TypeScriptExporter creates a deterministic Alice web source handoff archive", async () => {

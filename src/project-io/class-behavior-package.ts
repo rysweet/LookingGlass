@@ -28,6 +28,7 @@ export interface AliceClassBehaviorPackage {
   version: typeof CLASS_BEHAVIOR_PACKAGE_VERSION;
   exportedBy: "alice-web";
   type: AliceTypeDefinition;
+  evidence?: string[];
 }
 
 export interface ImportClassBehaviorPackageOptions {
@@ -43,6 +44,7 @@ export interface ClassBehaviorImportResult {
   renamed: boolean;
   replaced: boolean;
   merged: boolean;
+  evidence: string[];
 }
 
 export type ClassBehaviorPackageErrorCode =
@@ -86,6 +88,7 @@ export function exportClassBehaviorPackage(project: AliceProject, typeName: stri
     version: CLASS_BEHAVIOR_PACKAGE_VERSION,
     exportedBy: "alice-web",
     type: cloneType(type),
+    evidence: buildPackageEvidence(type),
   };
   validatePackage(packageData);
   return packageData;
@@ -183,6 +186,13 @@ function importResult(
     renamed: flags.renamed,
     replaced: flags.replaced,
     merged: flags.merged,
+    evidence: [
+      "class-behavior-package-validated",
+      "class-behavior-type-imported",
+      flags.renamed ? "class-behavior-conflict-renamed" : "class-behavior-name-preserved",
+      ...(flags.replaced ? ["class-behavior-conflict-replaced"] : []),
+      ...(flags.merged ? ["class-behavior-conflict-merged"] : []),
+    ],
   };
 }
 
@@ -291,6 +301,7 @@ function validatePackage(value: unknown): asserts value is AliceClassBehaviorPac
     throw invalidPackage("Class behavior package exporter must be alice-web.");
   }
   validateTypeDefinition(value.type);
+  validateStringArray(value.evidence, "evidence");
 }
 
 function validateTypeDefinition(value: unknown): asserts value is AliceTypeDefinition {
@@ -464,6 +475,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function cloneType(type: AliceTypeDefinition): AliceTypeDefinition {
   return JSON.parse(JSON.stringify(type)) as AliceTypeDefinition;
+}
+
+function buildPackageEvidence(type: AliceTypeDefinition): string[] {
+  return [
+    "class-behavior-type-present",
+    ...(type.superTypeName ? ["class-behavior-supertype-preserved"] : []),
+    ...((type.fields?.length ?? 0) > 0 ? ["class-behavior-fields-preserved"] : []),
+    ...((type.constructors?.length ?? 0) > 0 ? ["class-behavior-constructors-preserved"] : []),
+    ...((type.methods?.length ?? 0) > 0 ? ["class-behavior-methods-preserved"] : []),
+  ];
 }
 
 function cloneMethod(method: AliceMethod): AliceMethod {

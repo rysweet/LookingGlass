@@ -67,6 +67,26 @@ describe("project-migration", () => {
     expect(migration.xmlText).toContain("org.lgna.story.SThing");
   });
 
+  it("keeps Alice 2 conversion bounded and explicit instead of pretending automatic migration", () => {
+    const alice2Xml = `<?xml version="1.0" encoding="UTF-8"?><node version="2.4.3"><element class="edu.cmu.cs.stage3.alice.core.World"/></node>`;
+    const versionInfo = detectProjectVersion("2.4.3", null, alice2Xml);
+    const migration = migrateProjectXml(alice2Xml, versionInfo);
+
+    expect(versionInfo).toMatchObject({
+      originalAliceVersion: "2.4.3",
+      detectedAliceVersion: "2.4.3",
+      versionSource: "version.txt",
+      migrationSupport: "alice-2-guidance-only",
+      unsupportedReason: expect.stringContaining("automatic Alice 2 conversion is not supported"),
+    });
+    expect(migration.xmlText).toBe(alice2Xml);
+    expect(migration.versionInfo.migrated).toBe(false);
+    expect(migration.versionInfo.detectedAliceVersion).toBe("2.4.3");
+    expect(migration.versionInfo.migrationSteps).toEqual([
+      expect.stringContaining("automatic Alice 2 conversion is not supported"),
+    ]);
+  });
+
   it("updates nested manifest version metadata when direct version fields are absent", () => {
     const manifest = synchronizeManifestVersion(
       {
