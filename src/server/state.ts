@@ -106,7 +106,11 @@ export function buildCurrentProject(state: ServerState): AliceProject {
   }
   baseProject.sceneObjects = Array.from(sceneObjectsByName.values());
 
-  const methodsByName = new Map(baseProject.methods.map((method) => [method.name, method]));
+  const sceneType = baseProject.types?.find((type) => type.superTypeName?.includes("SScene"));
+  const sourceMethods = baseProject.types?.length && sceneType?.methods?.length
+    ? sceneType.methods
+    : baseProject.methods;
+  const methodsByName = new Map(sourceMethods.map((method) => [method.name, method]));
   for (const [name, statements] of state.procedures.entries()) {
     if (state.parsedProject && statements.length === 0 && methodsByName.has(name)) {
       continue;
