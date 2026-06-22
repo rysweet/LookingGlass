@@ -16,6 +16,13 @@ import {
   type WebPackageOptions,
   type WebPackageValidation,
 } from "../project-export.js";
+import {
+  exportClassBehaviorPackage,
+  importClassBehaviorPackage,
+  type AliceClassBehaviorPackage,
+  type ClassBehaviorConflictStrategy,
+  type ClassBehaviorImportResult,
+} from "../project-io/class-behavior-package.js";
 import { readProject, writeProject, type AliceProjectArchive } from "../project-io.js";
 import {
   applyAudioManifest,
@@ -61,6 +68,12 @@ export interface ProjectService {
   validateWebPackage(input: ValidateWebPackageInput): Promise<WebPackageValidation>;
   generateShareArtifacts(input: ShareArtifactsInput): Promise<ShareArtifacts>;
   exportTypeScript(state: ServerState): Promise<TypeScriptExportResult>;
+  exportClassBehaviorPackage(state: ServerState, typeName: string): Promise<AliceClassBehaviorPackage>;
+  importClassBehaviorPackage(
+    state: ServerState,
+    packageData: unknown,
+    options?: { conflictStrategy?: ClassBehaviorConflictStrategy },
+  ): Promise<ClassBehaviorImportResult>;
 }
 
 export interface TypeScriptExportResult {
@@ -412,6 +425,23 @@ export const projectService: ProjectService = {
       archive: Buffer.from(exported.archive),
       manifest: exported.manifest,
     };
+  },
+
+  async exportClassBehaviorPackage(state, typeName) {
+    return exportClassBehaviorPackage(buildCurrentProject(state), typeName);
+  },
+
+  async importClassBehaviorPackage(state, packageData, options) {
+    const project = buildCurrentProject(state);
+    const result = importClassBehaviorPackage(project, packageData, options);
+    state.parsedProject = project;
+    if (state.projectArchive) {
+      state.projectArchive = {
+        ...state.projectArchive,
+        project,
+      };
+    }
+    return result;
   },
 };
 

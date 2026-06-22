@@ -41,6 +41,12 @@ import {
   type WebXRSessionState,
 } from "./webxr-session";
 import { renderWebXRStatus, type WebXRButtonState } from "./webxr-ui";
+import {
+  exportClassBehaviorPackage,
+  importClassBehaviorPackage,
+  parseClassBehaviorPackage,
+  serializeClassBehaviorPackage,
+} from "./project-io/class-behavior-package";
 
 function requireElement<T extends HTMLElement>(id: string, ctor: abstract new (...args: never[]) => T): T {
   const element = document.getElementById(id);
@@ -58,6 +64,10 @@ const applyTextureButton = requireElement("assign-texture-button", HTMLButtonEle
 const saveProjectButton = requireElement("export-a3p-button", HTMLButtonElement);
 const exportWebPackageButton = requireElement("export-web-package-button", HTMLButtonElement);
 const shareWebPackageButton = requireElement("share-web-package-button", HTMLButtonElement);
+const classBehaviorSelect = requireElement("class-behavior-select", HTMLSelectElement);
+const exportClassBehaviorButton = requireElement("export-class-behavior-button", HTMLButtonElement);
+const importClassBehaviorInput = requireElement("import-class-behavior-input", HTMLInputElement);
+const classBehaviorList = requireElement("class-behavior-list", HTMLUListElement);
 const objectList = requireElement("object-list", HTMLUListElement);
 const assetList = requireElement("asset-list", HTMLUListElement);
 const jointObjectSelect = requireElement("joint-object-select", HTMLSelectElement);
@@ -97,6 +107,7 @@ let cameraWorkflow: CameraWorkflowState = createDefaultCameraWorkflowState();
 let lastArchive: AliceProjectArchive | null = null;
 let selectedObjectName: string | null = null;
 let selectedTextureResourceId: string | null = null;
+let selectedClassBehaviorName: string | null = null;
 let lastWebPackageBase64: string | null = null;
 const jointState = new JointSystem.JointStateStore();
 
@@ -190,6 +201,38 @@ function renderAssetList(project: AliceProject): void {
     item.textContent = `${asset.name} (${asset.kind}) ${asset.id}`;
     assetList.appendChild(item);
   }
+}
+
+function classBehaviorTypes(project: AliceProject): NonNullable<AliceProject["types"]> {
+  return (project.types ?? []).filter((type) => !(type.superTypeName?.includes("SScene") ?? false));
+}
+
+function renderClassBehaviorControls(project: AliceProject): void {
+  const types = classBehaviorTypes(project);
+  classBehaviorSelect.replaceChildren();
+  classBehaviorList.replaceChildren();
+
+  if (!selectedClassBehaviorName || !types.some((type) => type.name === selectedClassBehaviorName)) {
+    selectedClassBehaviorName = types[0]?.name ?? null;
+  }
+
+  for (const type of types) {
+    const option = document.createElement("option");
+    option.value = type.name;
+    option.textContent = type.name;
+    option.selected = type.name === selectedClassBehaviorName;
+    classBehaviorSelect.appendChild(option);
+
+    const item = document.createElement("li");
+    const fields = (type.fields ?? []).map((field) => field.name).join(", ") || "no fields";
+    const methods = (type.methods ?? []).map((method) => method.name).join(", ") || "no methods";
+    const constructors = `${type.constructors?.length ?? 0} constructor${type.constructors?.length === 1 ? "" : "s"}`;
+    item.textContent = `${type.name} extends ${type.superTypeName ?? "java.lang.Object"}; fields: ${fields}; methods: ${methods}; ${constructors}`;
+    classBehaviorList.appendChild(item);
+  }
+
+  classBehaviorSelect.disabled = types.length === 0;
+  exportClassBehaviorButton.disabled = types.length === 0;
 }
 
 function resizeRenderer(): void {
@@ -513,6 +556,48 @@ async function handleSaveProject(): Promise<void> {
     }
 }
 
+async function handleClassBehaviorExport(): Promise<void> {
+    try {
+      const archive = ensureArchive();
+      const typeName = classBehaviorSelect.value || selectedClassBehaviorName;
+      if (!typeName) {
+        throw new Error("Choose a class behavior before exporting.");
+      }
+      const packageData = exportClassBehaviorPackage(archive.project, typeName);
+      const blob = new Blob([serializeClassBehaviorPackage(packageData)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = classBehaviorFilename(packageData.type.name);
+      link.click();
+      URL.revokeObjectURL(url);
+      setStatusMessage(`Exported ${packageData.type.name}`);
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(error);
+    }
+}
+
+async function handleClassBehaviorImport(): Promise<void> {
+    const file = await readSelectedFile(importClassBehaviorInput);
+    if (!file) return;
+
+    try {
+      const archive = ensureArchive();
+      const packageData = parseClassBehaviorPackage(await file.text());
+      const result = importClassBehaviorPackage(archive.project, packageData);
+      selectedClassBehaviorName = result.importedName;
+      renderProject(archive.project);
+      renderClassBehaviorControls(archive.project);
+      setStatusMessage(`Imported ${result.importedName}`);
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(error);
+    } finally {
+      importClassBehaviorInput.value = "";
+    }
+}
+
 async function exportWebPackage(): Promise<void> {
       try {
         const project = ensureArchive().project;
@@ -564,6 +649,7 @@ async function generateShareArtifacts(): Promise<void> {
 function renderProject(project: AliceProject): void {
     renderObjectList(project);
     renderAssetList(project);
+    renderClassBehaviorControls(project);
     renderJointObjectOptions(project);
     applyScene(project);
 }
@@ -674,6 +760,16 @@ function camelCaseName(value: string): string {
     }).join("");
 }
 
+function classBehaviorFilename(typeName: string): string {
+    const safeBase = typeName
+      .trim()
+      .replace(/[^A-Za-z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      || "class-behavior";
+    return `${safeBase}.alice-class-behavior.json`;
+}
+
 function describeLastProject(): string {
   if (!lastProject) {
     return "No project loaded";
@@ -740,6 +836,15 @@ function installInputHandlers(): void {
   });
   createShapeButton.addEventListener("click", handleCreateShape);
   applyTextureButton.addEventListener("click", ModelTextureCameraJointExportWorkflowBrowser.assignTextureToModel);
+  classBehaviorSelect.addEventListener("change", () => {
+    selectedClassBehaviorName = classBehaviorSelect.value || null;
+  });
+  exportClassBehaviorButton.addEventListener("click", () => {
+    void handleClassBehaviorExport();
+  });
+  importClassBehaviorInput.addEventListener("change", () => {
+    void handleClassBehaviorImport();
+  });
   saveProjectButton.addEventListener("click", () => {
     void handleSaveProject();
   });

@@ -208,6 +208,7 @@ function removeDirectChildren(parent: Element, tagName: string): void {
 }
 
 function updateFieldNode(doc: Document, fieldNode: Element, desired: AliceFieldDefinition): void {
+  fieldNode.setAttribute("alice-web-field-json", JSON.stringify(desired));
   setPropertyText(doc, fieldNode, "name", desired.name);
   if (desired.typeName) setTypeProperty(doc, fieldNode, "valueType", desired.typeName);
   if (desired.resourceType) setResourceInitializer(doc, fieldNode, desired.resourceType);
@@ -472,6 +473,7 @@ function createFieldNode(doc: Document, field: AliceFieldDefinition): Element {
   const fieldNode = doc.createElement("node");
   fieldNode.setAttribute("type", "org.lgna.project.ast.UserField");
   fieldNode.setAttribute("uuid", generateUuid());
+  fieldNode.setAttribute("alice-web-field-json", JSON.stringify(field));
   appendStringProperty(doc, fieldNode, "name", field.name);
   appendTypeProperty(doc, fieldNode, "valueType", field.typeName || "java.lang.Object");
   if (field.resourceType) setResourceInitializer(doc, fieldNode, field.resourceType);

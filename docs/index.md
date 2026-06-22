@@ -57,6 +57,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Tutorial: manipulate and verify joints](./tutorial-joint-manipulation.md)
 - [Camera workflow parity](./tutorial-camera-workflow.md)
 - [Alice audio workflow](./tutorial-audio-workflow.md)
+- [Reuse class behavior between Alice projects](./tutorial-reuse-class-behavior-between-projects.md)
 
 ### How-to guides and workflows
 
@@ -64,6 +65,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [IDE operations](./ide-operations.md)
 - [Gadugi test scenarios](./gadugi-test-scenarios.md)
 - [Project IO usage guide](./project-io-usage.md)
+- [Reusable class behavior workflow](./class-behavior-workflow.md)
 - [Audio workflow usage](./audio-workflow-usage.md)
 - [Camera workflow usage](./camera-workflow-usage.md)
 - [Export, play, share, and validate a web package](./project-io-usage.md#export-play-share-and-validate-a-web-package)
@@ -95,6 +97,8 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Project IO](./project-io.md)
 - [Project IO API reference](./project-io-api.md)
 - [Project IO configuration](./project-io-configuration.md)
+- [Class behavior package API](./class-behavior-package-api.md)
+- [Class behavior package configuration](./class-behavior-package-configuration.md)
 - [Model, texture, camera, joint, and export workflow](./model-texture-camera-joint-export-workflow.md)
 - [Web package API routes](./api-reference.md#post-apiprojectexportweb-package)
 - [TypeScript source export](./typescript-source-export.md) - source handoff reference
