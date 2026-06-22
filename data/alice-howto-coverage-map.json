@@ -1,0 +1,560 @@
+{
+  "baseline": "rysweet/RabbitHole origin/develop",
+  "mappings": [
+    {
+      "id": "scene-editor-scene-editor-overview",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/scene-editor.test.ts",
+          "name": "Scene editor behavior"
+        },
+        {
+          "type": "gadugi",
+          "path": "gadugi/03-scene-entity-manipulation.yaml",
+          "name": "Scene Entity Manipulation"
+        }
+      ]
+    },
+    {
+      "id": "scene-editor-adding-objects",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/gallery-scene-integration.test.ts",
+          "name": "Gallery object insertion into scenes"
+        }
+      ]
+    },
+    {
+      "id": "scene-editor-positioning-objects",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/scene-graph-transforms.test.ts",
+          "name": "Scene graph object transforms"
+        }
+      ]
+    },
+    {
+      "id": "scene-editor-rotating-objects",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/transform-utilities.test.ts",
+          "name": "Transform utility rotation coverage"
+        }
+      ]
+    },
+    {
+      "id": "scene-editor-resizing-objects",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/object-properties.test.ts",
+          "name": "Object property scale coverage"
+        }
+      ]
+    },
+    {
+      "id": "scene-editor-manipulating-object-joints",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/joint-system.test.ts",
+          "name": "Joint manipulation behavior"
+        }
+      ]
+    },
+    {
+      "id": "scene-editor-using-one-shots",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/ide-command-operations.test.ts",
+          "name": "One-shot command operations"
+        }
+      ]
+    },
+    {
+      "id": "scene-editor-moving-the-camera",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/camera-system.test.ts",
+          "name": "Camera movement behavior"
+        }
+      ]
+    },
+    {
+      "id": "scene-editor-using-camera-views",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/camera-workflow.test.ts",
+          "name": "Camera workflow coverage"
+        }
+      ]
+    },
+    {
+      "id": "scene-editor-using-camera-markers",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/camera-routes.test.ts",
+          "name": "Camera marker route coverage"
+        }
+      ]
+    },
+    {
+      "id": "code-editor-code-editor-overview",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/code-editor.test.ts",
+          "name": "Code editor behavior"
+        }
+      ]
+    },
+    {
+      "id": "code-editor-using-procedures-overview",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/procedure-editor.test.ts",
+          "name": "Procedure editor behavior"
+        }
+      ]
+    },
+    {
+      "id": "code-editor-manipulating-object-joints",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/joint-server-contract.test.ts",
+          "name": "Joint server behavior from code"
+        }
+      ]
+    },
+    {
+      "id": "code-editor-creating-custom-procedures",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/create-procedure-function.test.ts",
+          "name": "Custom procedure creation"
+        }
+      ]
+    },
+    {
+      "id": "code-editor-adding-and-using-parameters",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/method-invocation.test.ts",
+          "name": "Method invocation arguments"
+        }
+      ]
+    },
+    {
+      "id": "code-editor-using-camera-markers",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/camera-workflow.test.ts",
+          "name": "Camera marker workflow from code"
+        }
+      ]
+    },
+    {
+      "id": "code-editor-exporting-and-importing-modified-classes",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/class-system.test.ts",
+          "name": "Class system import and export behavior"
+        }
+      ]
+    },
+    {
+      "id": "code-editor-using-do-together",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/do-together-runtime-evidence.test.ts",
+          "name": "Do Together runtime behavior"
+        }
+      ]
+    },
+    {
+      "id": "code-editor-using-functions-overview",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/expression-evaluator.test.ts",
+          "name": "Function expression evaluation"
+        }
+      ]
+    },
+    {
+      "id": "code-editor-using-events-overview",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/events.test.ts",
+          "name": "Event overview behavior"
+        },
+        {
+          "type": "gadugi",
+          "path": "gadugi/04-event-system.yaml",
+          "name": "Event System"
+        }
+      ]
+    },
+    {
+      "id": "animation-understanding-using-move-turn-or-roll",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/movement-implementation.test.ts",
+          "name": "Move, turn, and roll behavior"
+        }
+      ]
+    },
+    {
+      "id": "animation-manipulating-object-joints",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/joint-state-store-contract.test.ts",
+          "name": "Joint state behavior"
+        }
+      ]
+    },
+    {
+      "id": "animation-using-joint-arrays",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/joint-system.test.ts",
+          "name": "Joint array behavior"
+        }
+      ]
+    },
+    {
+      "id": "animation-manipulating-biped-joints",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/biped-quadruped.test.ts",
+          "name": "Biped joint behavior"
+        }
+      ]
+    },
+    {
+      "id": "animation-biped-walk-cycle",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/animation-implementations.test.ts",
+          "name": "Biped animation behavior"
+        }
+      ]
+    },
+    {
+      "id": "interactivity-first-person-camera",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/input-system.test.ts",
+          "name": "First-person input behavior"
+        }
+      ]
+    },
+    {
+      "id": "interactivity-setting-up-a-timekeeper",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/time-system.test.ts",
+          "name": "Timekeeper behavior"
+        }
+      ]
+    },
+    {
+      "id": "interactivity-setting-up-a-scorekeeper",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/state-synchronization.test.ts",
+          "name": "Score state behavior"
+        }
+      ]
+    },
+    {
+      "id": "interactivity-setting-up-proximity-detection",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/interaction-system.test.ts",
+          "name": "Proximity interaction behavior"
+        }
+      ]
+    },
+    {
+      "id": "interactivity-setting-up-collision-detection",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/collision-detection.test.ts",
+          "name": "Collision detection behavior"
+        }
+      ]
+    },
+    {
+      "id": "audio-the-basics-of-using-audio",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/audio.test.ts",
+          "name": "Audio behavior"
+        }
+      ]
+    },
+    {
+      "id": "audio-adding-background-music",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/project-audio-contract.test.ts",
+          "name": "Project audio coverage"
+        }
+      ]
+    },
+    {
+      "id": "audio-matching-sound-to-animation",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/say-out-loud-animation.test.ts",
+          "name": "Sound and animation behavior"
+        }
+      ]
+    },
+    {
+      "id": "audio-creating-custom-audio-in-audacity",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/audio-workflow-parity.test.ts",
+          "name": "Imported audio workflow"
+        }
+      ]
+    },
+    {
+      "id": "audio-changing-file-formats-in-audacity",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/project-audio-project-io-contract.test.ts",
+          "name": "Audio file project IO behavior"
+        }
+      ]
+    },
+    {
+      "id": "vr-programming-overview-of-vr-input-mapping",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-input.test.ts",
+          "name": "VR input behavior"
+        }
+      ]
+    },
+    {
+      "id": "vr-programming-creating-a-vr-project-with-a-vruser",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-session.test.ts",
+          "name": "VR project session behavior"
+        }
+      ]
+    },
+    {
+      "id": "vr-programming-vr-locomotion-on-rails",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-locomotion.test.ts",
+          "name": "VR locomotion behavior"
+        }
+      ]
+    },
+    {
+      "id": "vr-programming-vr-locomotion-direct-control",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-locomotion.test.ts",
+          "name": "VR direct control behavior"
+        }
+      ]
+    },
+    {
+      "id": "vr-programming-vr-locomotion-teleportation",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-locomotion.test.ts",
+          "name": "VR teleportation behavior"
+        }
+      ]
+    },
+    {
+      "id": "vr-programming-vr-locomotion-puppeteer",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-interaction.test.ts",
+          "name": "VR puppeteer interaction behavior"
+        }
+      ]
+    },
+    {
+      "id": "vr-programming-vr-object-interaction-point-and-click",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-interaction.test.ts",
+          "name": "VR point and click behavior"
+        }
+      ]
+    },
+    {
+      "id": "vr-programming-vr-object-interaction-click-and-move",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-interaction.test.ts",
+          "name": "VR click and move behavior"
+        }
+      ]
+    },
+    {
+      "id": "vr-programming-vr-using-controller-objects-hands",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-capabilities.test.ts",
+          "name": "VR controller object behavior"
+        }
+      ]
+    },
+    {
+      "id": "models-and-textures-importing-models-overview",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/model-management.test.ts",
+          "name": "Imported model behavior"
+        }
+      ]
+    },
+    {
+      "id": "models-and-textures-map-custom-images",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/texture-system.test.ts",
+          "name": "Texture mapping behavior"
+        }
+      ]
+    },
+    {
+      "id": "the-alice-player-using-the-alice-player",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/web-runtime.test.ts",
+          "name": "Alice Player runtime behavior"
+        }
+      ]
+    },
+    {
+      "id": "the-alice-player-exporting-for-the-alice-player",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/export-html.test.ts",
+          "name": "Alice Player export behavior"
+        },
+        {
+          "type": "gadugi",
+          "path": "gadugi/06-web-player-export-share-parity.yaml",
+          "name": "Web Player Export Share Parity"
+        }
+      ]
+    },
+    {
+      "id": "the-alice-player-using-the-alice-player-with-oculus-vr",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-session.test.ts",
+          "name": "Oculus VR player session behavior"
+        }
+      ]
+    },
+    {
+      "id": "the-alice-player-using-the-alice-player-with-vive-vr",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-ui.test.ts",
+          "name": "Vive VR player UI behavior"
+        }
+      ]
+    },
+    {
+      "id": "the-alice-player-using-the-alice-player-with-oculus-quest-vr",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/webxr-capabilities.test.ts",
+          "name": "Meta Quest VR player capability behavior"
+        }
+      ]
+    },
+    {
+      "id": "sharing-recording-and-sharing-alice-worlds",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/project-export.test.ts",
+          "name": "Project export behavior"
+        }
+      ]
+    },
+    {
+      "id": "sharing-making-an-alice-app",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/standalone-project.test.ts",
+          "name": "Standalone Alice app behavior"
+        }
+      ]
+    },
+    {
+      "id": "great-other-sources-youtube-channels-and-playlists",
+      "artifacts": [
+        {
+          "type": "vitest",
+          "path": "test/tutorials.test.ts",
+          "name": "Tutorial resource behavior"
+        }
+      ]
+    }
+  ]
+}

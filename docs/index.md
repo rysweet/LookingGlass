@@ -34,6 +34,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Server API](./server-api.md)
 - [Export, play, share, and validate a web package](./project-io-usage.md#export-play-share-and-validate-a-web-package)
 - [Testing](./testing.md)
+- [Alice HowTo parity audit](./alice-howto-parity-audit.md)
 
 ## Subsystem overview
 
@@ -72,6 +73,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 ### How-to guides and workflows
 
 - [Testing](./testing.md)
+- [Alice HowTo parity audit](./alice-howto-parity-audit.md)
 - [IDE operations](./ide-operations.md)
 - [Gadugi test scenarios](./gadugi-test-scenarios.md)
 - [Project IO usage guide](./project-io-usage.md)
@@ -88,6 +90,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 ### Reference
 
 - [API reference](./api-reference.md)
+- [Alice HowTo parity audit reference](./alice-howto-parity-audit-reference.md)
 - [Alice evidence artifact API](./alice-evidence-artifact-api.md)
 - [Alice evidence workflow configuration](./alice-evidence-workflow-configuration.md)
 - [Root TypeScript API barrel](./architecture.md#barrel-re-exports) -

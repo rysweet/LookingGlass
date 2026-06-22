@@ -18,6 +18,7 @@
     "src/evidence-writer.ts",
     "src/server.ts",
     "src/server/**/*.ts",
+    "src/alice-howto-parity-audit.ts",
     "src/cli.ts",
     "src/a3p-parser.ts",
     "src/ast-nodes.ts",

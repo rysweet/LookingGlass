@@ -291,6 +291,12 @@ See [Gadugi test scenarios](./docs/gadugi-test-scenarios.md) for scenario
 configuration, A3P fixture runs, full-suite usage, and the runner-compatible
 YAML pattern.
 
+The [Alice HowTo parity audit](./docs/alice-howto-parity-audit.md) verifies
+that the saved 54-entry Alice.org HowTo inventory maps to executable alice-web
+tests or scenarios. The audit reads checked-in inventory and mapping files,
+emits JSON for CI artifacts or PR comments, and uses
+`rysweet/RabbitHole origin/develop` as the RabbitHole baseline.
+
 ## Building
 
 ```bash

@@ -1,15 +1,25 @@
 #!/usr/bin/env node
-import { realpathSync } from "fs";
+import { promises as fs, realpathSync } from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
+import {
+  DEFAULT_INVENTORY_PATH,
+  DEFAULT_MAPPING_PATH,
+  formatAuditJson,
+  formatAuditSummary,
+  runAliceHowToParityAudit,
+} from "./alice-howto-parity-audit.js";
 import { createServer } from "./server.js";
 
 export interface CliConfig {
-  readonly command: "serve" | "help" | "print-config";
+  readonly command: "serve" | "help" | "print-config" | "alice-howto-parity-audit";
   readonly port: number;
   readonly evidenceDir: string;
   readonly project?: string;
   readonly localApiToken?: string;
+  readonly inventoryPath?: string;
+  readonly mappingPath?: string;
+  readonly outputPath?: string;
 }
 
 const DEFAULT_PORT = 3000;
@@ -18,7 +28,12 @@ const USAGE = [
   "Usage:",
   "  alice-web serve [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>] [--api-token <token>]",
   "  alice-web print-config [--port <1-65535>] [--evidence-dir <dir>] [--project <file.a3p>] [--api-token <token>]",
+  `  alice-web alice-howto-parity-audit [--inventory <path>] [--mapping <path>] [--output <path>]`,
   "  alice-web help",
+  "",
+  "Alice HowTo parity audit defaults:",
+  `  --inventory <path>  ${DEFAULT_INVENTORY_PATH}`,
+  `  --mapping <path>    ${DEFAULT_MAPPING_PATH}`,
 ].join("\n");
 
 export function parseArgs(argv: string[]): CliConfig {
@@ -30,6 +45,9 @@ export function parseArgs(argv: string[]): CliConfig {
   let evidenceDir = DEFAULT_EVIDENCE_DIR;
   let project: string | undefined;
   let localApiToken: string | undefined;
+  let inventoryPath: string = DEFAULT_INVENTORY_PATH;
+  let mappingPath: string = DEFAULT_MAPPING_PATH;
+  let outputPath: string | undefined;
 
   for (let i = 1; i < args.length; i++) {
     const current = args[i];
@@ -46,9 +64,27 @@ export function parseArgs(argv: string[]): CliConfig {
       case "--api-token":
         localApiToken = parseApiToken(args[++i]);
         break;
+      case "--inventory":
+        if (command !== "alice-howto-parity-audit") {
+          throw new Error("--inventory is only valid for alice-howto-parity-audit");
+        }
+        inventoryPath = parseRequiredPath(args[++i], "--inventory");
+        break;
+      case "--mapping":
+        if (command !== "alice-howto-parity-audit") {
+          throw new Error("--mapping is only valid for alice-howto-parity-audit");
+        }
+        mappingPath = parseRequiredPath(args[++i], "--mapping");
+        break;
+      case "--output":
+        if (command !== "alice-howto-parity-audit") {
+          throw new Error("--output is only valid for alice-howto-parity-audit");
+        }
+        outputPath = parseRequiredPath(args[++i], "--output");
+        break;
       case "--help":
       case "-h":
-        return { command: "help", port, evidenceDir, project, localApiToken };
+        return { command: "help", port, evidenceDir, project, localApiToken, inventoryPath, mappingPath, outputPath };
       default:
         if (current?.startsWith("-")) {
           throw new Error(`Unknown option: ${current}`);
@@ -56,14 +92,14 @@ export function parseArgs(argv: string[]): CliConfig {
     }
   }
 
-  return { command, port, evidenceDir, project, localApiToken };
+  return { command, port, evidenceDir, project, localApiToken, inventoryPath, mappingPath, outputPath };
 }
 
 function normalizeCommand(value: string): CliConfig["command"] {
   if (value === "--help" || value === "-h") {
     return "help";
   }
-  if (value === "serve" || value === "print-config" || value === "help") {
+  if (value === "serve" || value === "print-config" || value === "help" || value === "alice-howto-parity-audit") {
     return value;
   }
   throw new Error(`Unknown command: ${value}`);
@@ -101,6 +137,13 @@ function parseApiToken(value: string | undefined): string {
   return value;
 }
 
+function parseRequiredPath(value: string | undefined, option: string): string {
+  if (!value || !value.trim()) {
+    throw new Error(`${option} requires a path`);
+  }
+  return value;
+}
+
 export function formatConfig(config: CliConfig): string {
   return JSON.stringify(
     {
@@ -127,9 +170,36 @@ async function run(config: CliConfig): Promise<void> {
     case "print-config":
       console.log(formatConfig(config));
       return;
+    case "alice-howto-parity-audit":
+      await runHowToParityAudit(config);
+      return;
     case "serve":
       await serve(config);
       return;
+  }
+}
+
+async function runHowToParityAudit(config: CliConfig): Promise<void> {
+  const result = await runAliceHowToParityAudit({
+    repoRoot: process.cwd(),
+    inventoryPath: config.inventoryPath ?? DEFAULT_INVENTORY_PATH,
+    mappingPath: config.mappingPath ?? DEFAULT_MAPPING_PATH,
+  });
+  const json = formatAuditJson(result);
+  const summary = formatAuditSummary(result);
+
+  if (config.outputPath) {
+    const outputPath = path.resolve(config.outputPath);
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, json, "utf-8");
+    process.stdout.write(summary);
+  } else {
+    process.stdout.write(json);
+    process.stderr.write(summary);
+  }
+
+  if (!result.passed) {
+    process.exitCode = 1;
   }
 }
 

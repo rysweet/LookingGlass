@@ -16,10 +16,12 @@ nav:
     - "[PLANNED] Import a model and apply a custom texture": "tutorial-import-model-and-apply-texture.md"
   - "How-to guides":
     - "Testing": "testing.md"
+    - "Alice HowTo parity audit": "alice-howto-parity-audit.md"
     - "IDE operations": "ide-operations.md"
     - "Gadugi test scenarios": "gadugi-test-scenarios.md"
   - "Reference":
     - "API reference": "api-reference.md"
+    - "Alice HowTo parity audit reference": "alice-howto-parity-audit-reference.md"
     - "Animation system": "animation.md"
     - "Audio": "audio.md"
     - "Collision detection": "collision-detection.md"
