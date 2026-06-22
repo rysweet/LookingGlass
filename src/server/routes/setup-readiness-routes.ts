@@ -10,6 +10,7 @@ const SETUP_SCENARIOS = [
   "instructor-classroom-setup-readiness",
   "instructor-student-launch-evidence-handoff",
 ] as const;
+const GENERAL_SETUP_SCENARIO = "setup-readiness";
 
 const DOES_NOT_CLAIM = [
   "Java desktop Alice launch",
@@ -36,7 +37,7 @@ interface SetupPreflightResponse {
   readonly status: "ready";
   readonly runtime: "alice-web";
   readonly platform: "lookingglass";
-  readonly scenario: SetupScenario | "setup-readiness";
+  readonly scenario: SetupScenario | typeof GENERAL_SETUP_SCENARIO;
   readonly checks: readonly ReadinessCheck[];
   readonly unsupportedCapabilities: readonly string[];
   readonly classroomReadiness: {
@@ -108,14 +109,14 @@ export function registerSetupReadinessRoutes(app: Express, context: ServerContex
 }
 
 function buildSetupPreflight(
-  scenario: SetupScenario | "setup-readiness" | undefined,
+  scenario: SetupScenario | typeof GENERAL_SETUP_SCENARIO | undefined,
 ): SetupPreflightResponse {
   return {
     schema_version: "lookingglass.setup-preflight/v1",
     status: "ready",
     runtime: "alice-web",
     platform: "lookingglass",
-    scenario: scenario ?? "setup-readiness",
+    scenario: scenario ?? GENERAL_SETUP_SCENARIO,
     checks: [
       {
         id: "server-health",
@@ -166,7 +167,7 @@ function buildSetupPreflight(
 
 function buildEvidenceHandoff(
   context: ServerContext,
-  scenario: SetupScenario | "setup-readiness",
+  scenario: SetupScenario | typeof GENERAL_SETUP_SCENARIO,
 ) {
   const evidenceArtifact = path.join(
     context.evidenceDir,
@@ -207,14 +208,14 @@ function buildEvidenceHandoff(
 
 function readSetupScenario(
   value: unknown,
-): { ok: true; value?: SetupScenario } | { ok: false; error: string } {
+): { ok: true; value?: SetupScenario | typeof GENERAL_SETUP_SCENARIO } | { ok: false; error: string } {
   if (value === undefined || value === null || value === "") {
     return { ok: true };
   }
   if (typeof value !== "string") {
     return { ok: false, error: "scenario must be a string" };
   }
-  if (isSetupScenario(value)) {
+  if (value === GENERAL_SETUP_SCENARIO || isSetupScenario(value)) {
     return { ok: true, value };
   }
   return {

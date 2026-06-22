@@ -185,6 +185,11 @@ describe("server API response contracts", () => {
     expect(handoff.body.handoff.supportHandoffFields).toContain("retest signal");
     expect(fs.existsSync(handoff.body.evidenceArtifact)).toBe(true);
     expect(readJson(handoff.body.evidenceArtifact).status).toBe("handoff-created");
+
+    const generalHandoff = await localPost(app, "/api/setup/evidence-handoff")
+      .send({ scenario: "setup-readiness" })
+      .expect(200);
+    expect(generalHandoff.body.scenario).toBe("setup-readiness");
   });
 
   it("rejects a requested missing .a3p file without launching", async () => {
