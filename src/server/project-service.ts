@@ -183,6 +183,7 @@ export const projectService: ProjectService = {
       syncServerSceneObjectsFromProject(state, loadResult.project);
       state.projectAudio = applyAudioManifest(loadResult.archive.manifest);
       state.aliceAudio = loadResult.archive.aliceAudio ?? createDefaultProjectAudioState();
+      state.cameraWorkflow = loadResult.project.cameraWorkflow ?? createDefaultCameraWorkflowState();
     } else {
       state.projectArchive = null;
       state.resources = new Map();
@@ -194,7 +195,9 @@ export const projectService: ProjectService = {
     state.projectPath = resolvedProjectFile;
     state.projectName = projectName;
     state.parsedProject = parsedProject;
-    state.cameraWorkflow = createDefaultCameraWorkflowState();
+    if (!resolvedProjectFile) {
+      state.cameraWorkflow = createDefaultCameraWorkflowState();
+    }
 
     seedDefaultSceneObjects(state);
     state.eventSystem.reset();
@@ -401,7 +404,10 @@ export const projectService: ProjectService = {
   },
 
   async exportWebPackage(state, input) {
-    return exportWebPackage(buildCurrentProject(state), input);
+    return exportWebPackage(buildCurrentProject(state), {
+      ...input,
+      resources: Array.from(state.resources, ([path, bytes]) => ({ path, bytes })),
+    });
   },
 
   async validateWebPackage(input) {

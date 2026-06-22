@@ -100,6 +100,7 @@ export interface WebPackageOptions {
   title?: string;
   description?: string;
   canonicalUrl?: string;
+  resources?: ProjectExportResource[];
 }
 
 export interface WebPackageReference {
@@ -364,6 +365,7 @@ export async function exportWebPackage(
   options: WebPackageOptions = {},
 ): Promise<ExportedWebPackage> {
   const normalized = normalizeWebPackageOptions(project, options);
+  const resources = (options.resources ?? []).map(validateResourcePath);
   const filename = `${slugify(normalized.title)}.alice-web.zip`;
   const preview = await new ScreenshotCapture().capture({
     width: 960,
@@ -379,17 +381,26 @@ export async function exportWebPackage(
       preview: WEB_PACKAGE_ARTIFACTS.preview,
     },
   });
+  const html = injectBeforeBodyEnd(
+    htmlDocument.html,
+    buildResourceScript(Object.fromEntries(
+      resources.map((resource) => [resource.path, resourceToDataUrl(resource)]),
+    )),
+  );
   const manifest = buildPackageManifest(filename);
   const share = buildShareDocument(normalized, filename);
   const validation = buildValidationDocument();
 
   const zip = new JSZip();
-  addZipFile(zip, WEB_PACKAGE_ARTIFACTS.entrypoint, htmlDocument.html);
+  addZipFile(zip, WEB_PACKAGE_ARTIFACTS.entrypoint, html);
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.manifest, JSON.stringify(manifest, null, 2));
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.share, JSON.stringify(share, null, 2));
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.preview, preview.bytes);
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.project, JSON.stringify(project, null, 2));
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.validation, JSON.stringify(validation, null, 2));
+  for (const resource of resources) {
+    addZipFile(zip, resource.path, normalizeResourceBytes(resource.bytes));
+  }
 
   const archive = await zip.generateAsync({
     type: "uint8array",
@@ -490,12 +501,43 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
     errors.push({ code: "invalid-preview", message: "preview.png must be a PNG image", path: WEB_PACKAGE_ARTIFACTS.preview });
   }
 
-  const filename = manifest?.package?.filename ?? `${manifest?.packageName ?? ALICE_WEB_PACKAGE}.zip`;
+  const filename = validatedPackageFilename(manifest, errors);
   return buildValidationResult(evidence, errors, {
     runtime: manifest?.packageName === ALICE_WEB_PACKAGE ? ALICE_WEB_PACKAGE : undefined,
     package: buildPackageReference(filename, decoded.bytes),
     ...(manifest ? { manifest } : {}),
   });
+}
+
+function validatedPackageFilename(
+  manifest: AliceWebPackageManifest | null,
+  errors: WebPackageValidationError[],
+): string {
+  const fallback = `${manifest?.packageName ?? ALICE_WEB_PACKAGE}.zip`;
+  const candidate = manifest?.package?.filename;
+  if (candidate === undefined) return fallback;
+  if (typeof candidate !== "string") {
+    errors.push({
+      code: "invalid-package-filename",
+      message: "manifest package filename must be a safe ZIP filename",
+      path: WEB_PACKAGE_ARTIFACTS.manifest,
+    });
+    return fallback;
+  }
+  try {
+    const safe = assertSafeWritablePath(candidate);
+    if (safe.includes("/")) {
+      throw new Error("package filename must not contain directories");
+    }
+    return safe;
+  } catch {
+    errors.push({
+      code: "invalid-package-filename",
+      message: "manifest package filename must be a safe ZIP filename",
+      path: WEB_PACKAGE_ARTIFACTS.manifest,
+    });
+    return fallback;
+  }
 }
 
 export async function generateShareArtifacts(input: ShareArtifactsInput): Promise<ShareArtifacts> {

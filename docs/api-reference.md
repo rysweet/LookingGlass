@@ -639,6 +639,8 @@ runtime, API, player, manifest, share, or validation metadata.
 Web-package feature contract: create share artifacts from an exported package.
 The server validates `packageBase64` before generating the share response, then
 links the package by filename, byte size, and SHA-256 digest.
+Package filenames are accepted only when the validated package manifest contains
+a safe filename without directory traversal.
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/share \
@@ -773,8 +775,9 @@ Invalid packages return HTTP `400` with explicit validation errors:
 Validation rejects malformed base64, empty packages, unreadable ZIP data,
 absolute paths, parent traversal, backslash traversal, duplicate required
 entries, excessive package size, excessive file count, missing required files,
-wrong schema identity, wrong runtime identity, unsafe `canonicalUrl` values, and
-generated metadata that uses repository nickname identity.
+unsafe package filenames, wrong schema identity, wrong runtime identity, unsafe
+`canonicalUrl` values, and generated metadata that uses repository nickname
+identity.
 
 ## `GET /api/projects/current/export/typescript`
 
@@ -1020,7 +1023,7 @@ Example response:
 ```json
 {
   "schema_version": "alice.audio-workflow-result/v1",
-  "status": "proved",
+  "status": "bounded",
   "evidenceArtifact": "evidence/audio-workflow.json"
 }
 ```

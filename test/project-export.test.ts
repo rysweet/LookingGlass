@@ -207,6 +207,7 @@ describe("project-export", () => {
       title: "Winter Story",
       description: "A snow scene with a bunny.",
       canonicalUrl: "https://example.edu/alice/winter-story",
+      resources: [{ path: "resources/models/bunny.glb", bytes: new Uint8Array([1, 2, 3]) }],
     });
     const packageBytes = decodePackage(exported.package.base64);
     const zip = await JSZip.loadAsync(packageBytes);
@@ -238,8 +239,10 @@ describe("project-export", () => {
       "share.json",
       "preview.png",
       "project/project.json",
+      "resources/models/bunny.glb",
       "validation.json",
     ]));
+    expect(await zip.file("resources/models/bunny.glb")?.async("uint8array")).toEqual(new Uint8Array([1, 2, 3]));
 
     const manifest = await readZipJson(zip, "manifest.json");
     expect(manifest).toMatchObject({
@@ -419,6 +422,27 @@ describe("project-export", () => {
     expect(identityDrift.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "invalid-identity" }),
       expect.objectContaining({ code: "forbidden-repository-identity" }),
+    ]));
+
+    const unsafeManifestFilename = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "../evil.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(unsafeManifestFilename.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-package-filename" }),
     ]));
   });
 

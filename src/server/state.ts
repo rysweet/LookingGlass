@@ -86,6 +86,7 @@ export function buildCurrentProject(state: ServerState): AliceProject {
     };
 
   baseProject.projectName = state.projectName;
+  baseProject.cameraWorkflow = state.cameraWorkflow;
 
   const sceneObjectsByName = new Map(baseProject.sceneObjects.map((object) => [object.name, object]));
   for (const object of state.sceneObjects.values()) {
