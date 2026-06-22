@@ -39,3 +39,22 @@ describe("camera workflow public API", () => {
     expect(exportNames).not.toContain("LookingGlass");
   });
 });
+
+describe("Alice evidence artifact public API", () => {
+  it("exports the evidence helpers from the root package namespace", async () => {
+    const artifactModule = await import("../src/alice-evidence-artifact.js");
+    const publicApi = PublicApi as Record<string, unknown>;
+
+    expect(publicApi).toHaveProperty("AliceEvidenceArtifact");
+    expect(publicApi.AliceEvidenceArtifact).toBe(artifactModule);
+    expect(Object.keys(artifactModule).sort()).toEqual([
+      "AliceEvidenceArtifactError",
+      "createAliceEvidenceArtifact",
+      "parseAliceEvidenceArtifact",
+      "prepareAliceEvidenceShare",
+      "serializeAliceEvidenceArtifact",
+      "summarizeAliceEvidenceArtifact",
+      "validateAliceEvidenceArtifact",
+    ]);
+  });
+});

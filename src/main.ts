@@ -3,7 +3,9 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { type AliceObject, type AliceProject } from "./a3p-parser";
 import {
   createAliceEvidenceArtifact,
+  prepareAliceEvidenceShare,
   serializeAliceEvidenceArtifact,
+  summarizeAliceEvidenceArtifact,
   validateAliceEvidenceArtifact,
   type AliceEvidenceArtifact,
   type AliceEvidenceExportMethod,
@@ -98,6 +100,7 @@ const exportEvidenceButton = requireElement("export-evidence-button", HTMLButton
 const shareEvidenceButton = requireElement("share-evidence-button", HTMLButtonElement);
 const evidenceStatus = requireElement("evidence-status", HTMLElement);
 const evidenceSummary = requireElement("evidence-summary", HTMLElement);
+const evidenceCaptureList = requireElement("evidence-capture-list", HTMLUListElement);
 
 interface AliceWebRunResult {
   status: "completed" | "error";
@@ -112,6 +115,8 @@ interface AliceWebRunResult {
 interface AliceWebRuntimeState {
   latestRunResult: AliceWebRunResult | null;
 }
+
+type AliceEvidenceStatusState = "empty" | "ready" | "exported" | "shared" | "share-unavailable" | "invalid";
 
 declare global {
   interface Window {
@@ -230,22 +235,41 @@ function setCameraStatusMessage(message: string): void {
   cameraStatus.textContent = message;
 }
 
-function setEvidenceStatusMessage(message: string, state: "idle" | "ready" | "error" = "ready"): void {
+function setEvidenceStatusMessage(message: string, state: AliceEvidenceStatusState): void {
   evidenceStatus.textContent = message;
-  evidenceStatus.dataset.state = state;
+  evidenceStatus.dataset.aliceEvidenceStatus = state;
+  evidenceStatus.dataset.state = state === "invalid" ? "error" : state;
 }
 
 function resetEvidenceWorkflow(message: string): void {
   lastEvidenceArtifact = null;
   exportEvidenceButton.disabled = true;
   shareEvidenceButton.disabled = true;
-  setEvidenceStatusMessage(message, "idle");
+  setEvidenceStatusMessage(message, "empty");
   evidenceSummary.textContent = "No evidence captured.";
+  evidenceCaptureList.replaceChildren();
 }
 
-function enableEvidenceActions(): void {
+function canShareEvidenceFiles(): boolean {
+  return typeof navigator.share === "function"
+    && typeof File === "function"
+    && typeof navigator.canShare === "function";
+}
+
+function enableEvidenceActions(): boolean {
+  const shareAvailable = canShareEvidenceFiles();
   exportEvidenceButton.disabled = false;
-  shareEvidenceButton.disabled = false;
+  shareEvidenceButton.disabled = !shareAvailable;
+  return shareAvailable;
+}
+
+function renderEvidenceArtifactSummary(artifact: AliceEvidenceArtifact, actionLabel: string): void {
+  const summary = summarizeAliceEvidenceArtifact(artifact);
+  evidenceSummary.textContent = summary.statusText;
+  evidenceCaptureList.replaceChildren();
+  const item = document.createElement("li");
+  item.textContent = `${actionLabel}: ${summary.objectCount} ${summary.objectCount === 1 ? "object" : "objects"} captured.`;
+  evidenceCaptureList.appendChild(item);
 }
 
 function clearObjectList(): void {
@@ -809,13 +833,17 @@ function createEvidenceArtifactForCurrentScene(
 function handleCaptureEvidence(): void {
   try {
     lastEvidenceArtifact = createEvidenceArtifactForCurrentScene("download");
-    enableEvidenceActions();
-    setEvidenceStatusMessage("Visible behavior captured.");
-    evidenceSummary.textContent =
-      `${lastEvidenceArtifact.world.name}: ${lastEvidenceArtifact.visibleBehavior.objects.length} objects captured.`;
+    const shareAvailable = enableEvidenceActions();
+    renderEvidenceArtifactSummary(lastEvidenceArtifact, "Visible behavior");
+    setEvidenceStatusMessage(
+      shareAvailable
+        ? "Visible behavior captured."
+        : "Visible behavior captured. Native sharing is unavailable; export evidence instead.",
+      shareAvailable ? "ready" : "share-unavailable",
+    );
   } catch (error) {
     console.error(error);
-    setEvidenceStatusMessage(`Evidence error: ${error instanceof Error ? error.message : String(error)}`, "error");
+    setEvidenceStatusMessage(`Evidence error: ${error instanceof Error ? error.message : String(error)}`, "invalid");
   }
 }
 
@@ -837,29 +865,29 @@ function handleExportEvidence(): void {
     lastEvidenceArtifact = artifact;
     downloadEvidenceArtifact(artifact);
     enableEvidenceActions();
-    setEvidenceStatusMessage(`Exported ${artifact.export.filename}.`);
-    evidenceSummary.textContent = `${artifact.world.name}: ${artifact.visibleBehavior.objects.length} objects exported.`;
+    setEvidenceStatusMessage(`Exported ${artifact.export.filename}.`, "exported");
+    renderEvidenceArtifactSummary(artifact, "Exported evidence");
   } catch (error) {
     console.error(error);
-    setEvidenceStatusMessage(`Evidence error: ${error instanceof Error ? error.message : String(error)}`, "error");
+    setEvidenceStatusMessage(`Evidence error: ${error instanceof Error ? error.message : String(error)}`, "invalid");
   }
 }
 
 async function handleShareEvidence(): Promise<void> {
   try {
-    const canShareFiles = typeof navigator.share === "function"
-      && typeof File === "function"
-      && typeof navigator.canShare === "function";
-    if (!canShareFiles) {
-      lastEvidenceArtifact = createEvidenceArtifactForCurrentScene("native-share", {
+    if (!canShareEvidenceFiles()) {
+      lastEvidenceArtifact = prepareAliceEvidenceShare(createEvidenceArtifactForCurrentScene("native-share"), {
         available: false,
         outcome: "unavailable",
       });
-      setEvidenceStatusMessage("Native sharing is unavailable. Export evidence instead.", "error");
+      exportEvidenceButton.disabled = false;
+      shareEvidenceButton.disabled = true;
+      renderEvidenceArtifactSummary(lastEvidenceArtifact, "Visible behavior");
+      setEvidenceStatusMessage("Native sharing is unavailable. Export evidence instead.", "share-unavailable");
       return;
     }
 
-    const artifact = createEvidenceArtifactForCurrentScene("native-share", {
+    const artifact = prepareAliceEvidenceShare(createEvidenceArtifactForCurrentScene("native-share"), {
       available: true,
       outcome: "prepared",
     });
@@ -872,25 +900,27 @@ async function handleShareEvidence(): Promise<void> {
       files: [file],
     };
     if (!navigator.canShare(shareData)) {
-      lastEvidenceArtifact = createEvidenceArtifactForCurrentScene("native-share", {
+      lastEvidenceArtifact = prepareAliceEvidenceShare(createEvidenceArtifactForCurrentScene("native-share"), {
         available: false,
         outcome: "unavailable",
       });
-      setEvidenceStatusMessage("Native sharing cannot share this evidence. Export evidence instead.", "error");
+      exportEvidenceButton.disabled = false;
+      shareEvidenceButton.disabled = true;
+      renderEvidenceArtifactSummary(lastEvidenceArtifact, "Visible behavior");
+      setEvidenceStatusMessage("Native sharing cannot share this evidence. Export evidence instead.", "share-unavailable");
       return;
     }
 
     await navigator.share(shareData);
-    lastEvidenceArtifact = createEvidenceArtifactForCurrentScene("native-share", {
+    lastEvidenceArtifact = prepareAliceEvidenceShare(createEvidenceArtifactForCurrentScene("native-share"), {
       available: true,
       outcome: "completed",
     });
-    setEvidenceStatusMessage("Evidence shared.");
-    evidenceSummary.textContent =
-      `${lastEvidenceArtifact.world.name}: ${lastEvidenceArtifact.visibleBehavior.objects.length} objects shared.`;
+    setEvidenceStatusMessage("Evidence shared.", "shared");
+    renderEvidenceArtifactSummary(lastEvidenceArtifact, "Shared evidence");
   } catch (error) {
     console.error(error);
-    setEvidenceStatusMessage(`Evidence error: ${error instanceof Error ? error.message : String(error)}`, "error");
+    setEvidenceStatusMessage(`Evidence error: ${error instanceof Error ? error.message : String(error)}`, "invalid");
   }
 }
 

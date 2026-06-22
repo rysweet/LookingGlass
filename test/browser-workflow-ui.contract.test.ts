@@ -35,6 +35,7 @@ describe("Alice browser workflow UI contract", () => {
     expectElement(html, "share-evidence-button");
     expectElement(html, "evidence-status");
     expectElement(html, "evidence-summary");
+    expectElement(html, "evidence-capture-list");
     expectElement(html, "export-a3p-button");
     expectElement(html, "export-web-package-button");
     expectElement(html, "share-web-package-button");
@@ -47,6 +48,8 @@ describe("Alice browser workflow UI contract", () => {
     expect(html).toContain('data-testid="alice-evidence-share-button"');
     expect(html).toContain('data-testid="alice-evidence-status"');
     expect(html).toContain('data-testid="alice-evidence-summary"');
+    expect(html).toContain('data-alice-evidence-status="empty"');
+    expect(html).toContain('data-testid="alice-evidence-capture-list"');
     expect(html).toContain('accept=".a3p"');
     expect(html).toContain(".glb");
     expect(html).toContain(".gltf");

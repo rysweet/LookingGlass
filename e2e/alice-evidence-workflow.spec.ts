@@ -93,3 +93,29 @@ test("runs an Alice world, exports visible-behavior evidence, and verifies metad
   expect(serialized).not.toContain(process.cwd());
   expect(serialized).not.toMatch(/data:image\//);
 });
+
+test("keeps export available when native evidence sharing is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, "canShare", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(Navigator.prototype, "share", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  await page.goto("/");
+  await page.getByTestId("alice-create-shape-button").click();
+  await page.getByTestId("alice-evidence-capture-button").click();
+
+  await expect(page.getByTestId("alice-evidence-status")).toHaveAttribute(
+    "data-alice-evidence-status",
+    "share-unavailable",
+  );
+  await expect(page.getByTestId("alice-evidence-summary")).toContainText("Alice alice-web evidence");
+  await expect(page.getByTestId("alice-evidence-capture-list")).toContainText(/visible behavior/i);
+  await expect(page.getByTestId("alice-evidence-export-button")).toBeEnabled();
+  await expect(page.getByTestId("alice-evidence-share-button")).toBeDisabled();
+});

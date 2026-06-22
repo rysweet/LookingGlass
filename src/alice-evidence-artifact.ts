@@ -1,6 +1,6 @@
-export const ALICE_EVIDENCE_FORMAT = "alice-visible-behavior-evidence" as const;
-export const ALICE_EVIDENCE_VERSION = 1 as const;
-export const ALICE_EVIDENCE_MIME_TYPE = "application/json" as const;
+const ALICE_EVIDENCE_FORMAT = "alice-visible-behavior-evidence" as const;
+const ALICE_EVIDENCE_VERSION = 1 as const;
+const ALICE_EVIDENCE_MIME_TYPE = "application/json" as const;
 
 const MAX_VISIBLE_OBJECTS = 200;
 const MAX_FILENAME_LENGTH = 120;
@@ -69,6 +69,10 @@ export interface AliceEvidenceArtifact {
     share?: {
       available: boolean;
       outcome: AliceEvidenceShareOutcome;
+      title?: string;
+      summary?: string;
+      artifactHash?: `sha256:${string}`;
+      preparedAt?: string;
     };
   };
 }
@@ -92,6 +96,10 @@ export interface AliceEvidenceArtifactInput {
     share?: {
       available: boolean;
       outcome: AliceEvidenceShareOutcome;
+      title?: string;
+      summary?: string;
+      artifactHash?: `sha256:${string}`;
+      preparedAt?: string;
     };
   };
 }
@@ -99,6 +107,30 @@ export interface AliceEvidenceArtifactInput {
 export interface AliceEvidenceValidationResult {
   valid: boolean;
   errors: string[];
+}
+
+export interface AliceEvidenceSummary {
+  title: string;
+  projectName: string;
+  captureCount: number;
+  objectCount: number;
+  lastCaptureLabel: string | null;
+  statusText: string;
+}
+
+export interface PrepareAliceEvidenceShareInput {
+  available?: boolean;
+  outcome?: AliceEvidenceShareOutcome;
+  title?: string;
+  summary?: string;
+  preparedAt?: string;
+}
+
+export class AliceEvidenceArtifactError extends Error {
+  constructor(message: string, readonly errors: string[]) {
+    super(message);
+    this.name = "AliceEvidenceArtifactError";
+  }
 }
 
 export function createAliceEvidenceArtifact(input: AliceEvidenceArtifactInput): AliceEvidenceArtifact {
@@ -141,6 +173,10 @@ export function createAliceEvidenceArtifact(input: AliceEvidenceArtifactInput): 
         share: {
           available: Boolean(input.export.share.available),
           outcome: input.export.share.outcome,
+          ...(input.export.share.title ? { title: stringValue(input.export.share.title) } : {}),
+          ...(input.export.share.summary ? { summary: stringValue(input.export.share.summary) } : {}),
+          ...(input.export.share.artifactHash ? { artifactHash: input.export.share.artifactHash } : {}),
+          ...(input.export.share.preparedAt ? { preparedAt: stringValue(input.export.share.preparedAt) } : {}),
         },
       } : {}),
     },
@@ -148,7 +184,65 @@ export function createAliceEvidenceArtifact(input: AliceEvidenceArtifactInput): 
 }
 
 export function serializeAliceEvidenceArtifact(artifact: AliceEvidenceArtifact): string {
+  assertValidAliceEvidenceArtifact(artifact);
   return `${JSON.stringify(artifact, null, 2)}\n`;
+}
+
+export function parseAliceEvidenceArtifact(json: string): AliceEvidenceArtifact {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch (error) {
+    throw new AliceEvidenceArtifactError(
+      `Alice evidence artifact JSON could not be parsed: ${error instanceof Error ? error.message : String(error)}`,
+      ["JSON must be valid."],
+    );
+  }
+
+  assertValidAliceEvidenceArtifact(parsed);
+  return parsed as AliceEvidenceArtifact;
+}
+
+export function summarizeAliceEvidenceArtifact(artifact: AliceEvidenceArtifact): AliceEvidenceSummary {
+  assertValidAliceEvidenceArtifact(artifact);
+  const projectName = artifact.world.name;
+  const objectCount = artifact.visibleBehavior.objects.length;
+  const captureCount = 1;
+  const title = `Alice evidence for ${projectName}`;
+  const objectText = `${objectCount} ${objectCount === 1 ? "object" : "objects"}`;
+  return {
+    title,
+    projectName,
+    captureCount,
+    objectCount,
+    lastCaptureLabel: "Visible behavior",
+    statusText: `Alice alice-web evidence for ${projectName}: ${captureCount} capture, ${objectText}.`,
+  };
+}
+
+export function prepareAliceEvidenceShare(
+  artifact: AliceEvidenceArtifact,
+  input: PrepareAliceEvidenceShareInput = {},
+): AliceEvidenceArtifact {
+  const preShareArtifact = withoutShare(artifact);
+  const summary = summarizeAliceEvidenceArtifact(preShareArtifact);
+  const artifactHash = `sha256:${sha256Hex(serializeAliceEvidenceArtifact(preShareArtifact))}` as const;
+  const sharedArtifact: AliceEvidenceArtifact = {
+    ...preShareArtifact,
+    export: {
+      ...preShareArtifact.export,
+      share: {
+        available: input.available ?? true,
+        outcome: input.outcome ?? "prepared",
+        title: input.title ?? summary.title,
+        summary: input.summary ?? summary.statusText,
+        artifactHash,
+        preparedAt: input.preparedAt ?? new Date().toISOString(),
+      },
+    },
+  };
+  assertValidAliceEvidenceArtifact(sharedArtifact);
+  return sharedArtifact;
 }
 
 export function validateAliceEvidenceArtifact(value: unknown): AliceEvidenceValidationResult {
@@ -208,6 +302,19 @@ export function validateAliceEvidenceArtifact(value: unknown): AliceEvidenceVali
         if (!["prepared", "completed", "unavailable"].includes(String(share.outcome))) {
           errors.push("export.share.outcome must be prepared, completed, or unavailable.");
         }
+        if (share.title !== undefined) {
+          expectNonEmptyString(share.title, "export.share.title", errors);
+        }
+        if (share.summary !== undefined) {
+          expectNonEmptyString(share.summary, "export.share.summary", errors);
+        }
+        if (share.artifactHash !== undefined
+          && (typeof share.artifactHash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(share.artifactHash))) {
+          errors.push("export.share.artifactHash must be a sha256 hex digest.");
+        }
+        if (share.preparedAt !== undefined) {
+          expectIsoTimestamp(share.preparedAt, "export.share.preparedAt", errors);
+        }
       }
     }
   }
@@ -215,7 +322,7 @@ export function validateAliceEvidenceArtifact(value: unknown): AliceEvidenceVali
   return { valid: errors.length === 0, errors };
 }
 
-export function sanitizeAliceEvidenceFilename(value: string): string {
+function sanitizeAliceEvidenceFilename(value: string): string {
   const withoutExtension = value.replace(/\.json$/i, "");
   const normalized = withoutExtension
     .normalize("NFKD")
@@ -226,6 +333,27 @@ export function sanitizeAliceEvidenceFilename(value: string): string {
     .replace(/^-+|-+$/g, "");
   const base = (normalized || "alice-evidence").slice(0, MAX_FILENAME_LENGTH - ".json".length);
   return `${base.replace(/[.-]+$/g, "") || "alice-evidence"}.json`;
+}
+
+function assertValidAliceEvidenceArtifact(value: unknown): void {
+  const validation = validateAliceEvidenceArtifact(value);
+  if (!validation.valid) {
+    throw new AliceEvidenceArtifactError(
+      `Alice evidence artifact is invalid: ${validation.errors.join("; ")}`,
+      validation.errors,
+    );
+  }
+}
+
+function withoutShare(artifact: AliceEvidenceArtifact): AliceEvidenceArtifact {
+  const exportInfo = { ...artifact.export };
+  delete exportInfo.share;
+  const preShareArtifact = {
+    ...artifact,
+    export: exportInfo,
+  };
+  assertValidAliceEvidenceArtifact(preShareArtifact);
+  return preShareArtifact;
 }
 
 function sanitizeVisibleObject(object: AliceEvidenceVisibleObject): AliceEvidenceVisibleObject {
@@ -361,4 +489,94 @@ function validateVector(value: unknown, label: string, errors: string[]): void {
       errors.push(`${label}.${axis} must be a finite number.`);
     }
   }
+}
+
+const SHA256_INITIAL_HASH = [
+  0x6a09e667,
+  0xbb67ae85,
+  0x3c6ef372,
+  0xa54ff53a,
+  0x510e527f,
+  0x9b05688c,
+  0x1f83d9ab,
+  0x5be0cd19,
+] as const;
+
+const SHA256_ROUND_CONSTANTS = [
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+] as const;
+
+function sha256Hex(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  const paddedLength = paddedSha256Length(bytes.length);
+  const padded = new Uint8Array(paddedLength);
+  padded.set(bytes);
+  padded[bytes.length] = 0x80;
+
+  const bitLength = bytes.length * 8;
+  const view = new DataView(padded.buffer);
+  view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x100000000));
+  view.setUint32(paddedLength - 4, bitLength >>> 0);
+
+  const hash: number[] = [...SHA256_INITIAL_HASH];
+  const words = new Array<number>(64).fill(0);
+
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let index = 0; index < 16; index += 1) {
+      words[index] = view.getUint32(offset + index * 4);
+    }
+    for (let index = 16; index < 64; index += 1) {
+      const s0 = rotateRight(words[index - 15], 7) ^ rotateRight(words[index - 15], 18) ^ (words[index - 15] >>> 3);
+      const s1 = rotateRight(words[index - 2], 17) ^ rotateRight(words[index - 2], 19) ^ (words[index - 2] >>> 10);
+      words[index] = (words[index - 16] + s0 + words[index - 7] + s1) >>> 0;
+    }
+
+    let [a, b, c, d, e, f, g, h] = hash;
+    for (let index = 0; index < 64; index += 1) {
+      const s1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + s1 + ch + SHA256_ROUND_CONSTANTS[index] + words[index]) >>> 0;
+      const s0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (s0 + maj) >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temp1) >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temp1 + temp2) >>> 0;
+    }
+
+    hash[0] = (hash[0] + a) >>> 0;
+    hash[1] = (hash[1] + b) >>> 0;
+    hash[2] = (hash[2] + c) >>> 0;
+    hash[3] = (hash[3] + d) >>> 0;
+    hash[4] = (hash[4] + e) >>> 0;
+    hash[5] = (hash[5] + f) >>> 0;
+    hash[6] = (hash[6] + g) >>> 0;
+    hash[7] = (hash[7] + h) >>> 0;
+  }
+
+  return hash.map((value) => value.toString(16).padStart(8, "0")).join("");
+}
+
+function paddedSha256Length(byteLength: number): number {
+  let length = byteLength + 1 + 8;
+  while (length % 64 !== 0) {
+    length += 1;
+  }
+  return length;
+}
+
+function rotateRight(value: number, bits: number): number {
+  return (value >>> bits) | (value << (32 - bits));
 }

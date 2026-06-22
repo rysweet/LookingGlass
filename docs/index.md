@@ -23,6 +23,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Architecture](./architecture.md)
 - [API reference](./api-reference.md)
 - [Alice identity boundary](./alice-identity-boundary.md)
+- [Alice evidence export workflow](./alice-evidence-workflow.md)
 - [Alice do-together workflow](./do-together-workflow.md)
 - [Alice evidence workflow usage](./alice-evidence-workflow-usage.md)
 - [Camera workflow usage](./camera-workflow-usage.md)
@@ -76,6 +77,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Camera workflow usage](./camera-workflow-usage.md)
 - [Selected object transform controls](./selected-object-transform-controls.md)
 - [Alice do-together workflow](./do-together-workflow.md)
+- [Alice evidence export workflow](./alice-evidence-workflow.md)
 - [Export, play, share, and validate a web package](./project-io-usage.md#export-play-share-and-validate-a-web-package)
 
 ### Reference
@@ -100,6 +102,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Grading pipeline](./grading-pipeline.md)
 - [Image editor](./image-editor.md)
 - [Alice identity boundary](./alice-identity-boundary.md)
+- [Alice evidence API](./alice-evidence-api.md)
 - [Do-together runtime evidence](./do-together-runtime-evidence.md)
 - [Joint manipulation](./joint-manipulation.md)
 - [Imported model and texture assets](./imported-models-and-textures.md)

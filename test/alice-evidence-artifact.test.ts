@@ -1,7 +1,12 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   createAliceEvidenceArtifact,
+  parseAliceEvidenceArtifact,
+  prepareAliceEvidenceShare,
   serializeAliceEvidenceArtifact,
+  summarizeAliceEvidenceArtifact,
+  type AliceEvidenceArtifact,
   type AliceEvidenceArtifactInput,
   validateAliceEvidenceArtifact,
 } from "../src/alice-evidence-artifact";
@@ -128,6 +133,14 @@ describe("Alice evidence artifact", () => {
 
     expect(serialized).toBe(serializeAliceEvidenceArtifact(createAliceEvidenceArtifact(baseArtifactInput())));
     expect(JSON.parse(serialized)).toEqual(artifact);
+    expect(parseAliceEvidenceArtifact(serialized)).toEqual(artifact);
+    expect(summarizeAliceEvidenceArtifact(artifact)).toMatchObject({
+      title: "Alice evidence for Wonderland demo",
+      projectName: "Wonderland demo",
+      captureCount: 1,
+      objectCount: 2,
+      lastCaptureLabel: "Visible behavior",
+    });
     expect(serialized).toContain('"alice-web"');
     expect(serialized).not.toMatch(/data:image\//);
   });
@@ -154,6 +167,47 @@ describe("Alice evidence artifact", () => {
       },
     });
     expect(validateAliceEvidenceArtifact(artifact).valid).toBe(true);
+  });
+
+  it("prepares native share metadata from the pre-share artifact hash", () => {
+    const artifact = createAliceEvidenceArtifact(baseArtifactInput());
+    const staleSharedArtifact: AliceEvidenceArtifact = {
+      ...artifact,
+      export: {
+        ...artifact.export,
+        method: "native-share",
+        share: {
+          available: true,
+          outcome: "completed",
+          artifactHash: "sha256:stale",
+        },
+      },
+    };
+    const preShareArtifact: AliceEvidenceArtifact = {
+      ...staleSharedArtifact,
+      export: {
+        ...staleSharedArtifact.export,
+      },
+    };
+    delete preShareArtifact.export.share;
+    const expectedHash = `sha256:${createHash("sha256")
+      .update(serializeAliceEvidenceArtifact(preShareArtifact))
+      .digest("hex")}`;
+
+    const shared = prepareAliceEvidenceShare(staleSharedArtifact, {
+      available: true,
+      outcome: "prepared",
+      preparedAt: "2026-06-22T05:59:03.111Z",
+    });
+
+    expect(shared.export.share).toMatchObject({
+      available: true,
+      outcome: "prepared",
+      title: "Alice evidence for Wonderland demo",
+      artifactHash: expectedHash,
+      preparedAt: "2026-06-22T05:59:03.111Z",
+    });
+    expect(validateAliceEvidenceArtifact(shared)).toEqual({ valid: true, errors: [] });
   });
 
   it("rejects artifacts without Alice identity, export metadata, or visible behavior", () => {

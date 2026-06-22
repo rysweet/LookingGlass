@@ -121,13 +121,14 @@
       </label>
       <button id="joint-apply-pose" type="button">Apply joint pose</button>
     </section>
-    <section id="evidence-panel" data-testid="alice-evidence-panel" aria-label="Alice evidence workflow">
+    <section id="evidence-panel" data-testid="alice-evidence-panel" aria-label="Alice evidence export">
       <h2>Alice evidence</h2>
-      <div id="evidence-status" data-testid="alice-evidence-status">Load an Alice world to capture evidence.</div>
+      <div id="evidence-status" data-testid="alice-evidence-status" data-alice-evidence-status="empty">Load an Alice world to capture evidence.</div>
       <button id="capture-evidence-button" data-testid="alice-evidence-capture-button" type="button">Capture visible behavior</button>
       <button id="export-evidence-button" data-testid="alice-evidence-export-button" class="secondary" type="button" disabled>Export evidence</button>
       <button id="share-evidence-button" data-testid="alice-evidence-share-button" class="secondary" type="button" disabled>Share evidence</button>
       <div id="evidence-summary" data-testid="alice-evidence-summary">No evidence captured.</div>
+      <ul id="evidence-capture-list" data-testid="alice-evidence-capture-list" aria-label="Evidence captures"></ul>
     </section>
     <h2 style="font-size:0.9rem; margin-top:8px;">Imported Assets</h2>
     <ul id="asset-list" data-testid="alice-imported-asset-list"></ul>
