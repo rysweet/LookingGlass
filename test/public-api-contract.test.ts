@@ -90,6 +90,10 @@ function buildFactoryCases() {
   return new Map<string, FactoryCase>([
     ["Accessibility.createHighContrastStyle", () => PublicApi.Accessibility.createHighContrastStyle()],
     ["Analytics.createAnalyticsSnapshot", () => PublicApi.Analytics.createAnalyticsSnapshot()],
+    ["AliceWorkflowState.createDefaultAliceWorkflowState", () => PublicApi.AliceWorkflowState.createDefaultAliceWorkflowState()],
+    ["AliceWorkflowState.createInitialScoreValues", () => PublicApi.AliceWorkflowState.createInitialScoreValues(
+      PublicApi.AliceWorkflowState.createDefaultAliceWorkflowState(),
+    )],
     ["CameraWorkflow.createDefaultCameraWorkflowState", () => PublicApi.CameraWorkflow.createDefaultCameraWorkflowState()],
     ["CodeGeneration.createTweedleSource", () => PublicApi.CodeGeneration.createTweedleSource("Demo", [])],
     ["Curriculum.createCurriculumMetadata", () => PublicApi.Curriculum.createCurriculumMetadata()],
@@ -220,6 +224,17 @@ function assertFactoryResult(key: string, value: unknown): void {
     case "Analytics.createAnalyticsSnapshot":
       expectKeys(value, ["sessionId", "startedAt", "engagement"]);
       expect((value as { engagement: { activeDurationMs: number } }).engagement.activeDurationMs).toBeTypeOf("number");
+      return;
+    case "AliceWorkflowState.createDefaultAliceWorkflowState":
+      expect(value).toEqual({
+        schemaVersion: "alice-web.workflow-state/v1",
+        scorekeepers: [],
+        timekeepers: [],
+        visibleBindings: [],
+      });
+      return;
+    case "AliceWorkflowState.createInitialScoreValues":
+      expect(value).toBeInstanceOf(Map);
       return;
     case "CameraWorkflow.createDefaultCameraWorkflowState":
       expectKeys(value, ["camera", "markers", "activeMarkerId"]);

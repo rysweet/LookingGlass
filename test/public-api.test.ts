@@ -1,6 +1,28 @@
 import { describe, expect, it } from "vitest";
 import * as PublicApi from "../src/index.js";
+import * as AliceWorkflowState from "../src/alice-workflow-state.js";
 import * as CameraWorkflow from "../src/camera-workflow.js";
+
+describe("Alice score and time workflow public API", () => {
+  it("exports the Alice score and time workflow from the public package surface", () => {
+    expect(PublicApi).toHaveProperty("AliceWorkflowState");
+    expect(PublicApi.AliceWorkflowState).toBe(AliceWorkflowState);
+    expect(PublicApi.AliceWorkflowState.ALICE_WORKFLOW_STATE_SCHEMA_VERSION).toBe(
+      "alice-web.workflow-state/v1",
+    );
+
+    for (const functionName of [
+      "createDefaultAliceWorkflowState",
+      "validateAliceWorkflowState",
+      "addScorekeeper",
+      "addTimekeeper",
+      "bindVisibleWorkflowState",
+      "resolveVisibleWorkflowBindings",
+    ] as const) {
+      expect(PublicApi.AliceWorkflowState[functionName]).toBe(AliceWorkflowState[functionName]);
+    }
+  });
+});
 
 describe("camera workflow public API", () => {
   it("exports the Alice camera workflow from the public package surface", () => {
@@ -34,8 +56,10 @@ describe("camera workflow public API", () => {
     const exportNames = Object.keys(PublicApi);
 
     expect(exportNames).toContain("CameraWorkflow");
+    expect(exportNames).toContain("AliceWorkflowState");
     expect(exportNames).not.toContain("LookingGlassCameraWorkflow");
     expect(exportNames).not.toContain("LookingGlassCamera");
+    expect(exportNames).not.toContain("LookingGlassWorkflowState");
     expect(exportNames).not.toContain("LookingGlass");
   });
 });
