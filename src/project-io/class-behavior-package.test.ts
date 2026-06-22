@@ -80,6 +80,13 @@ function createPackage(type = createReusableDoorType()): AliceClassBehaviorPacka
     kind: CLASS_BEHAVIOR_PACKAGE_KIND,
     version: CLASS_BEHAVIOR_PACKAGE_VERSION,
     exportedBy: "alice-web",
+    evidence: [
+      "class-behavior-type-present",
+      "class-behavior-supertype-preserved",
+      "class-behavior-fields-preserved",
+      "class-behavior-constructors-preserved",
+      "class-behavior-methods-preserved",
+    ],
     type,
   };
 }
@@ -107,7 +114,7 @@ describe("project-io/class-behavior-package", () => {
 
     expect(packageData).toEqual(createPackage(type));
     expect(packageData.type).not.toBe(type);
-    expect(Object.keys(packageData).sort()).toEqual(["exportedBy", "kind", "type", "version"]);
+    expect(Object.keys(packageData).sort()).toEqual(["evidence", "exportedBy", "kind", "type", "version"]);
     expect(JSON.stringify(packageData)).not.toContain("projectOnlyMethod");
     expect(JSON.stringify(packageData)).not.toContain("HelperDoor");
   });
@@ -364,6 +371,11 @@ describe("project-io/class-behavior-package", () => {
     expect(result).toEqual({
       schema_version: "alice-web.class-behavior-import-result/v1",
       status: "imported",
+      evidence: [
+        "class-behavior-package-validated",
+        "class-behavior-type-imported",
+        "class-behavior-name-preserved",
+      ],
       originalName: "ReusableDoor",
       importedName: "ReusableDoor",
       conflictStrategy: "rename",
