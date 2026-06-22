@@ -332,13 +332,16 @@ function readStringArrayField(value: unknown, fieldName: string):
 }
 
 function validateShareUrl(value: string): { ok: true } | { ok: false; error: string } {
+  if (/[\u0000-\u0020\u007f]/u.test(value)) {
+    return { ok: false, error: "canonicalUrl must be a valid http or https URL" };
+  }
   let parsed: URL;
   try {
     parsed = new URL(value);
   } catch {
     return { ok: false, error: "canonicalUrl must be a valid http or https URL" };
   }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+  if (parsed.href !== value || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) {
     return { ok: false, error: "canonicalUrl must be a valid http or https URL" };
   }
   return { ok: true };

@@ -577,6 +577,9 @@ describe("server API", () => {
       await localPost(app, "/api/project/export/web-package")
         .send({ canonicalUrl: "javascript:alert(1)" })
         .expect(400);
+      await localPost(app, "/api/project/export/web-package")
+        .send({ canonicalUrl: "https://example.edu\n.evil/path" })
+        .expect(400);
 
       const malformedTeacher = await localPost(app, "/api/project/export/web-package")
         .send({ teacher: { audience: 42 } })

@@ -32,6 +32,7 @@ const WEB_PACKAGE_ARTIFACTS = {
 
 const REQUIRED_WEB_PACKAGE_FILES = Object.values(WEB_PACKAGE_ARTIFACTS);
 const FORBIDDEN_IDENTITY_RE = /LookingGlass|lookingglass|alice-standalone-player/;
+const URL_CONTROL_OR_SPACE_RE = /[\u0000-\u0020\u007f]/u;
 
 export interface ProjectExportResource {
   path: string;
@@ -774,13 +775,7 @@ function normalizeWebPackageOptions(
   const description = options.description?.trim();
   const canonicalUrl = options.canonicalUrl?.trim();
   if (canonicalUrl) {
-    let parsed: URL;
-    try {
-      parsed = new URL(canonicalUrl);
-    } catch {
-      throw new WebPackageInputError("canonicalUrl must be a valid http or https URL");
-    }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (!isSafeHttpUrl(canonicalUrl)) {
       throw new WebPackageInputError("canonicalUrl must be a valid http or https URL");
     }
   }
@@ -907,19 +902,24 @@ function validatePackageCanonicalUrl(value: unknown): WebPackageValidationError 
       path: WEB_PACKAGE_ARTIFACTS.share,
     };
   }
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-      return null;
-    }
-  } catch {
-    // handled below
+  if (isSafeHttpUrl(value)) {
+    return null;
   }
   return {
     code: "invalid-canonical-url",
     message: "share canonicalUrl must be a valid http or https URL",
     path: WEB_PACKAGE_ARTIFACTS.share,
   };
+}
+
+function isSafeHttpUrl(value: string): boolean {
+  if (URL_CONTROL_OR_SPACE_RE.test(value)) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.href === value && (parsed.protocol === "http:" || parsed.protocol === "https:");
+  } catch {
+    return false;
+  }
 }
 
 function buildPackageManifest(filename: string): AliceWebPackageManifest {
