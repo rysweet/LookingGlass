@@ -1,6 +1,7 @@
 import express, { type ErrorRequestHandler } from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
+import { ClassBehaviorPackageError } from "../../project-io/class-behavior-package.js";
 import type { ServerContext } from "../context.js";
 import { createInitialServerState } from "../state.js";
 import { registerProjectRoutes } from "./project-routes.js";
@@ -60,6 +61,39 @@ describe("project routes class behavior package workflow", () => {
     expect(response.body).toEqual(packageData);
   });
 
+  it("falls back to a safe class behavior filename when the type name has no filename characters", async () => {
+    const exportClassBehaviorPackage = vi.fn(() => packageData);
+    const { app } = createApp({ exportClassBehaviorPackage });
+
+    const response = await request(app)
+      .get(`/api/projects/current/classes/${encodeURIComponent("!!!")}/behavior`)
+      .expect(200);
+
+    expect(response.header["content-disposition"]).toBe(
+      'attachment; filename="class-behavior.alice-class-behavior.json"',
+    );
+  });
+
+  it("maps typed export errors to explicit class behavior error responses", async () => {
+    const exportClassBehaviorPackage = vi.fn(() => {
+      throw new ClassBehaviorPackageError(
+        "missing-class-behavior",
+        "Class behavior not found: MissingSpinner",
+      );
+    });
+    const { app } = createApp({ exportClassBehaviorPackage });
+
+    const response = await request(app)
+      .get("/api/projects/current/classes/MissingSpinner/behavior")
+      .expect(400);
+
+    expect(response.header["cache-control"]).toBe("no-store");
+    expect(response.body).toEqual({
+      error: "Class behavior not found: MissingSpinner",
+      code: "missing-class-behavior",
+    });
+  });
+
   it("imports one package into the current Alice project and returns the typed import result", async () => {
     const importResult = {
       schema_version: "alice-web.class-behavior-import-result/v1",
@@ -84,6 +118,67 @@ describe("project routes class behavior package workflow", () => {
     });
     expect(response.header["cache-control"]).toBe("no-store");
     expect(response.body).toEqual(importResult);
+  });
+
+  it("omits conflict strategy when the import body does not provide one", async () => {
+    const importResult = {
+      schema_version: "alice-web.class-behavior-import-result/v1",
+      status: "imported",
+      originalName: "Reusable Spinner",
+      importedName: "Reusable Spinner",
+      conflictStrategy: "rename",
+      renamed: false,
+      replaced: false,
+      merged: false,
+    };
+    const importClassBehaviorPackage = vi.fn(() => importResult);
+    const { app, state } = createApp({ importClassBehaviorPackage });
+
+    await request(app)
+      .post("/api/projects/current/classes/behavior")
+      .send({ package: packageData })
+      .expect(200);
+
+    expect(importClassBehaviorPackage).toHaveBeenCalledWith(state, packageData, {});
+  });
+
+  it("rejects unsupported conflict strategies before mutating the current project", async () => {
+    const importClassBehaviorPackage = vi.fn();
+    const { app } = createApp({ importClassBehaviorPackage });
+
+    const response = await request(app)
+      .post("/api/projects/current/classes/behavior")
+      .send({ package: packageData, conflictStrategy: "copy" })
+      .expect(400);
+
+    expect(response.body).toEqual({
+      error: "conflictStrategy must be rename, replace, merge, or reject",
+      code: "invalid-class-behavior-package",
+    });
+    expect(importClassBehaviorPackage).not.toHaveBeenCalled();
+  });
+
+  it("maps typed import errors to explicit class behavior error responses", async () => {
+    const importClassBehaviorPackage = vi.fn(() => {
+      throw new ClassBehaviorPackageError(
+        "class-behavior-conflict",
+        "Class behavior already exists: Reusable Spinner",
+        { existingName: "Reusable Spinner" },
+      );
+    });
+    const { app } = createApp({ importClassBehaviorPackage });
+
+    const response = await request(app)
+      .post("/api/projects/current/classes/behavior")
+      .send({ package: packageData, conflictStrategy: "reject" })
+      .expect(409);
+
+    expect(response.header["cache-control"]).toBe("no-store");
+    expect(response.body).toEqual({
+      error: "Class behavior already exists: Reusable Spinner",
+      code: "class-behavior-conflict",
+      existingName: "Reusable Spinner",
+    });
   });
 
   it("returns a typed conflict response for reject conflicts without a success-shaped body", async () => {

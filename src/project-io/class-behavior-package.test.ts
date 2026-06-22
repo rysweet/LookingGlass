@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AliceProject, AliceTypeDefinition } from "../a3p-parser.js";
+import type { AliceMethod, AliceProject, AliceStatement, AliceTypeDefinition } from "../a3p-parser.js";
 import {
   CLASS_BEHAVIOR_PACKAGE_KIND,
   CLASS_BEHAVIOR_PACKAGE_VERSION,
@@ -12,6 +12,7 @@ import {
   parseClassBehaviorPackage,
   serializeClassBehaviorPackage,
   type AliceClassBehaviorPackage,
+  type ClassBehaviorConflictStrategy,
 } from "./class-behavior-package.js";
 
 function createProject(types: AliceTypeDefinition[] = [createReusableDoorType()]): AliceProject {
@@ -204,6 +205,157 @@ describe("project-io/class-behavior-package", () => {
     expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
   });
 
+  it("accepts the full Alice statement shape used by class behavior methods", () => {
+    const packageData = createPackage({
+      ...createReusableDoorType(),
+      methods: [
+        {
+          name: "exerciseStatementShape",
+          isFunction: false,
+          returnType: "void",
+          parameters: [{ name: "amount", type: "Number" }],
+          statements: [
+            {
+              kind: "complex",
+              object: "this",
+              method: "turn",
+              itemType: "Number",
+              itemName: "amount",
+              collection: "doors",
+              condition: "amount > 0",
+              event: "sceneStart",
+              expression: "amount",
+              name: "localAmount",
+              varType: "Number",
+              value: "1",
+              count: 1,
+              countExpression: "amount",
+              arguments: ["LEFT", "amount"],
+              body: [{ kind: "comment", expression: "body" }],
+              ifBody: [{ kind: "comment", expression: "if" }],
+              elseBody: [{ kind: "comment", expression: "else" }],
+              tryBody: [{ kind: "comment", expression: "try" }],
+              catchBody: [{ kind: "comment", expression: "catch" }],
+              catchType: "Exception",
+              catchVariable: "error",
+              cases: [{ value: "1", body: [{ kind: "comment", expression: "case" }] }],
+              defaultCase: [{ kind: "comment", expression: "default" }],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(parseClassBehaviorPackage(packageData)).toEqual(packageData);
+  });
+
+  it("rejects malformed class behavior package JSON and value shapes", () => {
+    const base = createPackage();
+    const oversizedPackageJson = JSON.stringify(createPackage({
+      ...createReusableDoorType(),
+      name: "A".repeat(MAX_CLASS_BEHAVIOR_JSON_BYTES),
+    }));
+    const tooDeepPackage = createPackage();
+    let nested: Record<string, unknown> = tooDeepPackage as unknown as Record<string, unknown>;
+    for (let index = 0; index < 34; index += 1) {
+      nested.next = {};
+      nested = nested.next as Record<string, unknown>;
+    }
+    const invalidInputs: Array<[unknown, string]> = [
+      ["{", "invalid-class-behavior-package"],
+      [oversizedPackageJson, "class-behavior-package-too-large"],
+      [undefined, "invalid-class-behavior-package"],
+      [null, "invalid-class-behavior-package"],
+      [Number.POSITIVE_INFINITY, "invalid-class-behavior-package"],
+      [new Date(), "invalid-class-behavior-package"],
+      [JSON.parse('{"kind":"alice-web.reusable-class-behavior","version":1,"exportedBy":"alice-web","type":{"name":"ReusableDoor"},"__proto__":{"polluted":true}}'), "dangerous-class-behavior-key"],
+      [tooDeepPackage, "class-behavior-package-too-large"],
+      [{ ...base, type: "ReusableDoor" }, "invalid-class-behavior-package"],
+      [createPackage({ ...createReusableDoorType(), superTypeName: 1 as unknown as string }), "invalid-class-behavior-package"],
+      [createPackage({ ...createReusableDoorType(), fields: "bad" as unknown as AliceTypeDefinition["fields"] }), "invalid-class-behavior-package"],
+      [createPackage({ ...createReusableDoorType(), fields: ["bad" as unknown as NonNullable<AliceTypeDefinition["fields"]>[number]] }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        fields: [{ name: "badField", typeName: 1 as unknown as string }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({ ...createReusableDoorType(), methods: "bad" as unknown as AliceTypeDefinition["methods"] }), "invalid-class-behavior-package"],
+      [createPackage({ ...createReusableDoorType(), methods: ["bad" as unknown as NonNullable<AliceTypeDefinition["methods"]>[number]] }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{ ...createReusableDoorType().methods![0], isFunction: "false" as unknown as boolean }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{ ...createReusableDoorType().methods![0], returnType: "" }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{ ...createReusableDoorType().methods![0], parameters: "bad" as unknown as AliceMethod["parameters"] }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{
+          ...createReusableDoorType().methods![0],
+          parameters: ["bad" as unknown as AliceMethod["parameters"][number]],
+        }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{ ...createReusableDoorType().methods![0], statements: "bad" as unknown as AliceMethod["statements"] }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{ ...createReusableDoorType().methods![0], statements: ["bad" as unknown as AliceStatement] }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{ ...createReusableDoorType().methods![0], statements: [{ kind: "loop", count: -1 }] }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{ ...createReusableDoorType().methods![0], statements: [{ kind: "call", arguments: "bad" as unknown as string[] }] }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{ ...createReusableDoorType().methods![0], statements: [{ kind: "switch", cases: "bad" as unknown as AliceStatement["cases"] }] }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{ ...createReusableDoorType().methods![0], statements: [{ kind: "switch", cases: ["bad" as unknown as NonNullable<AliceStatement["cases"]>[number]] }] }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{
+          ...createReusableDoorType().methods![0],
+          statements: [{
+            kind: "switch",
+            cases: [{ value: "1" } as unknown as NonNullable<AliceStatement["cases"]>[number]],
+          }],
+        }],
+      }), "invalid-class-behavior-package"],
+      [createPackage({
+        ...createReusableDoorType(),
+        methods: [{ ...createReusableDoorType().methods![0], statements: [{ kind: "switch", defaultCase: "bad" as unknown as AliceStatement[] }] }],
+      }), "invalid-class-behavior-package"],
+    ];
+
+    for (const [input, code] of invalidInputs) {
+      expectPackageError(() => parseClassBehaviorPackage(input), code);
+    }
+  });
+
+  it("rejects unsupported import conflict strategies before changing the target project", () => {
+    const target = createProject([]);
+
+    expectPackageError(
+      () => importClassBehaviorPackage(target, createPackage(), {
+        conflictStrategy: "copy" as unknown as ClassBehaviorConflictStrategy,
+      }),
+      "invalid-class-behavior-package",
+    );
+    expect(target.types).toEqual([]);
+  });
+
   it("imports a non-conflicting class behavior into the target Alice project", () => {
     const target = createProject([]);
 
@@ -254,6 +406,26 @@ describe("project-io/class-behavior-package", () => {
       returnType: "ReusableDoor2",
     });
     expect(renamed?.methods?.[0]?.statements).toEqual([{ kind: "return", expression: '"ReusableDoor"' }]);
+  });
+
+  it("skips existing numeric rename suffixes when importing a duplicate behavior", () => {
+    const target = createProject([
+      createReusableDoorType(),
+      createReusableDoorType("ReusableDoor2"),
+    ]);
+
+    const result = importClassBehaviorPackage(target, createPackage());
+
+    expect(result).toMatchObject({
+      originalName: "ReusableDoor",
+      importedName: "ReusableDoor3",
+      renamed: true,
+    });
+    expect(target.types?.map((type) => type.name)).toEqual([
+      "ReusableDoor",
+      "ReusableDoor2",
+      "ReusableDoor3",
+    ]);
   });
 
   it("supports explicit replace, merge, and reject conflict strategies", () => {

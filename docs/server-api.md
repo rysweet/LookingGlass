@@ -230,7 +230,7 @@ policy as other current-project operations. See
 [Class behavior package API](./class-behavior-package-api.md) for the package
 format, request bodies, response bodies, validation rules, and examples.
 
-Camera routes require `X-Alice-Local-Api-Token` on both read and write
+Camera routes require `X-Alice-Local-Api-Token` on both read and mutation
 requests when the CLI server is started with `--api-token`.
 
 Read-only audio routes, including `GET /api/audio/formats` and
