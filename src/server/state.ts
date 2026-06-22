@@ -107,9 +107,7 @@ export function buildCurrentProject(state: ServerState): AliceProject {
   baseProject.sceneObjects = Array.from(sceneObjectsByName.values());
 
   const sceneType = baseProject.types?.find((type) => type.superTypeName?.includes("SScene"));
-  const sourceMethods = baseProject.types?.length && sceneType?.methods?.length
-    ? sceneType.methods
-    : baseProject.methods;
+  const sourceMethods = sceneType ? (sceneType.methods ?? []) : baseProject.methods;
   const methodsByName = new Map(sourceMethods.map((method) => [method.name, method]));
   for (const [name, statements] of state.procedures.entries()) {
     if (state.parsedProject && statements.length === 0 && methodsByName.has(name)) {
@@ -256,12 +254,24 @@ export function registerMethod(
 ): void {
   state.procedures.set(methodName, []);
   if (state.parsedProject) {
-    state.parsedProject.methods.push({
+    const method = {
       name: methodName,
       isFunction,
       returnType,
       parameters: params,
       statements: [],
-    });
+    };
+    const sceneType = state.parsedProject.types?.find((type) => type.superTypeName?.includes("SScene"));
+    if (sceneType) {
+      sceneType.methods = [
+        ...(sceneType.methods ?? []).filter((existing) => existing.name !== methodName),
+        method,
+      ];
+    } else {
+      state.parsedProject.methods = [
+        ...state.parsedProject.methods.filter((existing) => existing.name !== methodName),
+        method,
+      ];
+    }
   }
 }

@@ -5,6 +5,7 @@ import { projectService } from "../../src/server/project-service.js";
 import {
   buildCurrentProject,
   createInitialServerState,
+  registerMethod,
   seedDefaultSceneObjects,
 } from "../../src/server/state.js";
 
@@ -123,6 +124,56 @@ describe("ProjectService.exportTypeScript", () => {
 
     expect(sceneType?.methods?.map((method) => method.name)).toEqual(["sceneOnly"]);
     expect(doorType?.methods?.map((method) => method.name)).toEqual(["doorOnly"]);
+  });
+
+  it("does not promote class-owned methods when a typed project has an empty Scene method list", () => {
+    const state = createInitialServerState();
+    state.parsedProject = createMinimalProject();
+    state.parsedProject.types?.push({
+      name: "ReusableDoor",
+      superTypeName: "org.lgna.story.SModel",
+      fields: [],
+      constructors: [],
+      methods: [{
+        name: "doorOnly",
+        isFunction: false,
+        returnType: "void",
+        parameters: [],
+        statements: [],
+      }],
+    });
+
+    const project = buildCurrentProject(state);
+
+    expect(project.methods.map((method) => method.name)).not.toContain("doorOnly");
+    expect(project.types?.find((type) => type.name === "ReusableDoor")?.methods?.map((method) => method.name))
+      .toContain("doorOnly");
+  });
+
+  it("preserves newly registered Scene function metadata for reopened typed projects", () => {
+    const state = createInitialServerState();
+    state.parsedProject = createMinimalProject();
+
+    registerMethod(state, "distanceToTarget", true, "DecimalNumber", [
+      { name: "target", type: "SModel" },
+    ]);
+
+    const project = buildCurrentProject(state);
+    const method = project.methods.find((candidate) => candidate.name === "distanceToTarget");
+    const sceneMethod = project.types
+      ?.find((type) => type.superTypeName?.includes("SScene"))
+      ?.methods?.find((candidate) => candidate.name === "distanceToTarget");
+
+    expect(method).toMatchObject({
+      isFunction: true,
+      returnType: "DecimalNumber",
+      parameters: [{ name: "target", type: "SModel" }],
+    });
+    expect(sceneMethod).toMatchObject({
+      isFunction: true,
+      returnType: "DecimalNumber",
+      parameters: [{ name: "target", type: "SModel" }],
+    });
   });
 
   it("rejects export before a current Alice project is launched", async () => {
