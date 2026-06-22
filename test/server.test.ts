@@ -8,6 +8,7 @@ import * as os from "os";
 import * as path from "path";
 import type { Express } from "express";
 import request from "supertest";
+import type { Response as SupertestResponse } from "superagent";
 import { LOCAL_API_TOKEN_HEADER } from "../src/server/security";
 import { REPOSITORY_A3P_FIXTURE } from "./fixtures/a3p-fixtures";
 
@@ -25,6 +26,18 @@ function localPost(app: Express, apiPath: string) {
   return request(app)
     .post(apiPath)
     .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN);
+}
+
+function parseBinaryResponse(
+  res: SupertestResponse,
+  callback: (error: Error | null, body: Buffer) => void,
+): void {
+  const chunks: Buffer[] = [];
+  res.on("data", (chunk: Buffer | string) => {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  });
+  res.on("end", () => callback(null, Buffer.concat(chunks)));
+  res.on("error", callback);
 }
 
 function decodeBase64Package(base64: string): Buffer {
@@ -443,6 +456,8 @@ describe("server API", () => {
 
       const exportRes = await request(persistenceApp)
         .get("/api/projects/current/export/typescript")
+        .buffer(true)
+        .parse(parseBinaryResponse)
         .expect(200);
       expect(exportRes.headers["content-type"]).toContain("application/zip");
       expect(exportRes.headers["content-disposition"]).toContain(
