@@ -122,7 +122,7 @@ export function buildCurrentProject(state: ServerState): AliceProject {
     });
   }
   baseProject.methods = Array.from(methodsByName.values());
-  syncSceneTypeMethods(baseProject, baseProject.methods);
+  syncSceneTypeMethods(baseProject, baseProject.methods, new Set(state.procedures.keys()));
   return baseProject;
 }
 
@@ -138,12 +138,19 @@ function mergeProcedureStatements(existing: AliceStatement[], methods: string[])
   ];
 }
 
-function syncSceneTypeMethods(project: AliceProject, methods: AliceProject["methods"]): void {
+function syncSceneTypeMethods(
+  project: AliceProject,
+  methods: AliceProject["methods"],
+  serverProcedureNames: Set<string>,
+): void {
   const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
   if (!sceneType?.methods) return;
 
   const methodsByName = new Map(sceneType.methods.map((method) => [method.name, method]));
   for (const method of methods) {
+    if (!serverProcedureNames.has(method.name) && !methodsByName.has(method.name)) {
+      continue;
+    }
     methodsByName.set(method.name, method);
   }
   sceneType.methods = Array.from(methodsByName.values());

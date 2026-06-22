@@ -41,7 +41,7 @@ import {
   type ServerState,
 } from "./state.js";
 import type { EvidenceService } from "./evidence-service.js";
-import { validateExistingProjectRealPath } from "./validation.js";
+import { validateExistingProjectRealPath, validateProjectPath } from "./validation.js";
 
 export type LaunchProjectResult =
   | { ok: true }
@@ -180,6 +180,11 @@ async function writeAllowedProjectFile(
   a3pBytes: Uint8Array,
   allowedProjectDirs: readonly string[],
 ): Promise<void> {
+  const pathValidation = validateProjectPath(targetPath, allowedProjectDirs);
+  if (!pathValidation.valid || pathValidation.resolvedPath !== targetPath) {
+    throw new ProjectSaveError("project path is outside allowed directories");
+  }
+
   await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
 
   let handle: fs.promises.FileHandle | null = null;
@@ -231,6 +236,7 @@ export const projectService: ProjectService = {
     } else {
       state.projectArchive = null;
       state.resources = new Map();
+      state.sceneObjects.clear();
       syncServerProceduresFromProject(state, null);
       state.projectAudio = createEmptyProjectAudioState();
       state.aliceAudio = createDefaultProjectAudioState();

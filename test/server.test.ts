@@ -206,6 +206,21 @@ describe("server API", () => {
       expect(res.body.sceneObjectCount).toBeGreaterThanOrEqual(2);
     });
 
+    it("resets scene objects on default launch", async () => {
+      await localPost(app, "/api/launch").send({}).expect(200);
+      await localPost(app, "/api/scene/add-object")
+        .send({ className: "org.lgna.story.SBiped", name: "temporaryBunny" })
+        .expect(200);
+
+      const relaunched = await localPost(app, "/api/launch").send({}).expect(200);
+
+      expect(relaunched.body).toMatchObject({
+        status: "launched",
+        project: null,
+        sceneObjectCount: 2,
+      });
+    });
+
     it("uses the requested .a3p filename when the parsed project name is generic", async () => {
       const fixtureApp = createTestServer({
         port: 0,
