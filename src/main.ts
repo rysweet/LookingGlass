@@ -2,6 +2,18 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { type AliceObject, type AliceProject } from "./a3p-parser";
 import {
+  createAliceEvidenceArtifact,
+  prepareAliceEvidenceShare,
+  serializeAliceEvidenceArtifact,
+  summarizeAliceEvidenceArtifact,
+  validateAliceEvidenceArtifact,
+  type AliceEvidenceArtifact,
+  type AliceEvidenceExportMethod,
+  type AliceEvidenceShareOutcome,
+  type AliceEvidenceVector,
+  type AliceEvidenceVisibleObject,
+} from "./alice-evidence-artifact";
+import {
   applyCameraPreset,
   createDefaultCameraWorkflowState,
   deleteCameraMarker,
@@ -115,6 +127,12 @@ const visibleTimeLabel = requireElement("visible-time-label", HTMLElement);
 const runWorldButton = requireElement("run-world", HTMLButtonElement);
 const workflowSource = requireElement("workflow-source", HTMLTextAreaElement);
 const runWorkflowButton = requireElement("run-workflow-button", HTMLButtonElement);
+const captureEvidenceButton = requireElement("capture-evidence-button", HTMLButtonElement);
+const exportEvidenceButton = requireElement("export-evidence-button", HTMLButtonElement);
+const shareEvidenceButton = requireElement("share-evidence-button", HTMLButtonElement);
+const evidenceStatus = requireElement("evidence-status", HTMLElement);
+const evidenceSummary = requireElement("evidence-summary", HTMLElement);
+const evidenceCaptureList = requireElement("evidence-capture-list", HTMLUListElement);
 
 interface AliceWebRunResult {
   status: "completed" | "error";
@@ -129,6 +147,8 @@ interface AliceWebRunResult {
 interface AliceWebRuntimeState {
   latestRunResult: AliceWebRunResult | null;
 }
+
+type AliceEvidenceStatusState = "empty" | "ready" | "exported" | "shared" | "share-unavailable" | "invalid";
 
 declare global {
   interface Window {
@@ -164,6 +184,7 @@ let selectedObjectName: string | null = null;
 let selectedTextureResourceId: string | null = null;
 let selectedClassBehaviorName: string | null = null;
 let lastWebPackageBase64: string | null = null;
+let lastEvidenceArtifact: AliceEvidenceArtifact | null = null;
 const jointState = new JointSystem.JointStateStore();
 const MOVE_SELECTED_OBJECT_DELTA = { x: 1, y: 0, z: 0 } as const;
 const TURN_SELECTED_OBJECT_RADIANS = Math.PI / 12;
@@ -253,6 +274,43 @@ function setErrorMessage(error: unknown): void {
 
 function setCameraStatusMessage(message: string): void {
   cameraStatus.textContent = message;
+}
+
+function setEvidenceStatusMessage(message: string, state: AliceEvidenceStatusState): void {
+  evidenceStatus.textContent = message;
+  evidenceStatus.dataset.aliceEvidenceStatus = state;
+  evidenceStatus.dataset.state = state === "invalid" ? "error" : state;
+}
+
+function resetEvidenceWorkflow(message: string): void {
+  lastEvidenceArtifact = null;
+  exportEvidenceButton.disabled = true;
+  shareEvidenceButton.disabled = true;
+  setEvidenceStatusMessage(message, "empty");
+  evidenceSummary.textContent = "No evidence captured.";
+  evidenceCaptureList.replaceChildren();
+}
+
+function canShareEvidenceFiles(): boolean {
+  return typeof navigator.share === "function"
+    && typeof File === "function"
+    && typeof navigator.canShare === "function";
+}
+
+function enableEvidenceActions(): boolean {
+  const shareAvailable = canShareEvidenceFiles();
+  exportEvidenceButton.disabled = false;
+  shareEvidenceButton.disabled = !shareAvailable;
+  return shareAvailable;
+}
+
+function renderEvidenceArtifactSummary(artifact: AliceEvidenceArtifact, actionLabel: string): void {
+  const summary = summarizeAliceEvidenceArtifact(artifact);
+  evidenceSummary.textContent = summary.statusText;
+  evidenceCaptureList.replaceChildren();
+  const item = document.createElement("li");
+  item.textContent = `${actionLabel}: ${summary.objectCount} ${summary.objectCount === 1 ? "object" : "objects"} captured.`;
+  evidenceCaptureList.appendChild(item);
 }
 
 function setScoreTimeStatusMessage(message: string): void {
@@ -829,6 +887,198 @@ async function handleClassBehaviorImport(): Promise<void> {
     }
 }
 
+function buildRunId(capturedAt: string): string {
+  return `run-${capturedAt.replace(/[:.]/g, "-")}`;
+}
+
+function vectorFromThree(vector: THREE.Vector3): AliceEvidenceVector {
+  return {
+    x: vector.x,
+    y: vector.y,
+    z: vector.z,
+  };
+}
+
+function scenePositionForObject(object: AliceObject): AliceEvidenceVector {
+  const sceneObject = currentScene?.getObjectByName(object.name);
+  if (sceneObject) {
+    const position = new THREE.Vector3();
+    sceneObject.getWorldPosition(position);
+    return vectorFromThree(position);
+  }
+  return object.position ?? { x: 0, y: 0, z: 0 };
+}
+
+function collectVisibleObjectEvidence(project: AliceProject): AliceEvidenceVisibleObject[] {
+  return project.sceneObjects.map((object) => {
+    const sceneObject = currentScene?.getObjectByName(object.name);
+    return {
+      name: object.name,
+      typeName: object.typeName,
+      visible: sceneObject?.visible ?? true,
+      position: scenePositionForObject(object),
+    };
+  });
+}
+
+function evidenceFilenameForProject(project: AliceProject): string {
+  return `${project.projectName || "Alice world"} Alice evidence.json`;
+}
+
+function createEvidenceArtifactForCurrentScene(
+  method: AliceEvidenceExportMethod,
+  share?: { available: boolean; outcome: AliceEvidenceShareOutcome },
+): AliceEvidenceArtifact {
+  const project = lastProject;
+  if (!project || !currentScene || !currentCamera) {
+    throw new Error("Load an Alice world before capturing evidence.");
+  }
+  if (project.sceneObjects.length === 0) {
+    throw new Error("Add or load visible Alice world objects before capturing evidence.");
+  }
+
+  const capturedAt = new Date().toISOString();
+  const requestedAt = method === "download" ? new Date().toISOString() : capturedAt;
+  const artifact = createAliceEvidenceArtifact({
+    world: {
+      name: project.projectName || "Alice world",
+      aliceVersion: project.version,
+      objectCount: project.sceneObjects.length,
+    },
+    run: {
+      id: buildRunId(capturedAt),
+      capturedAt,
+    },
+    visibleBehavior: {
+      statusText: status.textContent?.trim() || describeProject(project),
+      viewport: {
+        width: renderer.domElement.width || canvas.clientWidth || 1,
+        height: renderer.domElement.height || canvas.clientHeight || 1,
+        canvasSnapshot: {
+          available: false,
+          reason: "structured-scene-metadata",
+          width: renderer.domElement.width || canvas.clientWidth || 1,
+          height: renderer.domElement.height || canvas.clientHeight || 1,
+          mimeType: "image/png",
+        },
+      },
+      camera: {
+        mode: cameraWorkflow.camera.mode,
+        position: vectorFromThree(currentCamera.position),
+        target: cameraWorkflow.camera.target,
+      },
+      objects: collectVisibleObjectEvidence(project),
+    },
+    export: {
+      method,
+      requestedAt,
+      filename: evidenceFilenameForProject(project),
+      mimeType: "application/json",
+      ...(share ? { share } : {}),
+    },
+  });
+
+  const validation = validateAliceEvidenceArtifact(artifact);
+  if (!validation.valid) {
+    throw new Error(`Alice evidence artifact is incomplete: ${validation.errors.join("; ")}`);
+  }
+  return artifact;
+}
+
+function handleCaptureEvidence(): void {
+  try {
+    lastEvidenceArtifact = createEvidenceArtifactForCurrentScene("download");
+    const shareAvailable = enableEvidenceActions();
+    renderEvidenceArtifactSummary(lastEvidenceArtifact, "Visible behavior");
+    setEvidenceStatusMessage(
+      shareAvailable
+        ? "Visible behavior captured."
+        : "Visible behavior captured. Native sharing is unavailable; export evidence instead.",
+      shareAvailable ? "ready" : "share-unavailable",
+    );
+  } catch (error) {
+    console.error(error);
+    setEvidenceStatusMessage(`Evidence error: ${error instanceof Error ? error.message : String(error)}`, "invalid");
+  }
+}
+
+function downloadEvidenceArtifact(artifact: AliceEvidenceArtifact): void {
+  const blob = new Blob([serializeAliceEvidenceArtifact(artifact)], { type: artifact.export.mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = artifact.export.filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function handleExportEvidence(): void {
+  try {
+    const artifact = createEvidenceArtifactForCurrentScene("download");
+    lastEvidenceArtifact = artifact;
+    downloadEvidenceArtifact(artifact);
+    enableEvidenceActions();
+    setEvidenceStatusMessage(`Exported ${artifact.export.filename}.`, "exported");
+    renderEvidenceArtifactSummary(artifact, "Exported evidence");
+  } catch (error) {
+    console.error(error);
+    setEvidenceStatusMessage(`Evidence error: ${error instanceof Error ? error.message : String(error)}`, "invalid");
+  }
+}
+
+async function handleShareEvidence(): Promise<void> {
+  try {
+    if (!canShareEvidenceFiles()) {
+      lastEvidenceArtifact = prepareAliceEvidenceShare(createEvidenceArtifactForCurrentScene("native-share"), {
+        available: false,
+        outcome: "unavailable",
+      });
+      exportEvidenceButton.disabled = false;
+      shareEvidenceButton.disabled = true;
+      renderEvidenceArtifactSummary(lastEvidenceArtifact, "Visible behavior");
+      setEvidenceStatusMessage("Native sharing is unavailable. Export evidence instead.", "share-unavailable");
+      return;
+    }
+
+    const artifact = prepareAliceEvidenceShare(createEvidenceArtifactForCurrentScene("native-share"), {
+      available: true,
+      outcome: "prepared",
+    });
+    const file = new File([serializeAliceEvidenceArtifact(artifact)], artifact.export.filename, {
+      type: artifact.export.mimeType,
+    });
+    const shareData: ShareData = {
+      title: "Alice evidence",
+      text: "Alice visible behavior evidence",
+      files: [file],
+    };
+    if (!navigator.canShare(shareData)) {
+      lastEvidenceArtifact = prepareAliceEvidenceShare(createEvidenceArtifactForCurrentScene("native-share"), {
+        available: false,
+        outcome: "unavailable",
+      });
+      exportEvidenceButton.disabled = false;
+      shareEvidenceButton.disabled = true;
+      renderEvidenceArtifactSummary(lastEvidenceArtifact, "Visible behavior");
+      setEvidenceStatusMessage("Native sharing cannot share this evidence. Export evidence instead.", "share-unavailable");
+      return;
+    }
+
+    await navigator.share(shareData);
+    lastEvidenceArtifact = prepareAliceEvidenceShare(createEvidenceArtifactForCurrentScene("native-share"), {
+      available: true,
+      outcome: "completed",
+    });
+    setEvidenceStatusMessage("Evidence shared.", "shared");
+    renderEvidenceArtifactSummary(lastEvidenceArtifact, "Shared evidence");
+  } catch (error) {
+    console.error(error);
+    setEvidenceStatusMessage(`Evidence error: ${error instanceof Error ? error.message : String(error)}`, "invalid");
+  }
+}
+
 async function exportWebPackage(): Promise<void> {
       try {
         const project = ensureArchive().project;
@@ -883,6 +1133,7 @@ function renderProject(project: AliceProject): void {
     renderClassBehaviorControls(project);
     renderJointObjectOptions(project);
     applyScene(project);
+    resetEvidenceWorkflow("Alice world ready for evidence capture.");
     renderScoreTimeWorkflow();
 }
 
@@ -1141,6 +1392,11 @@ function installInputHandlers(): void {
     void ModelTextureCameraJointExportWorkflowBrowser.generateShareArtifacts();
   });
   jointApplyPose.addEventListener("click", handleJointPoseApply);
+  captureEvidenceButton.addEventListener("click", handleCaptureEvidence);
+  exportEvidenceButton.addEventListener("click", handleExportEvidence);
+  shareEvidenceButton.addEventListener("click", () => {
+    void handleShareEvidence();
+  });
 }
 
 function handleAddScorekeeper(): void {
@@ -1481,6 +1737,7 @@ function initializeApplication(): void {
   renderWebXRPanel();
   setStatusMessage("Choose an .a3p file to begin.");
   setCameraStatusMessage("Camera ready.");
+  resetEvidenceWorkflow("Load an Alice world to capture evidence.");
   setScoreTimeStatusMessage("Score and time ready.");
   void refreshCapabilityStatus();
 }

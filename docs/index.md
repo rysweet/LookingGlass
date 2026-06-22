@@ -19,10 +19,13 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Getting started](./getting-started.md)
 - [Verify a local Alice server](./tutorial-alice-server-workflow.md)
 - [Audio workflow tutorial](./tutorial-audio-workflow.md)
+- [Capture and export Alice evidence](./tutorial-alice-evidence-workflow.md)
 - [Architecture](./architecture.md)
 - [API reference](./api-reference.md)
 - [Alice identity boundary](./alice-identity-boundary.md)
+- [Alice evidence export workflow](./alice-evidence-workflow.md)
 - [Alice do-together workflow](./do-together-workflow.md)
+- [Alice evidence workflow usage](./alice-evidence-workflow-usage.md)
 - [Camera workflow usage](./camera-workflow-usage.md)
 - [Selected object transform controls](./selected-object-transform-controls.md)
 - [Score and time workflow usage](./score-time-workflow-usage.md)
@@ -42,6 +45,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 | Rendering | Builds and draws 3D scenes in the browser | [Scene graph](./scene-graph.md), [Scene rendering](./scene-rendering.md), [Scene manager](./scene-manager.md), [WebXR and VR interactions](./webxr-vr.md), [camera workflow usage](./camera-workflow-usage.md), [camera workflow API](./camera-workflow-api.md) |
 | IDE workflows | Supports editing, running, and curriculum tasks | [IDE operations](./ide-operations.md), [Grading pipeline](./grading-pipeline.md), [Alice do-together workflow](./do-together-workflow.md), [Score and time workflow usage](./score-time-workflow-usage.md), [Score and time workflow API](./score-time-workflow-api.md) |
 | Assets and resources | Loads models, images, audio, textures, project files, and runnable web packages | [Model, texture, camera, joint, and export workflow](./model-texture-camera-joint-export-workflow.md), [Import a model and apply a custom texture](./tutorial-import-model-and-apply-texture.md), [Imported model and texture assets](./imported-models-and-textures.md), [Creating, using, and testing 3D character assets](./creating-using-testing-3d-character-assets.md), [Model resources](./model-resources.md), [Open-asset pipeline](./open-asset-pipeline.md), [Resource manager](./resource-manager.md), [Project IO](./project-io.md), [Project IO usage guide](./project-io-usage.md), [Image editor](./image-editor.md), [Audio](./audio.md), [Audio workflow usage](./audio-workflow-usage.md), [Audio workflow configuration](./audio-workflow-configuration.md) |
+| Evidence | Captures visible Alice behavior into exportable browser evidence | [Alice evidence workflow usage](./alice-evidence-workflow-usage.md), [Alice evidence artifact API](./alice-evidence-artifact-api.md), [Alice evidence workflow configuration](./alice-evidence-workflow-configuration.md), [Capture and export Alice evidence](./tutorial-alice-evidence-workflow.md) |
 | eatme integration | Exposes HTTP endpoints and scenario-friendly workflows | [API reference](./api-reference.md), [Server API](./server-api.md), [Audio workflow](./audio.md), [camera workflow API](./camera-workflow-api.md), [Gadugi test scenarios](./gadugi-test-scenarios.md) |
 | External service integration | Wraps outbound HTTP and WebSocket calls behind retryable adapters | [External service integration](./external-service-integration.md) |
 
@@ -56,6 +60,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Adding open-source 3D models](./tutorial-adding-3d-models.md)
 - [Creating, using, and testing 3D character assets](./creating-using-testing-3d-character-assets.md)
 - [Audio workflow tutorial](./tutorial-audio-workflow.md)
+- [Capture and export Alice evidence](./tutorial-alice-evidence-workflow.md)
 - [Round-trip an `.a3p` project with Project IO](./tutorial-project-io-round-trip.md)
 - [Tutorial: manipulate and verify joints](./tutorial-joint-manipulation.md)
 - [Camera workflow parity](./tutorial-camera-workflow.md)
@@ -72,15 +77,19 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Project IO usage guide](./project-io-usage.md)
 - [Reusable class behavior workflow](./class-behavior-workflow.md)
 - [Audio workflow usage](./audio-workflow-usage.md)
+- [Alice evidence workflow usage](./alice-evidence-workflow-usage.md)
 - [Camera workflow usage](./camera-workflow-usage.md)
 - [Selected object transform controls](./selected-object-transform-controls.md)
 - [Alice do-together workflow](./do-together-workflow.md)
+- [Alice evidence export workflow](./alice-evidence-workflow.md)
 - [Score and time workflow usage](./score-time-workflow-usage.md)
 - [Export, play, share, and validate a web package](./project-io-usage.md#export-play-share-and-validate-a-web-package)
 
 ### Reference
 
 - [API reference](./api-reference.md)
+- [Alice evidence artifact API](./alice-evidence-artifact-api.md)
+- [Alice evidence workflow configuration](./alice-evidence-workflow-configuration.md)
 - [Root TypeScript API barrel](./architecture.md#barrel-re-exports) -
   `src/index.ts` is the public root export surface. It includes namespace
   exports such as `StoryApi`, `TweedleParser`, `SceneRenderer`,
@@ -100,6 +109,7 @@ runtime, package, API, generated metadata, and user-facing app are Alice /
 - [Grading pipeline](./grading-pipeline.md)
 - [Image editor](./image-editor.md)
 - [Alice identity boundary](./alice-identity-boundary.md)
+- [Alice evidence API](./alice-evidence-api.md)
 - [Do-together runtime evidence](./do-together-runtime-evidence.md)
 - [Joint manipulation](./joint-manipulation.md)
 - [Imported model and texture assets](./imported-models-and-textures.md)

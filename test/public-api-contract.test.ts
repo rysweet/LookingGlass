@@ -89,6 +89,45 @@ function buildFactoryCases() {
 
   return new Map<string, FactoryCase>([
     ["Accessibility.createHighContrastStyle", () => PublicApi.Accessibility.createHighContrastStyle()],
+    ["AliceEvidenceArtifact.createAliceEvidenceArtifact", () => PublicApi.AliceEvidenceArtifact.createAliceEvidenceArtifact({
+      world: {
+        name: "ContractWorld",
+        aliceVersion: "3.10.0.0",
+        objectCount: 1,
+      },
+      run: {
+        id: "run-contract",
+        capturedAt: "2026-06-22T05:19:37.228Z",
+      },
+      visibleBehavior: {
+        statusText: "Loaded ContractWorld.",
+        viewport: {
+          width: 640,
+          height: 480,
+          canvasSnapshot: {
+            available: false,
+            reason: "structured-scene-metadata",
+          },
+        },
+        camera: {
+          mode: "orbit",
+          position: { x: 0, y: 1, z: 6 },
+          target: { x: 0, y: 1, z: 0 },
+        },
+        objects: [{
+          name: "alice",
+          typeName: "org.lgna.story.SBiped",
+          visible: true,
+          position: { x: 0, y: 0, z: 0 },
+        }],
+      },
+      export: {
+        method: "download",
+        requestedAt: "2026-06-22T05:19:38.000Z",
+        filename: "ContractWorld Alice evidence.json",
+        mimeType: "application/json",
+      },
+    })],
     ["Analytics.createAnalyticsSnapshot", () => PublicApi.Analytics.createAnalyticsSnapshot()],
     ["AliceWorkflowState.createDefaultAliceWorkflowState", () => PublicApi.AliceWorkflowState.createDefaultAliceWorkflowState()],
     ["AliceWorkflowState.createInitialScoreValues", () => PublicApi.AliceWorkflowState.createInitialScoreValues(
@@ -220,6 +259,13 @@ function assertFactoryResult(key: string, value: unknown): void {
   switch (key) {
     case "Accessibility.createHighContrastStyle":
       expectKeys(value, ["background", "color", "borderColor", "focusRing"]);
+      return;
+    case "AliceEvidenceArtifact.createAliceEvidenceArtifact":
+      expectKeys(value, ["format", "version", "application", "world", "run", "visibleBehavior", "export"]);
+      expect((value as { application: { name: string; runtime: string } }).application).toEqual({
+        name: "Alice",
+        runtime: "alice-web",
+      });
       return;
     case "Analytics.createAnalyticsSnapshot":
       expectKeys(value, ["sessionId", "startedAt", "engagement"]);
