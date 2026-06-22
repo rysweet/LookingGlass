@@ -31,6 +31,7 @@ const WEB_PACKAGE_ARTIFACTS = {
 } as const;
 
 const REQUIRED_WEB_PACKAGE_FILES = Object.values(WEB_PACKAGE_ARTIFACTS);
+const RESERVED_WEB_PACKAGE_PATHS = new Set<string>(REQUIRED_WEB_PACKAGE_FILES);
 const FORBIDDEN_IDENTITY_RE = /LookingGlass|lookingglass|alice-standalone-player/;
 
 export interface ProjectExportResource {
@@ -399,6 +400,9 @@ export async function exportWebPackage(
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.project, JSON.stringify(project, null, 2));
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.validation, JSON.stringify(validation, null, 2));
   for (const resource of resources) {
+    if (RESERVED_WEB_PACKAGE_PATHS.has(resource.path)) {
+      throw new WebPackageInputError(`resource path conflicts with web package artifact: ${resource.path}`);
+    }
     addZipFile(zip, resource.path, normalizeResourceBytes(resource.bytes));
   }
 
@@ -515,7 +519,16 @@ function validatedPackageFilename(
 ): string {
   const fallback = `${manifest?.packageName ?? ALICE_WEB_PACKAGE}.zip`;
   const candidate = manifest?.package?.filename;
-  if (candidate === undefined) return fallback;
+  if (candidate === undefined) {
+    if (manifest) {
+      errors.push({
+        code: "invalid-package-filename",
+        message: "manifest package filename must be a safe ZIP filename",
+        path: WEB_PACKAGE_ARTIFACTS.manifest,
+      });
+    }
+    return fallback;
+  }
   if (typeof candidate !== "string") {
     errors.push({
       code: "invalid-package-filename",
@@ -546,7 +559,7 @@ export async function generateShareArtifacts(input: ShareArtifactsInput): Promis
     throw new InvalidWebPackageError(validation);
   }
 
-  const title = input.title?.trim() || validation.manifest?.package.filename.replace(/\.alice-web\.zip$/, "") || "Alice Project";
+  const title = input.title?.trim() || validation.package.filename.replace(/\.alice-web\.zip$/, "") || "Alice Project";
   const normalized = normalizeWebPackageOptions({ projectName: title }, input);
   const share = {
     ...buildShareDocument(normalized, validation.package.filename),

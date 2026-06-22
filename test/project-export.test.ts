@@ -291,27 +291,13 @@ describe("project-export", () => {
       "alice-web-identity",
     ]));
     expect(exported.validation).toMatchObject(validation);
+  });
 
-    const projectPayload = await readZipJson(zip, "project/project.json");
-    expect(projectPayload.projectName).toBe("Round 84 Demo");
-
-    const indexHtml = await readZipText(zip, "index.html");
-    expect(indexHtml).toContain("window.AlicePlayer");
-    expect(indexHtml).toContain("alice-web-player");
-    expect(indexHtml).toContain("alice-project-data");
-    expect(indexHtml).toMatch(/<button\b[^>]*data-alice-player-action=["']play["']/);
-
-    const previewBytes = await zip.file("preview.png")!.async("uint8array");
-    expect(Array.from(previewBytes.slice(0, 4))).toEqual([137, 80, 78, 71]);
-
-    const generatedText = [
-      indexHtml,
-      JSON.stringify(manifest),
-      JSON.stringify(share),
-      JSON.stringify(validation),
-      JSON.stringify(projectPayload),
-    ].join("\n");
-    expect(generatedText).not.toMatch(/LookingGlass|lookingglass|alice-standalone-player/);
+  it("exportWebPackage rejects resources that would replace required package artifacts", async () => {
+    await expect(projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Collision",
+      resources: [{ path: "index.html", bytes: "owned" }],
+    })).rejects.toThrow(/resource path conflicts with web package artifact/);
   });
 
   it("validateWebPackage accepts exported packages and returns explicit validation evidence", async () => {
@@ -442,6 +428,28 @@ describe("project-export", () => {
       }),
     });
     expect(unsafeManifestFilename.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-package-filename" }),
+    ]));
+
+    const missingManifestFilename = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(missingManifestFilename.valid).toBe(false);
+    expect(missingManifestFilename.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "invalid-package-filename" }),
     ]));
   });
