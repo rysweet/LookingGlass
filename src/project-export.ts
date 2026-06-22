@@ -200,6 +200,11 @@ interface AliceWebShareDocument {
     filename: string;
     mimeType: typeof ZIP_MIME_TYPE;
   };
+  delivery: {
+    mode: "browser-download-fallback";
+    nativeWebShare: false;
+    requiresUserDownload: true;
+  };
   links: {
     html: typeof WEB_PACKAGE_ARTIFACTS.entrypoint;
     package: string;
@@ -787,6 +792,11 @@ function buildShareDocument(
     package: {
       filename,
       mimeType: ZIP_MIME_TYPE,
+    },
+    delivery: {
+      mode: "browser-download-fallback",
+      nativeWebShare: false,
+      requiresUserDownload: true,
     },
     links: {
       html: WEB_PACKAGE_ARTIFACTS.entrypoint,
