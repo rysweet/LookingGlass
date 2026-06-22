@@ -281,19 +281,6 @@ export const projectService: ProjectService = {
     statements.push(marker);
     const afterStatementCount = statements.length;
 
-    if (editSpec.startsWith("append-statement:") && state.parsedProject) {
-      const method = state.parsedProject.methods.find((m) => m.name === methodName);
-      if (method) {
-        method.statements ??= [];
-        method.statements.push({
-          kind: "MethodCall",
-          object: "this",
-          method: marker.trim(),
-          arguments: [],
-        });
-      }
-    }
-
     const methodNames = Array.from(state.procedures.keys());
 
     const currentProjectBytes = await writeA3P(buildCurrentProject(state));
