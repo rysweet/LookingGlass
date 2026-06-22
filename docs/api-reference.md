@@ -73,6 +73,10 @@ implemented export/share routes. `/api/audio/*` exposes the audio workflow; see
 | `/api/camera/markers` | `POST` | Save a camera marker |
 | `/api/camera/markers/:id/restore` | `POST` | Restore a camera marker |
 | `/api/camera/markers/:id` | `DELETE` | Delete a camera marker |
+| `/api/vr/camera-comfort` | `GET` | Read token-protected browser camera and bounded VR comfort evidence |
+| `/api/accessibility/rescue-camera-captions` | `GET` | Read token-protected accessibility caption evidence for the current scene |
+| `/api/review/gallery-walk-rubric` | `GET` | Read token-protected gallery review and rubric evidence |
+| `/api/review/runtime-parity` | `GET` | Read token-protected combined runtime parity evidence |
 | `/api/events/register` | `POST` | Register an event handler |
 | `/api/events/fire` | `POST` | Fire an event and report which handlers ran |
 

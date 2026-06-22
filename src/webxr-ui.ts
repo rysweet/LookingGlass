@@ -64,6 +64,7 @@ export function renderWebXRStatus(root: HTMLElement, viewModel: WebXRStatusViewM
 
   if (viewModel.cameraComfort) {
     const comfort = root.ownerDocument.createElement("section");
+    comfort.id = "camera-vr-comfort-panel";
     comfort.dataset.testid = "alice-camera-vr-comfort-panel";
     comfort.setAttribute("aria-label", "Alice camera and VR comfort evidence");
 
@@ -72,6 +73,7 @@ export function renderWebXRStatus(root: HTMLElement, viewModel: WebXRStatusViewM
       "div",
       `Camera/WebXR comfort: ${viewModel.cameraComfort.status}`,
     );
+    comfortStatus.id = "camera-vr-comfort-status";
     comfortStatus.dataset.testid = "alice-camera-vr-comfort-status";
 
     const keyboard = appendTextElement(
@@ -97,6 +99,7 @@ export function renderWebXRStatus(root: HTMLElement, viewModel: WebXRStatusViewM
       "div",
       viewModel.cameraComfort.unsupportedReason,
     );
+    trueVr.id = "true-vr-unsupported";
     trueVr.dataset.testid = "alice-true-vr-unsupported";
 
     root.appendChild(comfort);

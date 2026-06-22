@@ -27,6 +27,12 @@ function localPost(app: Express, apiPath: string) {
     .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN);
 }
 
+function localGet(app: Express, apiPath: string) {
+  return request(app)
+    .get(apiPath)
+    .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN);
+}
+
 function decodeBase64Package(base64: string): Buffer {
   return Buffer.from(base64, "base64");
 }
@@ -208,8 +214,16 @@ describe("server API", () => {
   });
 
   describe("runtime parity evidence APIs", () => {
+    it("requires the local API token for runtime parity reads", async () => {
+      await request(app).get("/api/vr/camera-comfort").expect(401);
+      await request(app)
+        .get("/api/review/runtime-parity")
+        .set(LOCAL_API_TOKEN_HEADER, "wrong-token")
+        .expect(401);
+    });
+
     it("reports camera comfort evidence without claiming true headset VR", async () => {
-      const res = await request(app).get("/api/vr/camera-comfort").expect(200);
+      const res = await localGet(app, "/api/vr/camera-comfort").expect(200);
 
       expect(res.body.schema_version).toBe("alice.camera-vr-comfort-evidence/v1");
       expect(res.body.status).toBe("partial");
@@ -226,6 +240,7 @@ describe("server API", () => {
 
       const res = await request(app)
         .get("/api/accessibility/rescue-camera-captions")
+        .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN)
         .expect(200);
 
       expect(res.body.schema_version).toBe("alice.accessibility-rescue-camera-captions/v1");
@@ -244,6 +259,7 @@ describe("server API", () => {
 
       const res = await request(app)
         .get("/api/review/gallery-walk-rubric")
+        .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN)
         .expect(200);
 
       expect(res.body.schema_version).toBe("alice.gallery-walk-rubric-evidence/v1");
@@ -254,7 +270,7 @@ describe("server API", () => {
     });
 
     it("bundles the runtime parity evidence sections", async () => {
-      const res = await request(app).get("/api/review/runtime-parity").expect(200);
+      const res = await localGet(app, "/api/review/runtime-parity").expect(200);
 
       expect(res.body.cameraVrComfort.schema_version).toBe("alice.camera-vr-comfort-evidence/v1");
       expect(res.body.accessibilityRescueCaptions.schema_version).toBe("alice.accessibility-rescue-camera-captions/v1");

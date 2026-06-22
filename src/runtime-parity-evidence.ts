@@ -6,7 +6,7 @@ export const CAMERA_VR_COMFORT_SCHEMA_VERSION = "alice.camera-vr-comfort-evidenc
 export const ACCESSIBILITY_RESCUE_CAPTIONS_SCHEMA_VERSION = "alice.accessibility-rescue-camera-captions/v1" as const;
 export const GALLERY_WALK_RUBRIC_SCHEMA_VERSION = "alice.gallery-walk-rubric-evidence/v1" as const;
 
-export type RuntimeParityStatus = "covered" | "partial" | "not_supported";
+export type RuntimeParityStatus = "partial";
 
 export interface CameraVrComfortEvidence {
   readonly schema_version: typeof CAMERA_VR_COMFORT_SCHEMA_VERSION;

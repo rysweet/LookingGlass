@@ -88,7 +88,13 @@ Callers check `valid` before exporting or trusting metadata.
       "trueHeadsetVrSupported": false,
       "nativeVrSupported": false,
       "cameraMode": "orbit",
-      "evidenceCodes": ["desktop-camera-fallback", "true-vr-unsupported"]
+      "evidenceCodes": ["desktop-camera-fallback", "true-vr-unsupported"],
+      "comfortChecks": {
+        "discreteMovementStep": true,
+        "stableHorizon": true,
+        "noForcedHeadset": true
+      },
+      "unsupportedReason": "LookingGlass records browser WebXR and desktop camera comfort evidence only; true headset/native VR remains unsupported."
     },
     "accessibilityRescueCaptions": {
       "schema_version": "alice.accessibility-rescue-camera-captions/v1",
@@ -97,7 +103,21 @@ Callers check `valid` before exporting or trusting metadata.
       "cameraCaption": "Camera orbit view at 0.00, 1.60, 6.00.",
       "objectCaption": "Scene contains alice.",
       "keyboardReviewAvailable": true,
-      "highContrastReviewAvailable": true
+      "highContrastReviewAvailable": true,
+      "captionChecks": [
+        {
+          "id": "aria-live-status",
+          "present": true,
+          "channel": "aria-live",
+          "text": "Loaded Program."
+        },
+        {
+          "id": "camera-caption",
+          "present": true,
+          "channel": "visible-text",
+          "text": "Camera orbit view at 0.00, 1.60, 6.00."
+        }
+      ]
     },
     "galleryWalkRubric": {
       "schema_version": "alice.gallery-walk-rubric-evidence/v1",
@@ -106,7 +126,23 @@ Callers check `valid` before exporting or trusting metadata.
       "galleryItemCount": 1,
       "reviewWorkflowSupported": true,
       "rubricRecordingSupported": true,
-      "liveStudioSupported": false
+      "liveStudioSupported": false,
+      "unsupportedLiveStudioReason": "LookingGlass provides web gallery review and rubric evidence, not a synchronized live workshop studio.",
+      "rubric": [
+        {
+          "id": "visible-world",
+          "label": "Visible world evidence",
+          "maxScore": 4,
+          "evidenceRequired": "The project has visible Alice objects and runnable scene evidence."
+        }
+      ],
+      "galleryItems": [
+        {
+          "id": "scene-object-1",
+          "title": "alice",
+          "reviewPrompt": "Review how alice supports the story, game goal, or scene composition."
+        }
+      ]
     }
   },
   "export": {
@@ -148,6 +184,12 @@ interface AliceCameraVrComfortEvidence {
   nativeVrSupported: false;
   cameraMode: string;
   evidenceCodes: string[];
+  comfortChecks: {
+    discreteMovementStep: boolean;
+    stableHorizon: boolean;
+    noForcedHeadset: boolean;
+  };
+  unsupportedReason: string;
 }
 
 interface AliceAccessibilityCaptionsEvidence {
@@ -158,6 +200,12 @@ interface AliceAccessibilityCaptionsEvidence {
   objectCaption: string;
   keyboardReviewAvailable: boolean;
   highContrastReviewAvailable: boolean;
+  captionChecks: {
+    id: string;
+    present: boolean;
+    channel: "aria-live" | "visible-text";
+    text: string;
+  }[];
 }
 
 interface AliceGalleryReviewEvidence {
@@ -168,6 +216,18 @@ interface AliceGalleryReviewEvidence {
   reviewWorkflowSupported: boolean;
   rubricRecordingSupported: boolean;
   liveStudioSupported: false;
+  unsupportedLiveStudioReason: string;
+  rubric: {
+    id: string;
+    label: string;
+    maxScore: number;
+    evidenceRequired: string;
+  }[];
+  galleryItems: {
+    id: string;
+    title: string;
+    reviewPrompt: string;
+  }[];
 }
 
 interface AliceEvidenceRuntimeReview {
