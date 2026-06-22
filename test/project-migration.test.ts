@@ -113,6 +113,28 @@ describe("project-migration", () => {
     });
   });
 
+  it("prefers explicit Alice 3 XML over unrelated nested Alice 2 manifest strings", () => {
+    const alice3Xml = `<?xml version="1.0" encoding="UTF-8"?><node version="3.4.0.0"><element class="org.lgna.story.SScene"/></node>`;
+    const versionInfo = detectProjectVersion(null, {
+      dependencies: [
+        {
+          name: "Unrelated tool",
+          version: "2.4.3",
+        },
+      ],
+    }, alice3Xml);
+    const migration = migrateProjectXml(alice3Xml, versionInfo);
+
+    expect(versionInfo).toMatchObject({
+      originalAliceVersion: "3.4.0.0",
+      detectedAliceVersion: "3.4.0.0",
+      versionSource: "xml",
+      migrationSupport: "alice-3-reader-migration",
+    });
+    expect(migration.versionInfo.migrationSupport).toBe("alice-3-reader-migration");
+    expect(migration.versionInfo.detectedAliceVersion).toBe(CURRENT_VERSION);
+  });
+
   it("treats caller-supplied Alice 2 version info as guidance-only even without support metadata", () => {
     const alice2Xml = `<?xml version="1.0" encoding="UTF-8"?><node version="2.4.3"></node>`;
     const migration = migrateProjectXml(alice2Xml, {

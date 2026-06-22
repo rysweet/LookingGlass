@@ -105,7 +105,9 @@ export function detectProjectVersion(
 ): ProjectVersionInfo {
   const normalizedVersionText = normalizeCandidate(versionText);
   const xmlVersion = extractXmlVersion(xmlText);
-  const manifestVersion = extractManifestVersion(manifest);
+  const directManifestVersion = extractDirectManifestVersion(manifest);
+  const nestedManifestVersion = directManifestVersion ?? findNestedAliceVersion(manifest);
+  const manifestVersion = directManifestVersion ?? nestedManifestVersion;
 
   if (normalizedVersionText && isAliceProjectVersion(normalizedVersionText)) {
     return buildVersionInfo({
@@ -129,20 +131,20 @@ export function detectProjectVersion(
     });
   }
 
-  if (manifestVersion && isAliceProjectVersion(manifestVersion)) {
+  if (directManifestVersion && isAliceProjectVersion(directManifestVersion)) {
     return buildVersionInfo({
-      originalAliceVersion: manifestVersion,
-      detectedAliceVersion: manifestVersion,
+      originalAliceVersion: directManifestVersion,
+      detectedAliceVersion: directManifestVersion,
       manifestVersion,
       xmlVersion,
       versionSource: "manifest",
     });
   }
 
-  if (manifestVersion && isAlice2ProjectVersion(manifestVersion)) {
+  if (directManifestVersion && isAlice2ProjectVersion(directManifestVersion)) {
     return buildVersionInfo({
-      originalAliceVersion: manifestVersion,
-      detectedAliceVersion: manifestVersion,
+      originalAliceVersion: directManifestVersion,
+      detectedAliceVersion: directManifestVersion,
       manifestVersion,
       xmlVersion,
       versionSource: "manifest",
@@ -168,6 +170,28 @@ export function detectProjectVersion(
       manifestVersion,
       xmlVersion,
       versionSource: "xml",
+      migrationSupport: "alice-2-guidance-only",
+      unsupportedReason: ALICE_2_UNSUPPORTED_REASON,
+    });
+  }
+
+  if (nestedManifestVersion && isAliceProjectVersion(nestedManifestVersion)) {
+    return buildVersionInfo({
+      originalAliceVersion: nestedManifestVersion,
+      detectedAliceVersion: nestedManifestVersion,
+      manifestVersion,
+      xmlVersion,
+      versionSource: "manifest",
+    });
+  }
+
+  if (nestedManifestVersion && isAlice2ProjectVersion(nestedManifestVersion)) {
+    return buildVersionInfo({
+      originalAliceVersion: nestedManifestVersion,
+      detectedAliceVersion: nestedManifestVersion,
+      manifestVersion,
+      xmlVersion,
+      versionSource: "manifest",
       migrationSupport: "alice-2-guidance-only",
       unsupportedReason: ALICE_2_UNSUPPORTED_REASON,
     });
@@ -317,7 +341,7 @@ function extractXmlVersion(xmlText: string): string | null {
   return normalizeCandidate(match?.[1]);
 }
 
-function extractManifestVersion(manifest: Record<string, unknown> | null): string | null {
+function extractDirectManifestVersion(manifest: Record<string, unknown> | null): string | null {
   if (!manifest) {
     return null;
   }
@@ -336,7 +360,7 @@ function extractManifestVersion(manifest: Record<string, unknown> | null): strin
     }
   }
 
-  return findNestedAliceVersion(manifest);
+  return null;
 }
 
 function findNestedAliceVersion(value: unknown, depth = 0): string | null {

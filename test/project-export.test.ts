@@ -569,6 +569,43 @@ describe("project-export", () => {
     ]));
   });
 
+  it("rejects teacher metadata with null values or non-array list fields", async () => {
+    await expect(projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Bad Teacher Pack",
+      teacher: {
+        remix: "allowed",
+        tags: "" as unknown as string[],
+        standards: ["CSTA"],
+      },
+    })).rejects.toThrow(/teacher\.tags must be an array of strings/);
+
+    const exported = await projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Teacher Share Pack",
+      teacher: {
+        remix: "allowed",
+        tags: ["classroom"],
+        standards: ["CSTA"],
+      },
+    });
+    const zip = await JSZip.loadAsync(decodePackage(exported.package.base64));
+    const share = JSON.parse(await zip.file("share.json")!.async("string"));
+    share.teacher = null;
+    zip.file("share.json", JSON.stringify(share));
+
+    const validation = await projectExportApi.validateWebPackage!({
+      packageBase64: Buffer.from(await zip.generateAsync({ type: "uint8array" })).toString("base64"),
+    });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.evidence).not.toContain("teacher-share-metadata");
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "invalid-teacher-share-metadata",
+        message: "teacher metadata must be an object",
+      }),
+    ]));
+  });
+
   it("TypeScriptExporter creates a deterministic Alice web source handoff archive", async () => {
     const first = await new TypeScriptExporter().export(createProjectFixture());
     const second = await new TypeScriptExporter().export(createProjectFixture());
