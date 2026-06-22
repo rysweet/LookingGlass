@@ -525,6 +525,13 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
   }
 
   const filename = manifest?.package?.filename ?? `${manifest?.packageName ?? ALICE_WEB_PACKAGE}.zip`;
+  if (!manifest?.package || manifest.package.filename !== filename || manifest.package.mimeType !== ZIP_MIME_TYPE) {
+    errors.push({
+      code: "invalid-package-reference",
+      message: "manifest package must include the validated ZIP filename and application/zip MIME type",
+      path: WEB_PACKAGE_ARTIFACTS.manifest,
+    });
+  }
   return buildValidationResult(evidence, errors, {
     runtime: manifest?.packageName === ALICE_WEB_PACKAGE ? ALICE_WEB_PACKAGE : undefined,
     package: buildPackageReference(filename, decoded.bytes),
@@ -538,7 +545,7 @@ export async function generateShareArtifacts(input: ShareArtifactsInput): Promis
     throw new InvalidWebPackageError(validation);
   }
 
-  const title = input.title?.trim() || validation.manifest?.package.filename.replace(/\.alice-web\.zip$/, "") || "Alice Project";
+  const title = input.title?.trim() || validation.package.filename.replace(/\.alice-web\.zip$/, "") || "Alice Project";
   const normalized = normalizeWebPackageOptions({ projectName: title }, input);
   const share = {
     ...buildShareDocument(normalized, validation.package.filename),

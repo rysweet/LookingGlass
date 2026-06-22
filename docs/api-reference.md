@@ -598,7 +598,11 @@ Example response:
     "entrypoint": "index.html",
     "preview": "preview.png",
     "share": "share.json",
-    "validation": "validation.json"
+    "validation": "validation.json",
+    "package": {
+      "filename": "WinterStory.alice-web.zip",
+      "mimeType": "application/zip"
+    }
   },
   "artifacts": {
     "entrypoint": "index.html",
@@ -734,7 +738,11 @@ Valid response:
   "manifest": {
     "schemaVersion": "alice-web.package/v1",
     "runtimeIdentity": "alice-web-player",
-    "entrypoint": "index.html"
+    "entrypoint": "index.html",
+    "package": {
+      "filename": "WinterStory.alice-web.zip",
+      "mimeType": "application/zip"
+    }
   },
   "evidence": [
     "base64-decodes",
