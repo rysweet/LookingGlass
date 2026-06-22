@@ -300,6 +300,17 @@ describe("project-export", () => {
     })).rejects.toThrow(/resource path conflicts with web package artifact/);
   });
 
+  it.each([
+    "index%2ehtml",
+    "manifest%2ejson",
+    "project%2fproject.json",
+  ])("exportWebPackage rejects encoded resource path controls %s", async (path) => {
+    await expect(projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Encoded Collision",
+      resources: [{ path, bytes: "owned" }],
+    })).rejects.toThrow(/encoded path controls/);
+  });
+
   it("validateWebPackage accepts exported packages and returns explicit validation evidence", async () => {
     expect(projectExportApi.exportWebPackage).toBeTypeOf("function");
     expect(projectExportApi.validateWebPackage).toBeTypeOf("function");

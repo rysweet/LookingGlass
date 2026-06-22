@@ -748,6 +748,9 @@ function createTypeScriptReadme(manifest: TypeScriptSourceManifest): string {
 }
 
 function validateResourcePath(resource: ProjectExportResource): ProjectExportResource {
+  if (ENCODED_PATH_CONTROL_RE.test(resource.path)) {
+    throw new WebPackageInputError(`resource path must not contain encoded path controls: ${resource.path}`);
+  }
   return {
     ...resource,
     path: assertSafeWritablePath(resource.path),
