@@ -35,6 +35,9 @@ export function extractStatements(methodNode: Element, keyMap: Map<string, Eleme
 }
 
 function parseStatement(node: Element, keyMap: Map<string, Element>): AliceStatement | null {
+  const metadataStatement = parseMetadataStatement(node);
+  if (metadataStatement) return metadataStatement;
+
   const nodeType = node.getAttribute("type") ?? "";
 
   if (nodeType === "org.lgna.project.ast.ExpressionStatement") {
@@ -102,6 +105,20 @@ function parseStatement(node: Element, keyMap: Map<string, Element>): AliceState
   }
 
   return { kind: nodeType.split(".").pop() ?? "Unknown" };
+}
+
+function parseMetadataStatement(node: Element): AliceStatement | null {
+  const metadata = node.getAttribute("alice-web-statement-json");
+  if (!metadata) return null;
+  try {
+    const parsed = JSON.parse(metadata) as unknown;
+    if (parsed && typeof parsed === "object" && typeof (parsed as AliceStatement).kind === "string") {
+      return parsed as AliceStatement;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function extractArguments(invocationNode: Element, keyMap: Map<string, Element>): string[] {

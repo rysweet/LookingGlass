@@ -35,6 +35,11 @@ function createStatementNode(doc: Document, statement: AliceMethod["statements"]
   switch (statement.kind) {
     case "Comment":
       return createCommentNode(doc, statement.expression ?? "");
+    case "comment":
+    case "call":
+    case "expression":
+    case "return":
+      return createMetadataStatementNode(doc, statement);
     case "MethodCall":
       return createMethodCallNode(doc, statement);
     case "CountLoop": {
@@ -142,6 +147,12 @@ function createEnabledNode(doc: Document, type: string): Element {
 function createCommentNode(doc: Document, text: string): Element {
   const commentNode = createEnabledNode(doc, "org.lgna.project.ast.Comment");
   appendStringProperty(doc, commentNode, "text", text);
+  return commentNode;
+}
+
+function createMetadataStatementNode(doc: Document, statement: AliceStatement): Element {
+  const commentNode = createCommentNode(doc, "Alice class behavior statement");
+  commentNode.setAttribute("alice-web-statement-json", JSON.stringify(statement));
   return commentNode;
 }
 

@@ -17,8 +17,8 @@
     #sidebar h1 { font-size: 1.1rem; color: #e94560; }
     #sidebar label { font-size: 0.85rem; color: #aaa; }
     #status { font-size: 0.8rem; color: #0f3460; background: #e2e2e2; padding: 6px 8px; border-radius: 4px; }
-    #object-list, #asset-list { list-style: none; font-size: 0.82rem; line-height: 1.6; }
-    #object-list li, #asset-list li { padding: 2px 0; border-bottom: 1px solid #1a1a3e; }
+    #object-list, #asset-list, #class-behavior-list { list-style: none; font-size: 0.82rem; line-height: 1.6; }
+    #object-list li, #asset-list li, #class-behavior-list li { padding: 2px 0; border-bottom: 1px solid #1a1a3e; }
     #object-list li { cursor: pointer; }
     #object-list li[data-selected="true"] { color: #fff; background: #0f3460; }
     #object-list small, #asset-list small { color: #888; }
@@ -90,6 +90,17 @@
     <button id="export-a3p-button" data-testid="alice-save-project-button" type="button">Save project</button>
     <button id="export-web-package-button" type="button">Export web package</button>
     <button id="share-web-package-button" type="button">Share web package</button>
+    <section id="class-behavior-panel" aria-label="Alice class behavior packages">
+      <h2 style="font-size:0.9rem; margin-top:8px;">Class Behaviors</h2>
+      <label>Reusable class behavior
+        <select id="class-behavior-select" data-testid="alice-class-behavior-select"></select>
+      </label>
+      <button id="export-class-behavior-button" data-testid="alice-export-class-behavior-button" type="button">Export class behavior</button>
+      <label>Import .alice-class-behavior.json
+        <input id="import-class-behavior-input" data-testid="alice-import-class-behavior-input" type="file" accept=".alice-class-behavior.json,application/json" />
+      </label>
+      <ul id="class-behavior-list" data-testid="alice-class-behavior-list"></ul>
+    </section>
     <div id="status">No project loaded</div>
     <div id="webxr-status">
       <button type="button" data-alice-webxr-vr-button="disabled" disabled>VR unavailable</button>

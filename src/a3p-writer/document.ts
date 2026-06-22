@@ -209,6 +209,7 @@ function removeDirectChildren(parent: Element, tagName: string): void {
 }
 
 function updateFieldNode(doc: Document, fieldNode: Element, desired: AliceFieldDefinition): void {
+  fieldNode.setAttribute("alice-web-field-json", JSON.stringify(desired));
   setPropertyText(doc, fieldNode, "name", desired.name);
   if (desired.typeName) setTypeProperty(doc, fieldNode, "valueType", desired.typeName);
   if (desired.resourceType) setResourceInitializer(doc, fieldNode, desired.resourceType);
@@ -670,6 +671,7 @@ function createFieldNode(doc: Document, field: AliceFieldDefinition): Element {
   const fieldNode = doc.createElement("node");
   fieldNode.setAttribute("type", "org.lgna.project.ast.UserField");
   fieldNode.setAttribute("uuid", generateUuid());
+  fieldNode.setAttribute("alice-web-field-json", JSON.stringify(field));
   appendStringProperty(doc, fieldNode, "name", field.name);
   appendTypeProperty(doc, fieldNode, "valueType", field.typeName || "java.lang.Object");
   if (field.resourceType) setResourceInitializer(doc, fieldNode, field.resourceType);
@@ -690,8 +692,28 @@ function setResourceInitializer(doc: Document, fieldNode: Element, resourceType:
 
 function setTypeProperty(doc: Document, parent: Element, propertyName: string, typeName: string): void {
   const property = ensureProperty(doc, parent, propertyName);
+  const existingNode = directChild(property, "node");
+  if (existingNode && existingNamedUserTypeMatches(existingNode, typeName)) {
+    return;
+  }
   while (property.firstChild) property.removeChild(property.firstChild);
   property.appendChild(createTypeNode(doc, typeName));
+}
+
+function existingNamedUserTypeMatches(typeNode: Element, typeName: string): boolean {
+  if (typeNode.getAttribute("type") !== "org.lgna.project.ast.NamedUserType") {
+    return false;
+  }
+  if (getPropertyText(typeNode, "name") === typeName) {
+    return true;
+  }
+  const superTypeNode = getPropertyNode(typeNode, "superType");
+  if (!superTypeNode) {
+    return false;
+  }
+  const superType = directChild(superTypeNode, "type")?.getAttribute("name")
+    ?? getPropertyText(superTypeNode, "name");
+  return superType === typeName;
 }
 
 function appendTypeProperty(doc: Document, parent: Element, propertyName: string, typeName: string): void {

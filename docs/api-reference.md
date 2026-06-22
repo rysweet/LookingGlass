@@ -48,6 +48,8 @@ implemented export/share routes. `/api/audio/*` exposes the audio workflow; see
 | `/api/code/edit-procedure` | `POST` | Append a procedure edit proof |
 | `/api/project/save` | `POST` | Save the current project and proof artifact |
 | `/api/projects/current/export/typescript` | `GET` | Download the current project as an Alice web TypeScript source ZIP |
+| `/api/projects/current/classes/:typeName/behavior` | `GET` | Download one reusable Alice class behavior package |
+| `/api/projects/current/classes/behavior` | `POST` | Import one reusable Alice class behavior package |
 | `/api/project/export/web-package` | `POST` | Web-package feature contract: export the active project as a runnable `alice-web` ZIP package |
 | `/api/project/share` | `POST` | Web-package feature contract: generate share artifacts linked to a validated exported package |
 | `/api/project/validate-web-package` | `POST` | Web-package feature contract: validate an exported `alice-web` ZIP package |

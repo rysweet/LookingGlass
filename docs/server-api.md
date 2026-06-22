@@ -163,6 +163,8 @@ export/share/validation routes:
 | `POST` | `/api/code/create-function` | function creation summary | adds a function to current state |
 | `POST` | `/api/code/edit-procedure` | `eatme.alice-first-lesson-code-editor-action-proof-result/v1` | writes edit proof and `edited-project.a3p` |
 | `POST` | `/api/project/save` | `eatme.alice-project-save-result/v1` | writes save proof and `project-save/saved-project.a3p` |
+| `GET` | `/api/projects/current/classes/:typeName/behavior` | `alice-web.reusable-class-behavior` package | reads one reusable Alice class behavior from current state |
+| `POST` | `/api/projects/current/classes/behavior` | `alice-web.class-behavior-import-result/v1` | imports one reusable Alice class behavior into current state |
 | `POST` | `/api/project/export/web-package` | `alice-web.export-web-package-result/v1` | web-package feature contract: returns a runnable `alice-web` ZIP package |
 | `POST` | `/api/project/share` | `alice-web.share-artifacts-result/v1` | web-package feature contract: returns share metadata linked to a validated package |
 | `POST` | `/api/project/validate-web-package` | `alice-web.validate-web-package-result/v1` | web-package feature contract: validates package safety, playability, and identity |
@@ -212,6 +214,21 @@ The response sets `Content-Type: application/zip`,
 and `Cache-Control: no-store`. See
 [TypeScript source export](./typescript-source-export.md) for archive
 contents and generated-source conventions.
+
+### Reusable class behavior package routes
+
+`GET /api/projects/current/classes/:typeName/behavior` downloads one reusable
+Alice class behavior package from the current project. Clients must URL-encode
+`:typeName`.
+
+`POST /api/projects/current/classes/behavior` imports one reusable Alice class
+behavior package into the current project. The route accepts `rename`, `replace`,
+`merge`, and `reject` conflict strategies.
+
+Both routes use the current Alice project state and the same local API token
+policy as other current-project operations. See
+[Class behavior package API](./class-behavior-package-api.md) for the package
+format, request bodies, response bodies, validation rules, and examples.
 
 Camera routes require `X-Alice-Local-Api-Token` on both read and mutation
 requests when the CLI server is started with `--api-token`.
@@ -335,7 +352,7 @@ bodies, marker lifecycle, first-person behavior, and validation rules.
 Camera reads are protected when `--api-token` is configured. The camera routes
 use a route-level token guard so `GET /api/camera/state` and
 `GET /api/camera/markers` reject missing or invalid tokens the same way camera
-mutation routes do.
+write routes do.
 
 ## Server state model
 

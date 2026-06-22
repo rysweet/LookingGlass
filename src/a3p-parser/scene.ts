@@ -87,6 +87,11 @@ function extractFieldDefinitions(typeNode: Element, keyMap: Map<string, Element>
     .filter((child) => child.getAttribute("type") === "org.lgna.project.ast.UserField");
 
   for (const field of fieldNodes) {
+    const metadataField = parseMetadataField(field);
+    if (metadataField) {
+      fields.push(metadataField);
+      continue;
+    }
     const name = getPropertyText(field, "name");
     if (!name) continue;
     fields.push({
@@ -98,6 +103,20 @@ function extractFieldDefinitions(typeNode: Element, keyMap: Map<string, Element>
   }
 
   return fields;
+}
+
+function parseMetadataField(field: Element): AliceFieldDefinition | null {
+  const metadata = field.getAttribute("alice-web-field-json");
+  if (!metadata) return null;
+  try {
+    const parsed = JSON.parse(metadata) as unknown;
+    if (parsed && typeof parsed === "object" && typeof (parsed as AliceFieldDefinition).name === "string") {
+      return parsed as AliceFieldDefinition;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function summarizeInitializer(field: Element, keyMap: Map<string, Element>): string | null {
