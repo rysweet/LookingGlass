@@ -209,7 +209,14 @@ describe("CLI argument behavior", () => {
     expect(audit.scope?.excluded).toEqual(expect.any(Array));
     expect((text.match(/RabbitHole/g) ?? []).length).toBe(1);
 
-    for (const id of ["alice-identity", "baseline-only", "howto-inventory", "coverage-evidence", "wording"]) {
+    for (const id of [
+      "alice-identity",
+      "baseline-only",
+      "howto-inventory",
+      "scenario-traceability",
+      "coverage-evidence",
+      "wording",
+    ]) {
       expect(audit.checks?.find((check) => check.id === id)?.status, `${id} should pass`).toBe("passed");
     }
 

@@ -95,6 +95,7 @@ That source exports:
 | Export | Purpose |
 | --- | --- |
 | `ALICE_ORG_HOWTO_INVENTORY` | The saved 54-entry Alice.org HowTo inventory. Each entry has a stable `id`, title, source label, and expected Alice coverage area. |
+| `ALICE_HOWTO_SCENARIO_MAP` | One executable scenario for each inventory entry. Each scenario has a stable id, command that selects that id, user steps, expected output, and evidence records. |
 | `ALICE_HOWTO_COVERAGE_MAP` | The required coverage evidence for each inventory entry. Evidence may point to docs, tests, or Gadugi scenarios, but every referenced path must exist. |
 | `ALICE_HOWTO_WORDING_RULES` | Exact wording and jargon rules used by the `wording` audit check. |
 
@@ -153,6 +154,11 @@ Successful output:
       "summary": "Saved HowTo inventory has 54 unique entries with mapped records."
     },
     {
+      "id": "scenario-traceability",
+      "status": "passed",
+      "summary": "Every HowTo maps to one executable scenario with user steps and expected output."
+    },
+    {
       "id": "coverage-evidence",
       "status": "passed",
       "summary": "All mapped evidence files exist and contain expected tokens."
@@ -165,7 +171,7 @@ Successful output:
   ],
   "summary": {
     "status": "passed",
-    "passed": 5,
+    "passed": 6,
     "failed": 0
   }
 }

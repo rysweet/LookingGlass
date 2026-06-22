@@ -140,6 +140,7 @@ const scenarioSpecs: ScenarioSpec[] = [
       "Alice.org HowTo coverage",
       "source?.inventoryCount",
       "howto-inventory",
+      "scenario-traceability",
       "coverage-evidence",
       "wording",
     ],

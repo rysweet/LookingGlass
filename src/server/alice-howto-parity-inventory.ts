@@ -12,6 +12,14 @@ export interface AliceHowToCoverageRecord {
   readonly evidenceToken: string;
 }
 
+export interface AliceHowToExecutableScenario {
+  readonly scenarioId: string;
+  readonly command: string;
+  readonly userSteps: readonly string[];
+  readonly expectedOutput: string;
+  readonly evidence: readonly AliceHowToCoverageRecord[];
+}
+
 export interface AliceHowToWordingRules {
   readonly allowedBaseline: string;
   readonly forbiddenTerms: readonly string[];
@@ -230,16 +238,16 @@ export const ALICE_ORG_HOWTO_INVENTORY: readonly AliceHowToInventoryEntry[] = IN
   }),
 );
 
-export const ALICE_HOWTO_COVERAGE_MAP: Readonly<Record<string, readonly AliceHowToCoverageRecord[]>> =
+export const ALICE_HOWTO_SCENARIO_MAP: Readonly<Record<string, AliceHowToExecutableScenario>> =
   Object.fromEntries(
     COVERAGE_PATHS.map(([id, paths]) => [
       id,
-      paths.map((filePath) => ({
-        path: filePath,
-        evidenceToken: filePath.endsWith(".yaml") ? "scenario:" : "describe",
-      })),
+      buildExecutableScenario(id, paths),
     ]),
   );
+
+export const ALICE_HOWTO_COVERAGE_MAP: Readonly<Record<string, readonly AliceHowToCoverageRecord[]>> =
+  Object.fromEntries(Object.entries(ALICE_HOWTO_SCENARIO_MAP).map(([id, scenario]) => [id, scenario.evidence]));
 
 export const ALICE_HOWTO_WORDING_RULES: AliceHowToWordingRules = {
   allowedBaseline: "rysweet/RabbitHole origin/develop",
@@ -254,3 +262,27 @@ export const ALICE_HOWTO_WORDING_RULES: AliceHowToWordingRules = {
   ],
   forbiddenJargon: ["retcon", "merge-ready", "quality-audit", "agentic", "L3", "harness", "fixture"],
 };
+
+function buildExecutableScenario(id: string, paths: readonly string[]): AliceHowToExecutableScenario {
+  const entry = INVENTORY_SEEDS.find(([seedId]) => seedId === id);
+  if (!entry) {
+    throw new Error(`Missing inventory seed for ${id}`);
+  }
+  const [, title, category] = entry;
+  const scenarioId = `alice-howto:${id}`;
+
+  return {
+    scenarioId,
+    command: `npm test -- test/alice-howto-executable-scenarios.test.ts -t "${scenarioId}$"`,
+    userSteps: [
+      `Open the Alice.org HowTo "${title}".`,
+      `Follow the ${category} workflow in Alice web.`,
+      `Run the executable traceability command for ${scenarioId}.`,
+    ],
+    expectedOutput: `Alice web preserves the "${title}" workflow evidence required by the ${category} HowTo.`,
+    evidence: paths.map((filePath) => ({
+      path: filePath,
+      evidenceToken: filePath.endsWith(".yaml") ? "scenario:" : "describe",
+    })),
+  };
+}
