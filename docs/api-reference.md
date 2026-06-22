@@ -86,7 +86,9 @@ implemented export/share routes. `/api/audio/*` exposes the audio workflow; see
 curl http://127.0.0.1:3000/api/health
 ```
 
-Example response:
+Abbreviated example response. The `checks`, `unsupportedCapabilities`, and
+`classroomReadiness.studentFallbackRoles` arrays may contain additional stable
+entries; clients should treat them as arrays, not singletons.
 
 ```json
 {
@@ -109,7 +111,8 @@ filesystem paths.
 curl http://127.0.0.1:3000/api/config
 ```
 
-Example response:
+Abbreviated example response. The `handoff.readinessSignals` array may contain
+additional stable entries; clients should treat it as an array, not a singleton.
 
 ```json
 {
