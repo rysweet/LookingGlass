@@ -58,7 +58,7 @@ implemented export/share routes. `/api/audio/*` exposes the audio workflow; see
 | `/api/audio/assets` | `POST` | Register a base64-encoded audio asset |
 | `/api/audio/background` | `POST` | Select a registered asset as background music |
 | `/api/audio/cues` | `POST` | Add an animation-timed audio cue |
-| `/api/audio/evidence` | `POST` | Write audio workflow proof evidence |
+| `/api/audio/evidence` | `POST` | Write bounded audio workflow evidence |
 | `/api/world/run` | `POST` | Run the cached project through the Tweedle VM |
 | `/api/screenshot` | `POST` | Render the current scene to a PNG file |
 | `/api/camera/state` | `GET` | Read the active camera workflow state |
@@ -1002,7 +1002,7 @@ once when the named animation timeline reaches or crosses the configured time.
 
 ## `POST /api/audio/evidence`
 
-Write the audio workflow proof artifact.
+Write the bounded audio workflow evidence artifact.
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/audio/evidence \
@@ -1016,7 +1016,7 @@ Request body:
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `savedProjectArtifact` | `string` | no | Saved project artifact name to record in evidence |
-| `reloaded` | `boolean` | no | Whether the proof was collected after reloading a saved project |
+| `reloaded` | `boolean` | no | Whether the evidence was collected after reloading a saved project |
 
 Example response:
 

@@ -543,8 +543,8 @@ function validatedPackageFilename(
       throw new Error("package filename must not contain encoded path controls");
     }
     const safe = assertSafeWritablePath(candidate);
-    if (safe.includes("/")) {
-      throw new Error("package filename must not contain directories");
+    if (safe.includes("/") || RESERVED_WEB_PACKAGE_PATHS.has(safe) || !safe.toLowerCase().endsWith(".zip")) {
+      throw new Error("package filename must be a non-reserved ZIP basename");
     }
     return safe;
   } catch {

@@ -191,6 +191,23 @@ describe("model, texture, camera, joint, and export workflow contract", () => {
     expect(initial.cameraWorkflow).toEqual(CameraWorkflow.createDefaultCameraWorkflowState());
   });
 
+  it("initializes workflow camera state from saved projects", () => {
+    const api = getWorkflowApi();
+    const project = createRobotProject();
+    const savedCamera = CameraWorkflow.applyCameraPreset(
+      CameraWorkflow.createDefaultCameraWorkflowState(),
+      "isometric",
+    );
+    project.cameraWorkflow = CameraWorkflow.saveCameraMarker(savedCamera, { name: "Saved authoring view" });
+
+    const initial = api.createWorkflowState({ project });
+
+    expect(initial.cameraWorkflow.camera.activePreset).toBe("isometric");
+    expect(initial.cameraWorkflow.markers).toEqual([
+      expect.objectContaining({ name: "Saved authoring view" }),
+    ]);
+  });
+
   it("imports model and texture assets immutably under safe archive paths", async () => {
     const api = getWorkflowApi();
     const initial = api.createWorkflowState({ project: createRobotProject() });
@@ -321,6 +338,10 @@ describe("model, texture, camera, joint, and export workflow contract", () => {
       "share.json",
       "validation.json",
     ]));
+    const html = await zip.file("index.html")!.async("string");
+    expect(html).toContain("alice-export-resources");
+    expect(html).toContain("resources/models/robot.gltf");
+    expect(html).toContain("resources/textures/robot.png");
 
     const projectPayload = JSON.parse(await zip.file("project/project.json")!.async("string")) as Record<string, unknown>;
     expect(projectPayload).toMatchObject({

@@ -376,9 +376,10 @@ bytes should use the same resource map seeded from `readProject()` and passed to
 `writeProject()`; they should not live in a second imported-byte-only map.
 
 Launching a project seeds default `ground` and `camera` scene objects when the
-project has no loaded scene objects and resets camera workflow state to the
-default Alice home view. Creating a project from a template replaces the active
-project state, resets camera workflow state, and marks the server launched.
+project has no loaded scene objects and restores saved camera workflow state
+when the project carries it, otherwise it uses the default Alice home view.
+Creating a project from a template replaces the active project state, resets
+camera workflow state, and marks the server launched.
 
 ## Route responsibility map
 
