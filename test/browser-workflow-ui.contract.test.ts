@@ -13,7 +13,7 @@ function expectElement(html: string, id: string): void {
 }
 
 describe("Alice browser workflow UI contract", () => {
-  it("exposes controls for project, model, texture, camera, joint, export, and share steps", () => {
+  it("exposes controls for project, model, texture, camera, joint, evidence, export, and share steps", () => {
     const html = readText("src/index.html");
     expect(html).toContain("Alice 3 Web Viewer");
     expect(html).not.toContain(["Looking", "Glass"].join(""));
@@ -29,9 +29,27 @@ describe("Alice browser workflow UI contract", () => {
     expectElement(html, "joint-object-select");
     expectElement(html, "joint-pose-name");
     expectElement(html, "joint-apply-pose");
+    expectElement(html, "evidence-panel");
+    expectElement(html, "capture-evidence-button");
+    expectElement(html, "export-evidence-button");
+    expectElement(html, "share-evidence-button");
+    expectElement(html, "evidence-status");
+    expectElement(html, "evidence-summary");
+    expectElement(html, "evidence-capture-list");
     expectElement(html, "export-a3p-button");
     expectElement(html, "export-web-package-button");
     expectElement(html, "share-web-package-button");
+    expect(html).toContain("Alice evidence");
+    expect(html).toContain("Capture visible behavior");
+    expect(html).toContain("Export evidence");
+    expect(html).toContain("Share evidence");
+    expect(html).toContain('data-testid="alice-evidence-capture-button"');
+    expect(html).toContain('data-testid="alice-evidence-export-button"');
+    expect(html).toContain('data-testid="alice-evidence-share-button"');
+    expect(html).toContain('data-testid="alice-evidence-status"');
+    expect(html).toContain('data-testid="alice-evidence-summary"');
+    expect(html).toContain('data-alice-evidence-status="empty"');
+    expect(html).toContain('data-testid="alice-evidence-capture-list"');
     expect(html).toContain('accept=".a3p"');
     expect(html).toContain(".glb");
     expect(html).toContain(".gltf");
@@ -68,6 +86,11 @@ describe("Alice browser workflow UI contract", () => {
       "joint-object-select",
       "joint-pose-name",
       "joint-apply-pose",
+      "capture-evidence-button",
+      "export-evidence-button",
+      "share-evidence-button",
+      "evidence-status",
+      "evidence-summary",
       "export-a3p-button",
       "export-web-package-button",
       "share-web-package-button",
@@ -84,6 +107,11 @@ describe("Alice browser workflow UI contract", () => {
     expect(main).toContain("assignTextureToModel");
     expect(main).toContain("exportWebPackage");
     expect(main).toContain("generateShareArtifacts");
+    expect(main).toContain("alice-evidence-artifact");
+    expect(main).toContain("createAliceEvidenceArtifact");
+    expect(main).toContain("serializeAliceEvidenceArtifact");
+    expect(main).toContain("validateAliceEvidenceArtifact");
+    expect(main).toContain("navigator.share");
   });
 
   it("exposes Alice selected object transform controls", () => {
