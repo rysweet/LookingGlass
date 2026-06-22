@@ -36,7 +36,11 @@ implemented export/share routes. `/api/audio/*` exposes the audio workflow; see
 | Endpoint | Method | Purpose |
 | --- | --- | --- |
 | `/api/health` | `GET` | Check that the server is alive |
+| `/api/config` | `GET` | Discover server metadata and public endpoint paths without filesystem paths |
 | `/api/launch` | `POST` | Start or reset a project session |
+| `/api/setup/preflight` | `GET` | Return setup-readiness checks for a requested setup scenario |
+| `/api/setup/readiness` | `GET` | Return general setup-readiness checks |
+| `/api/setup/evidence-handoff` | `POST` | Write a setup-readiness handoff artifact and return its safe artifact filename |
 | `/api/project/templates` | `GET` | List available project templates |
 | `/api/project/new` | `POST` | Create a new project from a template |
 | `/api/assets/import-model` | `POST` | Import a `.gltf` or `.glb` model into the current project |

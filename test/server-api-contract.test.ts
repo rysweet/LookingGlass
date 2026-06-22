@@ -122,6 +122,7 @@ describe("server API response contracts", () => {
     expect(config.body.endpoints).toMatchObject({
       health: "/api/health",
       setupPreflight: "/api/setup/preflight",
+      setupReadiness: "/api/setup/readiness",
       evidenceHandoff: "/api/setup/evidence-handoff",
       projectTemplates: "/api/project/templates",
       createProject: "/api/project/new",
@@ -183,13 +184,28 @@ describe("server API response contracts", () => {
       "record one visible result after running",
     );
     expect(handoff.body.handoff.supportHandoffFields).toContain("retest signal");
-    expect(fs.existsSync(handoff.body.evidenceArtifact)).toBe(true);
-    expect(readJson(handoff.body.evidenceArtifact).status).toBe("handoff-created");
+    expect(handoff.body.evidenceArtifact).toBe(
+      "setup-readiness-handoff-instructor-student-launch-evidence-handoff.json",
+    );
+    expect(handoff.body.evidenceArtifact).not.toContain(evidenceDir);
+    expect(path.isAbsolute(handoff.body.evidenceArtifact)).toBe(false);
+    const handoffPath = path.join(evidenceDir, handoff.body.evidenceArtifact);
+    expect(fs.existsSync(handoffPath)).toBe(true);
+    const persistedHandoff = readJson(handoffPath);
+    expect(persistedHandoff.status).toBe("handoff-created");
+    expect(JSON.stringify(persistedHandoff)).not.toContain(evidenceDir);
 
     const generalHandoff = await localPost(app, "/api/setup/evidence-handoff")
       .send({ scenario: "setup-readiness" })
       .expect(200);
     expect(generalHandoff.body.scenario).toBe("setup-readiness");
+
+    await localPost(app, "/api/setup/evidence-handoff")
+      .send({ scenario: "missing-setup-scenario" })
+      .expect(400)
+      .expect((res) => {
+        expect(res.body.error).toContain("setup-readiness");
+      });
   });
 
   it("rejects a requested missing .a3p file without launching", async () => {

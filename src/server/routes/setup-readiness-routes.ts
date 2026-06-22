@@ -61,6 +61,7 @@ export function registerSetupReadinessRoutes(app: Express, context: ServerContex
       endpoints: {
         health: "/api/health",
         setupPreflight: "/api/setup/preflight",
+        setupReadiness: "/api/setup/readiness",
         evidenceHandoff: "/api/setup/evidence-handoff",
         projectTemplates: "/api/project/templates",
         createProject: "/api/project/new",
@@ -102,8 +103,12 @@ export function registerSetupReadinessRoutes(app: Express, context: ServerContex
       return;
     }
 
-    const handoff = buildEvidenceHandoff(context, scenario.value ?? "setup-readiness");
-    fs.writeFileSync(handoff.evidenceArtifact, JSON.stringify(handoff, null, 2) + "\n");
+    const scenarioValue = scenario.value ?? "setup-readiness";
+    const handoff = buildEvidenceHandoff(scenarioValue);
+    fs.writeFileSync(
+      path.join(context.evidenceDir, handoff.evidenceArtifact),
+      JSON.stringify(handoff, null, 2) + "\n",
+    );
     res.json(handoff);
   });
 }
@@ -165,14 +170,8 @@ function buildSetupPreflight(
   };
 }
 
-function buildEvidenceHandoff(
-  context: ServerContext,
-  scenario: SetupScenario | typeof GENERAL_SETUP_SCENARIO,
-) {
-  const evidenceArtifact = path.join(
-    context.evidenceDir,
-    `setup-readiness-handoff-${scenario}.json`,
-  );
+function buildEvidenceHandoff(scenario: SetupScenario | typeof GENERAL_SETUP_SCENARIO) {
+  const evidenceArtifact = `setup-readiness-handoff-${scenario}.json`;
 
   return {
     schema_version: "lookingglass.setup-evidence-handoff/v1",
@@ -220,7 +219,7 @@ function readSetupScenario(
   }
   return {
     ok: false,
-    error: `scenario must be one of: ${SETUP_SCENARIOS.join(", ")}`,
+    error: `scenario must be one of: ${[...SETUP_SCENARIOS, GENERAL_SETUP_SCENARIO].join(", ")}`,
   };
 }
 

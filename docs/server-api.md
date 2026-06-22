@@ -152,6 +152,10 @@ export/share/validation routes:
 | Method | Route | Success response | Main side effect |
 | --- | --- | --- | --- |
 | `GET` | `/api/health` | process status | none |
+| `GET` | `/api/config` | public server config and endpoint map | none |
+| `GET` | `/api/setup/preflight` | `lookingglass.setup-preflight/v1` | none |
+| `GET` | `/api/setup/readiness` | `lookingglass.setup-preflight/v1` | none |
+| `POST` | `/api/setup/evidence-handoff` | `lookingglass.setup-evidence-handoff/v1` | writes `setup-readiness-handoff-<scenario>.json` under the configured evidence directory and returns only the artifact filename |
 | `POST` | `/api/launch` | project launch summary | initializes per-server project state |
 | `GET` | `/api/project/templates` | template list | none |
 | `POST` | `/api/project/new` | `eatme.alice-project-new-result/v1` | writes `project-new/<ProjectName>.a3p` |
