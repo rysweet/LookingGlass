@@ -122,34 +122,45 @@ Successful output:
   },
   "scope": {
     "name": "Alice.org HowTo coverage",
-    "included": ["saved Alice.org HowTo inventory", "repository coverage map"],
-    "excluded": ["live Alice.org crawling", "general documentation checks", "all product capabilities"]
+    "included": [
+      "Animation Alice.org HowTo coverage",
+      "Audio Alice.org HowTo coverage",
+      "Code Editor Alice.org HowTo coverage",
+      "Great Other Sources Alice.org HowTo coverage",
+      "Interactivity Alice.org HowTo coverage",
+      "Models and Textures Alice.org HowTo coverage",
+      "Scene Editor Alice.org HowTo coverage",
+      "Sharing Alice.org HowTo coverage",
+      "The Alice Player Alice.org HowTo coverage",
+      "VR Programming Alice.org HowTo coverage"
+    ],
+    "excluded": ["live web crawling", "general documentation checks", "all product capabilities"]
   },
   "checks": [
     {
       "id": "alice-identity",
       "status": "passed",
-      "summary": "Audit output uses Alice and alice-web identity."
+      "summary": "Product and runtime fields match required names."
     },
     {
       "id": "baseline-only",
       "status": "passed",
-      "summary": "The comparison baseline is rysweet/RabbitHole origin/develop."
+      "summary": "Comparison field matches the approved upstream reference."
     },
     {
       "id": "howto-inventory",
       "status": "passed",
-      "summary": "All 54 saved Alice.org HowTo entries have coverage records."
+      "summary": "Saved HowTo inventory has 54 unique entries with mapped records."
     },
     {
       "id": "coverage-evidence",
       "status": "passed",
-      "summary": "Every mapped coverage path exists and contains the expected evidence token."
+      "summary": "All mapped evidence files exist and contain expected tokens."
     },
     {
       "id": "wording",
       "status": "passed",
-      "summary": "No forbidden wording or unsupported jargon was found."
+      "summary": "Generated evidence text stays within wording rules."
     }
   ],
   "summary": {

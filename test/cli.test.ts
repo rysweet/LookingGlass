@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { createServer } from "../src/server";
 import { spawnSync } from "child_process";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import * as http from "http";
 import type { AddressInfo } from "net";
@@ -11,14 +12,14 @@ const CLI_PATH = path.join(PROJECT_ROOT, "dist-server/cli.js");
 const TEST_EVIDENCE_DIR = path.resolve(__dirname, "../.test-cli-evidence");
 const CLI_SYMLINK_PATH = path.join(TEST_EVIDENCE_DIR, "alice-web-bin.js");
 
-function runBuiltCli(args: string[], cliPath = CLI_PATH) {
+function runBuiltCli(args: string[], cliPath = CLI_PATH, cwd = PROJECT_ROOT) {
   expect(
     fs.existsSync(cliPath),
     "Run npm run build:server before CLI subprocess tests",
   ).toBe(true);
 
   return spawnSync(process.execPath, [cliPath, ...args], {
-    cwd: PROJECT_ROOT,
+    cwd,
     encoding: "utf8",
     env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=32768" },
   });
@@ -135,9 +136,19 @@ describe("CLI argument behavior", () => {
     const result = runBuiltCli(["serve", "--definitely-not-valid"]);
 
     expect(result.error).toBeUndefined();
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("Unknown option: --definitely-not-valid");
+    expect(result.stderr).toContain("Usage:");
+  });
+
+  it("rejects an invalid --port value with usage error exit code 2", () => {
+    const result = runBuiltCli(["serve", "--port", "not-a-port"]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("--port must be a valid port number");
     expect(result.stderr).toContain("Usage:");
   });
 
@@ -221,5 +232,35 @@ describe("CLI argument behavior", () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("--output");
     expect(fs.existsSync(missingParentOutput)).toBe(false);
+  });
+
+  it("exits 1 and writes a failed summary when audit evidence is missing", () => {
+    const emptyRoot = fs.mkdtempSync(path.join(os.tmpdir(), "alice-howto-empty-root-"));
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-howto-audit-out-"));
+    const auditJson = path.join(outputDir, "alice-howto-parity-audit.json");
+
+    try {
+      const result = runBuiltCli(
+        ["alice-howto-parity-audit", "--output", auditJson],
+        CLI_PATH,
+        emptyRoot,
+      );
+
+      expect(result.error).toBeUndefined();
+      expect(result.status, [result.stdout, result.stderr].filter(Boolean).join("\n")).toBe(1);
+      expect(fs.existsSync(auditJson)).toBe(true);
+
+      const audit = JSON.parse(fs.readFileSync(auditJson, "utf8")) as {
+        summary?: { status?: string; failed?: number };
+        checks?: Array<{ id?: string; status?: string }>;
+      };
+
+      expect(audit.summary?.status).toBe("failed");
+      expect(audit.summary?.failed ?? 0).toBeGreaterThan(0);
+      expect(audit.checks?.find((check) => check.id === "coverage-evidence")?.status).toBe("failed");
+    } finally {
+      fs.rmSync(emptyRoot, { recursive: true, force: true });
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    }
   });
 });

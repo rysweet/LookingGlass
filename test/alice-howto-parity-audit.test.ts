@@ -59,7 +59,11 @@ async function loadInventoryModule() {
 async function loadAuditModule() {
   const modulePath = "../src/server/alice-howto-parity-audit";
   return import(/* @vite-ignore */ modulePath) as Promise<{
-    runAliceHowToParityAudit(options: { outputPath: string; pretty?: boolean }): Promise<AuditResult>;
+    runAliceHowToParityAudit(options: {
+      outputPath: string;
+      pretty?: boolean;
+      repoRoot?: string;
+    }): Promise<AuditResult>;
   }>;
 }
 
@@ -168,6 +172,20 @@ describe("Alice HowTo parity audit result contract", () => {
     for (const id of ["alice-identity", "baseline-only", "howto-inventory", "coverage-evidence", "wording"]) {
       expect(result.checks.find((check) => check.id === id)?.status, `${id} should pass`).toBe("passed");
     }
+  });
+
+  it("reports a failed summary when mapped evidence is absent from the repo root", async () => {
+    const { runAliceHowToParityAudit } = await loadAuditModule();
+    const emptyRoot = makeTempDir();
+    const outputPath = join(makeTempDir(), "alice-howto-parity-audit.json");
+
+    const result = await runAliceHowToParityAudit({ outputPath, repoRoot: emptyRoot });
+    const written = JSON.parse(readFileSync(outputPath, "utf8")) as AuditResult;
+
+    expect(written).toEqual(result);
+    expect(result.summary.status).toBe("failed");
+    expect(result.summary.failed).toBeGreaterThan(0);
+    expect(result.checks.find((check) => check.id === "coverage-evidence")?.status).toBe("failed");
   });
 
   it("keeps generated audit evidence inside the Alice identity and wording boundary", async () => {

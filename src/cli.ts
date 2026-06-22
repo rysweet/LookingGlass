@@ -63,7 +63,7 @@ export function parseArgs(argv: string[]): CliConfig {
         return { command: "help", port, evidenceDir, project, localApiToken, outputPath, pretty };
       default:
         if (current?.startsWith("-")) {
-          throw new Error(`Unknown option: ${current}`);
+          throw new CliUsageError(`Unknown option: ${current}`);
         }
     }
   }
@@ -78,37 +78,37 @@ function normalizeCommand(value: string): CliConfig["command"] {
   if (value === "serve" || value === "print-config" || value === "help" || value === "alice-howto-parity-audit") {
     return value;
   }
-  throw new Error(`Unknown command: ${value}`);
+  throw new CliUsageError(`Unknown command: ${value}`);
 }
 
 function parsePort(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-    throw new Error("--port must be a valid port number");
+    throw new CliUsageError("--port must be a valid port number");
   }
   return parsed;
 }
 
 function parseEvidenceDir(value: string | undefined): string {
   if (!value || !value.trim()) {
-    throw new Error("--evidence-dir requires a directory path");
+    throw new CliUsageError("--evidence-dir requires a directory path");
   }
   return value;
 }
 
 function parseProjectPath(value: string | undefined): string {
   if (!value || !value.trim()) {
-    throw new Error("--project requires a file path");
+    throw new CliUsageError("--project requires a file path");
   }
   if (!value.endsWith(".a3p")) {
-    throw new Error("--project must point to an .a3p file");
+    throw new CliUsageError("--project must point to an .a3p file");
   }
   return value;
 }
 
 function parseApiToken(value: string | undefined): string {
   if (!value || !value.trim()) {
-    throw new Error("--api-token requires a non-empty token");
+    throw new CliUsageError("--api-token requires a non-empty token");
   }
   return value;
 }
