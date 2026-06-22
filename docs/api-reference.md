@@ -774,8 +774,8 @@ Invalid packages return HTTP `400` with explicit validation errors:
 
 Validation rejects malformed base64, empty packages, unreadable ZIP data,
 absolute paths, parent traversal, backslash traversal, duplicate required
-entries, excessive package size, excessive file count, missing required files,
-unsafe package filenames, wrong schema identity, wrong runtime identity, unsafe
+entries, encoded path controls, missing required files, unsafe package
+filenames, wrong schema identity, wrong runtime identity, unsafe
 `canonicalUrl` values, and generated metadata that uses repository nickname
 identity.
 

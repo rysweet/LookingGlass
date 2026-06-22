@@ -522,7 +522,7 @@ function validatedPackageFilename(
   manifest: AliceWebPackageManifest | null,
   errors: WebPackageValidationError[],
 ): string {
-  const fallback = `${manifest?.packageName ?? ALICE_WEB_PACKAGE}.zip`;
+  const fallback = `${ALICE_WEB_PACKAGE}.zip`;
   const candidate = manifest?.package?.filename;
   if (candidate === undefined) {
     if (manifest) {
@@ -981,6 +981,9 @@ function containsForbiddenRepositoryIdentity(values: unknown[]): boolean {
 function zipPathsAreSafe(zip: JSZip): boolean {
   for (const [path, file] of Object.entries(zip.files)) {
     const originalName = readUnsafeOriginalName(file) ?? path;
+    if (ENCODED_PATH_CONTROL_RE.test(originalName) || ENCODED_PATH_CONTROL_RE.test(path)) {
+      return false;
+    }
     try {
       const validate = file.dir ? validateArchivePath : assertSafeWritablePath;
       if (validate(originalName) !== originalName || (path && validate(path) !== path)) {
