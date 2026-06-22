@@ -535,6 +535,40 @@ describe("project-export", () => {
     expect(share.share.teacher).not.toHaveProperty("title");
   });
 
+  it("rejects malformed teacher metadata instead of awarding teacher-share evidence", async () => {
+    const exported = await projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Malformed Teacher Share Pack",
+      teacher: {
+        remix: "allowed",
+        tags: ["classroom"],
+        standards: ["CSTA"],
+      },
+    });
+    const zip = await JSZip.loadAsync(decodePackage(exported.package.base64));
+    const share = JSON.parse(await zip.file("share.json")!.async("string"));
+    share.teacher.audience = 42;
+    share.teacher.lessonFocus = { text: "not a string" };
+    zip.file("share.json", JSON.stringify(share));
+    const packageBytes = await zip.generateAsync({ type: "uint8array" });
+
+    const validation = await projectExportApi.validateWebPackage!({
+      packageBase64: Buffer.from(packageBytes).toString("base64"),
+    });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.evidence).not.toContain("teacher-share-metadata");
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "invalid-teacher-share-metadata",
+        message: "teacher audience must be a string",
+      }),
+      expect.objectContaining({
+        code: "invalid-teacher-share-metadata",
+        message: "teacher lessonFocus must be a string",
+      }),
+    ]));
+  });
+
   it("TypeScriptExporter creates a deterministic Alice web source handoff archive", async () => {
     const first = await new TypeScriptExporter().export(createProjectFixture());
     const second = await new TypeScriptExporter().export(createProjectFixture());

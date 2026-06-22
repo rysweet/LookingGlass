@@ -837,6 +837,19 @@ function normalizeTextList(values: unknown, fieldName: string): string[] {
 
 function validateTeacherShareMetadata(value: AliceWebTeacherShareMetadata): WebPackageValidationError[] {
   const errors: WebPackageValidationError[] = [];
+  for (const [fieldName, fieldValue] of Object.entries({
+    audience: value.audience,
+    lessonFocus: value.lessonFocus,
+    attribution: value.attribution,
+  })) {
+    if (fieldValue !== undefined && typeof fieldValue !== "string") {
+      errors.push({
+        code: "invalid-teacher-share-metadata",
+        message: `teacher ${fieldName} must be a string`,
+        path: WEB_PACKAGE_ARTIFACTS.share,
+      });
+    }
+  }
   if (value.schemaVersion !== "alice-web.teacher-share/v1") {
     errors.push({
       code: "invalid-teacher-share-metadata",

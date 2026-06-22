@@ -87,6 +87,52 @@ describe("project-migration", () => {
     ]);
   });
 
+  it("detects nested Alice 2 manifest metadata as guidance-only", () => {
+    const alice2Xml = `<?xml version="1.0" encoding="UTF-8"?><node><element class="edu.cmu.cs.stage3.alice.core.World"/></node>`;
+    const versionInfo = detectProjectVersion(null, {
+      project: {
+        createdWith: {
+          version: "2.4.3",
+        },
+      },
+    }, alice2Xml);
+    const migration = migrateProjectXml(alice2Xml, versionInfo);
+
+    expect(versionInfo).toMatchObject({
+      originalAliceVersion: "2.4.3",
+      detectedAliceVersion: "2.4.3",
+      versionSource: "manifest",
+      migrationSupport: "alice-2-guidance-only",
+    });
+    expect(migration.xmlText).toBe(alice2Xml);
+    expect(migration.versionInfo).toMatchObject({
+      detectedAliceVersion: "2.4.3",
+      migrated: false,
+      migrationSupport: "alice-2-guidance-only",
+      unsupportedReason: expect.stringContaining("automatic Alice 2 conversion is not supported"),
+    });
+  });
+
+  it("treats caller-supplied Alice 2 version info as guidance-only even without support metadata", () => {
+    const alice2Xml = `<?xml version="1.0" encoding="UTF-8"?><node version="2.4.3"></node>`;
+    const migration = migrateProjectXml(alice2Xml, {
+      originalAliceVersion: "2.4.3",
+      detectedAliceVersion: "2.4.3",
+      manifestVersion: null,
+      xmlVersion: "2.4.3",
+      versionSource: "xml",
+      migrated: false,
+      migrationSteps: [],
+    });
+
+    expect(migration.xmlText).toBe(alice2Xml);
+    expect(migration.versionInfo.detectedAliceVersion).toBe("2.4.3");
+    expect(migration.versionInfo.migrationSupport).toBe("alice-2-guidance-only");
+    expect(migration.versionInfo.migrationSteps).toEqual([
+      expect.stringContaining("automatic Alice 2 conversion is not supported"),
+    ]);
+  });
+
   it("updates nested manifest version metadata when direct version fields are absent", () => {
     const manifest = synchronizeManifestVersion(
       {

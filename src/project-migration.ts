@@ -187,11 +187,16 @@ export function migrateProjectXml(
   xmlText: string,
   versionInfo: ProjectVersionInfo,
 ): { xmlText: string; versionInfo: ProjectVersionInfo } {
-  if (versionInfo.migrationSupport === "alice-2-guidance-only") {
+  if (
+    versionInfo.migrationSupport === "alice-2-guidance-only" ||
+    isAlice2ProjectVersion(versionInfo.originalAliceVersion ?? "") ||
+    isAlice2ProjectVersion(versionInfo.detectedAliceVersion)
+  ) {
     return {
       xmlText,
       versionInfo: {
         ...versionInfo,
+        migrationSupport: "alice-2-guidance-only",
         migrated: false,
         migrationSteps: [
           ...versionInfo.migrationSteps,
@@ -339,7 +344,7 @@ function findNestedAliceVersion(value: unknown, depth = 0): string | null {
     return null;
   }
   if (typeof value === "string") {
-    return isAliceProjectVersion(value) ? value.trim() : null;
+    return isSupportedAliceVersion(value) ? value.trim() : null;
   }
   if (Array.isArray(value)) {
     for (const entry of value) {
@@ -368,6 +373,10 @@ function isAliceProjectVersion(value: string): boolean {
 
 function isAlice2ProjectVersion(value: string): boolean {
   return /^2(?:\.\d+){1,4}$/.test(value.trim());
+}
+
+function isSupportedAliceVersion(value: string): boolean {
+  return isAliceProjectVersion(value) || isAlice2ProjectVersion(value);
 }
 
 function buildVersionInfo(options: Omit<ProjectVersionInfo, "migrated" | "migrationSteps"> & {
