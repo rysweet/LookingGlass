@@ -234,6 +234,69 @@ describe("CLI argument behavior", () => {
     expect(fs.existsSync(missingParentOutput)).toBe(false);
   });
 
+  it("rejects Alice HowTo parity audit output paths that are filesystem roots", () => {
+    const rootOutput = path.parse(TEST_EVIDENCE_DIR).root;
+
+    const result = runBuiltCli(["alice-howto-parity-audit", "--output", rootOutput]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("--output must point to a file path");
+  });
+
+  it("rejects Alice HowTo parity audit output paths whose parent is a file", () => {
+    fs.mkdirSync(TEST_EVIDENCE_DIR, { recursive: true });
+    const fileParent = path.join(TEST_EVIDENCE_DIR, "not-a-directory");
+    fs.writeFileSync(fileParent, "not a directory", "utf8");
+    const outputPath = path.join(fileParent, "audit.json");
+
+    const result = runBuiltCli(["alice-howto-parity-audit", "--output", outputPath]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("--output parent path is not a directory");
+    expect(fs.existsSync(outputPath)).toBe(false);
+  });
+
+  it("rejects Alice HowTo parity audit output paths that already point to a directory", () => {
+    fs.mkdirSync(TEST_EVIDENCE_DIR, { recursive: true });
+    const outputDirectory = path.join(TEST_EVIDENCE_DIR, "audit-output-directory");
+    fs.mkdirSync(outputDirectory, { recursive: true });
+
+    const result = runBuiltCli(["alice-howto-parity-audit", "--output", outputDirectory]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("--output must point to a file, not a directory");
+  });
+
+  it("rejects Alice HowTo parity audit output paths whose parent is not writable", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    fs.mkdirSync(TEST_EVIDENCE_DIR, { recursive: true });
+    const readOnlyParent = path.join(TEST_EVIDENCE_DIR, "read-only-parent");
+    fs.mkdirSync(readOnlyParent, { recursive: true });
+    fs.chmodSync(readOnlyParent, 0o555);
+
+    try {
+      const outputPath = path.join(readOnlyParent, "audit.json");
+      const result = runBuiltCli(["alice-howto-parity-audit", "--output", outputPath]);
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(2);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain("--output parent directory is not writable");
+      expect(fs.existsSync(outputPath)).toBe(false);
+    } finally {
+      fs.chmodSync(readOnlyParent, 0o755);
+    }
+  });
+
   it("exits 1 and writes a failed summary when audit evidence is missing", () => {
     const emptyRoot = fs.mkdtempSync(path.join(os.tmpdir(), "alice-howto-empty-root-"));
     const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-howto-audit-out-"));

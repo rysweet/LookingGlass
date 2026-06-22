@@ -108,7 +108,7 @@ Each check object uses this shape:
 | `id` | string | yes | Stable check identifier |
 | `status` | string | yes | `passed` or `failed` |
 | `summary` | string | yes | Human-readable check result |
-| `details` | object | no | Check-specific evidence for failures or verbose output |
+| `details` | string[] | no | Check-specific evidence for failures or verbose output |
 
 ## Checks
 
