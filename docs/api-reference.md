@@ -100,6 +100,137 @@ Example response:
 
 The `runtime` value is the Alice web runtime identity.
 
+## `GET /api/config`
+
+Return public server metadata and endpoint discovery without exposing configured
+filesystem paths.
+
+```bash
+curl http://127.0.0.1:3000/api/config
+```
+
+Example response:
+
+```json
+{
+  "schema_version": "lookingglass.server-config/v1",
+  "runtime": "alice-web",
+  "platform": "lookingglass",
+  "port": 3000,
+  "evidenceDirConfigured": true,
+  "projectConfigured": false,
+  "endpoints": {
+    "health": "/api/health",
+    "setupPreflight": "/api/setup/preflight",
+    "setupReadiness": "/api/setup/readiness",
+    "evidenceHandoff": "/api/setup/evidence-handoff",
+    "projectTemplates": "/api/project/templates",
+    "createProject": "/api/project/new"
+  }
+}
+```
+
+The response intentionally returns booleans and route strings, not `evidenceDir`,
+`projectPath`, or absolute host paths.
+
+## `GET /api/setup/preflight`
+
+Return setup-readiness checks for one setup scenario.
+
+```bash
+curl 'http://127.0.0.1:3000/api/setup/preflight?scenario=setup-preflight-ready-to-create'
+```
+
+Query parameters:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `scenario` | `string` | no | One of `setup-preflight-ready-to-create`, `setup-support-lab-readiness`, `instructor-classroom-setup-readiness`, `instructor-student-launch-evidence-handoff`, or `setup-readiness` |
+
+Example response:
+
+```json
+{
+  "schema_version": "lookingglass.setup-preflight/v1",
+  "status": "ready",
+  "runtime": "alice-web",
+  "platform": "lookingglass",
+  "scenario": "setup-preflight-ready-to-create",
+  "checks": [
+    {
+      "id": "server-health",
+      "label": "LookingGlass REST server is reachable",
+      "status": "pass",
+      "evidence": "health route is registered at /api/health"
+    }
+  ],
+  "unsupportedCapabilities": ["Java desktop Alice launch"],
+  "classroomReadiness": {
+    "readyToCreateProject": true,
+    "readyForLabHandoff": true,
+    "readyForEvidenceHandoff": true,
+    "studentFallbackRoles": ["web project creator"]
+  }
+}
+```
+
+Invalid scenarios return `400`:
+
+```json
+{
+  "error": "scenario must be one of: setup-preflight-ready-to-create, setup-support-lab-readiness, instructor-classroom-setup-readiness, instructor-student-launch-evidence-handoff, setup-readiness"
+}
+```
+
+## `GET /api/setup/readiness`
+
+Return general setup-readiness checks. This is the same contract shape as
+`GET /api/setup/preflight` with `scenario` fixed to `setup-readiness`.
+
+```bash
+curl http://127.0.0.1:3000/api/setup/readiness
+```
+
+## `POST /api/setup/evidence-handoff`
+
+Write a setup-readiness handoff artifact and return the safe artifact filename.
+This is a mutating local API request, so it requires `X-Alice-Local-Api-Token`
+when token protection is configured.
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/setup/evidence-handoff \
+  -H "X-Alice-Local-Api-Token: $ALICE_LOCAL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"scenario":"instructor-student-launch-evidence-handoff"}'
+```
+
+Request body:
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `scenario` | `string` | no | One setup scenario or `setup-readiness`; defaults to `setup-readiness` |
+
+Example response:
+
+```json
+{
+  "schema_version": "lookingglass.setup-evidence-handoff/v1",
+  "status": "handoff-created",
+  "runtime": "alice-web",
+  "platform": "lookingglass",
+  "scenario": "instructor-student-launch-evidence-handoff",
+  "evidenceArtifact": "setup-readiness-handoff-instructor-student-launch-evidence-handoff.json",
+  "handoff": {
+    "audience": "instructor-and-students",
+    "readinessSignals": ["server health route is registered"]
+  }
+}
+```
+
+`evidenceArtifact` is always a filename, never an absolute path and never the
+configured `evidenceDir`. The server writes the file under its configured
+evidence directory internally.
+
 ## `POST /api/launch`
 
 Start a session with an `.a3p` path.
