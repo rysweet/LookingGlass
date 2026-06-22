@@ -1,4 +1,12 @@
 import { RunSystem } from "./run-system.js";
+import {
+  createInitialScoreValues,
+  resolveScorekeeperSourceName,
+  resolveVisibleWorkflowBindings,
+  validateAliceWorkflowState,
+  type AliceWorkflowState,
+  type ResolvedVisibleWorkflowBinding,
+} from "./alice-workflow-state.js";
 import type { CompilationUnit, ExecutableAst, ExecutableMethod } from "./tweedle-compiler.js";
 import type { Expression, Statement } from "./tweedle-parser.js";
 
@@ -8,6 +16,7 @@ export interface RunConfiguration {
   loggingLevel?: "silent" | "info" | "debug";
   tickMs?: number;
   maxSteps?: number;
+  aliceWorkflow?: AliceWorkflowState;
 }
 
 export interface ExecutionLogEntry {
@@ -28,11 +37,14 @@ export interface RunResult {
   log: ExecutionLogEntry[];
   error: string | null;
   stoppedAtBreakpoint: string | null;
+  scoreValues: Map<string, number>;
+  visibleWorkflowBindings: ResolvedVisibleWorkflowBinding[];
 }
 
 export interface ExecutableProject {
   units: CompilationUnit[];
   entryPoint?: string;
+  aliceWorkflow?: AliceWorkflowState;
 }
 
 interface PlannedStep {
@@ -40,6 +52,13 @@ interface PlannedStep {
   className: string;
   methodName: string;
   statement: Statement;
+}
+
+interface WorkflowRunState {
+  workflow: AliceWorkflowState;
+  scoreValues: Map<string, number>;
+  elapsedSeconds: number;
+  visibleWorkflowBindings: ResolvedVisibleWorkflowBinding[];
 }
 
 export class ExecutionLog {
@@ -88,6 +107,7 @@ export class ProjectRunner {
     const steps = buildExecutionPlan(activeProject);
     const breakpoints = new Set(this.configuration.breakpoints ?? []);
     const maxSteps = Math.max(1, this.configuration.maxSteps ?? 10_000);
+    const workflowState = createWorkflowRunState(activeProject.aliceWorkflow ?? this.configuration.aliceWorkflow);
     let stepIndex = 0;
     let stoppedAtBreakpoint: string | null = null;
 
@@ -109,13 +129,15 @@ export class ProjectRunner {
         if (stepIndex >= maxSteps) {
           throw new Error(`Maximum step limit ${maxSteps} exceeded`);
         }
-        executeStep(plannedStep, elapsedMs, stepIndex, log, output, this.configuration.loggingLevel ?? "info");
+        executeStep(plannedStep, elapsedMs, stepIndex, log, output, this.configuration.loggingLevel ?? "info", workflowState);
         stepIndex += 1;
         return stepIndex < steps.length;
       },
     });
 
     const baseResult = await system.waitForCompletion();
+    updateFinalWorkflowTime(workflowState, stepIndex, baseResult?.elapsedMs ?? 0);
+    const executionTimeMs = Math.max(baseResult?.elapsedMs ?? 0, stepIndex > 0 ? 1 : 0);
     const completionReason = system.lastError
       ? "error"
       : stoppedAtBreakpoint
@@ -127,11 +149,13 @@ export class ProjectRunner {
     return {
       success: completionReason === "completed" || completionReason === "breakpoint",
       completionReason,
-      executionTimeMs: baseResult?.elapsedMs ?? 0,
+      executionTimeMs,
       output,
       log: log.toArray(),
       error: system.lastError ? String((system.lastError.cause as Error)?.message ?? system.lastError.cause) : null,
       stoppedAtBreakpoint,
+      scoreValues: workflowState ? new Map(workflowState.scoreValues) : new Map(),
+      visibleWorkflowBindings: workflowState?.visibleWorkflowBindings ?? [],
     };
   }
 }
@@ -155,7 +179,7 @@ export class InteractiveRunner {
       return null;
     }
     const plannedStep = this.steps[this.stepIndex];
-    const entry = executeStep(plannedStep, this.stepIndex, this.stepIndex, this.log, this.output, this.loggingLevel);
+    const entry = executeStep(plannedStep, this.stepIndex, this.stepIndex, this.log, this.output, this.loggingLevel, null);
     this.stepIndex += 1;
     return entry;
   }
@@ -184,7 +208,7 @@ function normalizeProject(project: CompilationUnit | readonly CompilationUnit[] 
     return { units: [...project] };
   }
   if (project instanceof Object && "units" in project) {
-    return { units: [...project.units], entryPoint: project.entryPoint };
+    return { units: [...project.units], entryPoint: project.entryPoint, aliceWorkflow: project.aliceWorkflow };
   }
   return { units: [project] };
 }
@@ -324,7 +348,9 @@ function executeStep(
   log: ExecutionLog,
   output: string[],
   loggingLevel: RunConfiguration["loggingLevel"],
+  workflowState: WorkflowRunState | null,
 ): ExecutionLogEntry {
+  applyWorkflowStatement(step.statement, workflowState);
   const message = describeStatement(step.statement, step.className, step.methodName, output);
   const entry: ExecutionLogEntry = {
     timestampMs,
@@ -338,6 +364,7 @@ function executeStep(
   if (loggingLevel !== "silent") {
     log.record(entry);
   }
+  advanceWorkflowRunState(workflowState, timestampMs, 0.1);
   return entry;
 }
 
@@ -385,6 +412,135 @@ function extractText(expression: Expression | undefined): string | null {
     return expression.name;
   }
   return null;
+}
+
+function createWorkflowRunState(workflow: AliceWorkflowState | undefined): WorkflowRunState | null {
+  if (!workflow) {
+    return null;
+  }
+  const validated = validateAliceWorkflowState(workflow);
+  const scoreValues = createInitialScoreValues(validated);
+  return {
+    workflow: validated,
+    scoreValues,
+    elapsedSeconds: 0,
+    visibleWorkflowBindings: resolveVisibleWorkflowBindings(validated, { scoreValues }),
+  };
+}
+
+function applyWorkflowStatement(statement: Statement, workflowState: WorkflowRunState | null): void {
+  if (!workflowState) {
+    return;
+  }
+  if (statement.type === "LocalVariableDeclaration") {
+    updateWorkflowScoreValue(workflowState, statement.name, evaluateWorkflowExpression(statement.initializer, workflowState));
+    return;
+  }
+  if (statement.type !== "ExpressionStatement" || statement.expression.type !== "Assignment") {
+    return;
+  }
+  const targetName = workflowTargetName(statement.expression.target);
+  if (!targetName) {
+    return;
+  }
+  updateWorkflowScoreValue(workflowState, targetName, evaluateWorkflowExpression(statement.expression.value, workflowState));
+}
+
+function updateWorkflowScoreValue(workflowState: WorkflowRunState, name: string, value: unknown): void {
+  const sourceName = resolveScorekeeperSourceName(workflowState.workflow, name);
+  if (!sourceName) {
+    return;
+  }
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    throw new TypeError(`Alice score value for ${sourceName} must be finite`);
+  }
+  workflowState.scoreValues.set(sourceName, numeric);
+}
+
+function workflowTargetName(expression: Expression): string | null {
+  if (expression.type === "Identifier") {
+    return expression.name;
+  }
+  if (expression.type === "MemberAccess") {
+    return expression.memberName;
+  }
+  return null;
+}
+
+function evaluateWorkflowExpression(expression: Expression, workflowState: WorkflowRunState): unknown {
+  switch (expression.type) {
+    case "Literal":
+      return expression.value;
+    case "Identifier":
+      return workflowState.scoreValues.get(expression.name) ?? expression.name;
+    case "MemberAccess": {
+      const sourceName = resolveScorekeeperSourceName(workflowState.workflow, expression.memberName);
+      return sourceName ? workflowState.scoreValues.get(sourceName) : expression.memberName;
+    }
+    case "BinaryOp":
+      return evaluateWorkflowBinaryExpression(expression, workflowState);
+    case "Parenthesized":
+      return evaluateWorkflowExpression(expression.expression, workflowState);
+    case "UnaryOp": {
+      const value = Number(evaluateWorkflowExpression(expression.operand, workflowState));
+      if (!Number.isFinite(value)) {
+        return expression.operator === "!" ? false : Number.NaN;
+      }
+      return expression.operator === "-" ? -value : value;
+    }
+    default:
+      return Number.NaN;
+  }
+}
+
+function evaluateWorkflowBinaryExpression(
+  expression: Extract<Expression, { type: "BinaryOp" }>,
+  workflowState: WorkflowRunState,
+): unknown {
+  const left = evaluateWorkflowExpression(expression.left, workflowState);
+  const right = evaluateWorkflowExpression(expression.right, workflowState);
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  switch (expression.operator) {
+    case "+":
+      return Number.isFinite(leftNumber) && Number.isFinite(rightNumber)
+        ? leftNumber + rightNumber
+        : `${String(left)}${String(right)}`;
+    case "-":
+      return leftNumber - rightNumber;
+    case "*":
+      return leftNumber * rightNumber;
+    case "/":
+      if (rightNumber === 0) {
+        throw new TypeError("Alice score expression cannot divide by zero");
+      }
+      return leftNumber / rightNumber;
+    default:
+      return Number.NaN;
+  }
+}
+
+function advanceWorkflowRunState(workflowState: WorkflowRunState | null, timestampMs: number, deltaSeconds: number): void {
+  if (!workflowState) {
+    return;
+  }
+  workflowState.elapsedSeconds = Math.max(workflowState.elapsedSeconds + deltaSeconds, timestampMs / 1000);
+  workflowState.visibleWorkflowBindings = resolveVisibleWorkflowBindings(workflowState.workflow, {
+    scoreValues: workflowState.scoreValues,
+    elapsedSeconds: workflowState.elapsedSeconds,
+  });
+}
+
+function updateFinalWorkflowTime(workflowState: WorkflowRunState | null, stepCount: number, elapsedMs: number): void {
+  if (!workflowState) {
+    return;
+  }
+  workflowState.elapsedSeconds = Math.max(workflowState.elapsedSeconds, stepCount / 10, elapsedMs / 1000);
+  workflowState.visibleWorkflowBindings = resolveVisibleWorkflowBindings(workflowState.workflow, {
+    scoreValues: workflowState.scoreValues,
+    elapsedSeconds: workflowState.elapsedSeconds,
+  });
 }
 
 function assertNever(value: never): never {

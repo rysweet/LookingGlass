@@ -14,6 +14,10 @@ import {
   type DebugTraceEvent,
   type DebugVariableSnapshot,
 } from "./debugging.js";
+import type {
+  AliceWorkflowState,
+  ResolvedVisibleWorkflowBinding,
+} from "./alice-workflow-state.js";
 import {
   createTweedleRuntimeEnvironment,
   registerRuntimeObject,
@@ -35,6 +39,8 @@ export interface LogEntry {
 export interface ExecutionResult {
   execution_log: LogEntry[];
   returnValues: Map<string, unknown>;
+  scoreValues: Map<string, number>;
+  visibleWorkflowBindings: ResolvedVisibleWorkflowBinding[];
 }
 
 export interface TweedleExecutionOptions {
@@ -85,6 +91,14 @@ export interface AliceMethodBridge {
 
 export interface VMExecutionOptions {
   sceneBridge?: AliceMethodBridge | null;
+  aliceWorkflow?: AliceWorkflowState;
+}
+
+export interface AliceWorkflowRuntimeState {
+  workflow: AliceWorkflowState;
+  scoreValues: Map<string, number>;
+  elapsedSeconds: number;
+  visibleWorkflowBindings: ResolvedVisibleWorkflowBinding[];
 }
 
 interface DebugCallFrameState {
@@ -119,6 +133,7 @@ export interface VMState {
   returnValues: Map<string, unknown>;
   listenerMap: Map<string, RuntimeLambda[]>;
   sceneBridge: AliceMethodBridge | null;
+  aliceWorkflowRuntime?: AliceWorkflowRuntimeState | null;
   debugRuntime?: DebugRuntime;
 }
 
@@ -131,5 +146,6 @@ export interface VMEnvironment {
   objectMap: Map<string, RuntimeObject>;
   listenerMap: Map<string, RuntimeLambda[]>;
   sceneBridge: AliceMethodBridge | null;
+  aliceWorkflowRuntime?: AliceWorkflowRuntimeState | null;
   stepCounter: number;
 }

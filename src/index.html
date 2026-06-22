@@ -43,6 +43,17 @@
     #camera-marker-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
     #camera-marker-list li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     #camera-marker-list span { flex: 1 1 auto; }
+    #score-time-panel { display: flex; flex-direction: column; gap: 8px; font-size: 0.82rem; }
+    #score-time-panel h2 { font-size:0.9rem; margin-top:8px; }
+    #score-time-panel button, #score-time-panel input {
+      font: inherit;
+      border: 0;
+      border-radius: 4px;
+      padding: 6px 8px;
+    }
+    #score-time-status { color: #d7e3fc; }
+    #score-time-panel .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    #visible-score-label, #visible-time-label { color: #fff; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 
     #viewport-container { flex: 1; position: relative; }
     #viewport { width: 100%; height: 100%; display: block; }
@@ -96,6 +107,28 @@
       </label>
       <button id="camera-save-marker" data-testid="camera-save-marker" type="button">Save marker</button>
       <ul id="camera-marker-list" data-testid="camera-marker-list" aria-label="Camera markers"></ul>
+    </section>
+    <section id="score-time-panel" data-testid="score-time-panel" aria-label="Alice score and time workflow">
+      <h2>Score and time</h2>
+      <div id="score-time-status" data-testid="score-time-status">Score and time ready</div>
+      <label>Scorekeeper name
+        <input id="scorekeeper-name" data-testid="scorekeeper-name" type="text" maxlength="80" />
+      </label>
+      <label>Initial score
+        <input id="scorekeeper-initial-value" data-testid="scorekeeper-initial-value" type="number" step="1" />
+      </label>
+      <button id="add-scorekeeper" data-testid="add-scorekeeper" type="button">Add scorekeeper</button>
+      <label>Timekeeper name
+        <input id="timekeeper-name" data-testid="timekeeper-name" type="text" maxlength="80" />
+      </label>
+      <button id="add-timekeeper" data-testid="add-timekeeper" type="button">Add timekeeper</button>
+      <div class="button-row">
+        <button id="add-visible-score" data-testid="add-visible-score" type="button">Show score</button>
+        <button id="add-visible-time" data-testid="add-visible-time" type="button">Show time</button>
+      </div>
+      <div>Score: <span id="visible-score-label" data-testid="visible-score-label"></span></div>
+      <div>Time: <span id="visible-time-label" data-testid="visible-time-label"></span></div>
+      <button id="run-world" data-testid="run-world" type="button">Run world</button>
     </section>
     <section id="joint-panel" aria-label="Alice joint workflow">
       <h2 style="font-size:0.9rem; margin-top:8px;">Joints</h2>

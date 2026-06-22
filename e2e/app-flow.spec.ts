@@ -65,3 +65,34 @@ test("drives the Alice camera workflow through browser controls", async ({ page 
   await expect(page.getByTestId("camera-status")).toContainText(/first-person camera mode/i);
   await expect(page.getByTestId("camera-mode")).toContainText(/first-person/i);
 });
+
+test("authors score and time state, binds visible labels, and observes browser-visible changes", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByTestId("score-time-panel")).toBeVisible();
+  await expect(page.getByTestId("score-time-status")).toContainText(/score and time ready/i);
+
+  await page.getByTestId("scorekeeper-name").fill("score");
+  await page.getByTestId("scorekeeper-initial-value").fill("0");
+  await page.getByTestId("add-scorekeeper").click();
+  await expect(page.getByTestId("score-time-status")).toContainText(/scorekeeper "score" added/i);
+
+  await page.getByTestId("timekeeper-name").fill("elapsedTime");
+  await page.getByTestId("add-timekeeper").click();
+  await expect(page.getByTestId("score-time-status")).toContainText(/timekeeper "elapsedTime" added/i);
+
+  await page.getByTestId("add-visible-score").click();
+  await page.getByTestId("add-visible-time").click();
+
+  const visibleScore = page.getByTestId("visible-score-label");
+  const visibleTime = page.getByTestId("visible-time-label");
+  await expect(visibleScore).toHaveText("Score: 0");
+  await expect(visibleTime).toHaveText("Time: 0.0");
+
+  await page.getByTestId("run-world").click();
+
+  await expect(visibleScore).toHaveText("Score: 10", { timeout: 10_000 });
+  await expect(visibleTime).toHaveText(/^Time: (?!0\.0$)\d+\.\d$/, { timeout: 10_000 });
+  await expect(visibleScore).not.toContainText("<");
+  await expect(visibleTime).not.toContainText("<");
+});
