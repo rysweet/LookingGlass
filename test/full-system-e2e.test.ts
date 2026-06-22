@@ -1,6 +1,13 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { JSDOM } from "jsdom";
 import type { AliceMethod, AliceProject } from "../src/a3p-parser";
+import {
+  addScorekeeper,
+  addTimekeeper,
+  bindVisibleWorkflowState,
+  createDefaultAliceWorkflowState,
+  resolveVisibleWorkflowBindings,
+} from "../src/alice-workflow-state.js";
 import { ProjectManager } from "../src/project-manager";
 import {
   buildGradeInputFromProject,
@@ -215,5 +222,81 @@ describe("full system end-to-end", () => {
 
     expect(dimensionResults.every((result) => result.passed)).toBe(true);
     expect(lessonResults.every((result) => result.passed)).toBe(true);
+  });
+
+  it("creates score and time variables, binds visible state, runs the world, and observes changed values", async () => {
+    const projectManager = new ProjectManager();
+    const archive = projectManager.create();
+    archive.project.projectName = "ScoreTimeWorld";
+
+    addSceneObject(archive.project, "hero", "org.lgna.story.SBiped", 0, 0);
+    archive.project.methods.push({
+      name: "runScoreTime",
+      isFunction: false,
+      returnType: "void",
+      parameters: [],
+      statements: [
+        {
+          kind: "VariableDeclaration",
+          name: "score",
+          varType: "WholeNumber",
+          value: "0",
+        },
+        {
+          kind: "VariableAssignment",
+          name: "score",
+          value: "score + 10",
+        },
+        {
+          kind: "MethodCall",
+          object: "hero",
+          method: "say",
+          arguments: ['"score changed"'],
+        },
+      ],
+    });
+
+    let workflow = createDefaultAliceWorkflowState();
+    workflow = addScorekeeper(workflow, { name: "score" });
+    workflow = addTimekeeper(workflow, { name: "elapsedTime" });
+    workflow = bindVisibleWorkflowState(workflow, {
+      id: "score-label",
+      kind: "score",
+      sourceName: "score",
+      target: "world-overlay",
+      label: "Score",
+      format: "integer",
+    });
+    workflow = bindVisibleWorkflowState(workflow, {
+      id: "time-label",
+      kind: "time",
+      sourceName: "elapsedTime",
+      target: "world-overlay",
+      label: "Time",
+      format: "seconds-one-decimal",
+    });
+    archive.aliceWorkflow = workflow;
+
+    const initialVisible = resolveVisibleWorkflowBindings(workflow);
+    expect(initialVisible).toEqual([
+      expect.objectContaining({ id: "score-label", text: "Score: 0" }),
+      expect.objectContaining({ id: "time-label", text: "Time: 0.0" }),
+    ]);
+
+    const a3pBytes = await projectManager.saveAs("score-time-world.a3p");
+    const reopened = new ProjectManager();
+    await reopened.open(a3pBytes, "score-time-world.a3p");
+
+    expect(reopened.currentArchive?.aliceWorkflow).toEqual(workflow);
+
+    const execution = executeProject(reopened.currentArchive!.project, {
+      aliceWorkflow: reopened.currentArchive!.aliceWorkflow,
+    });
+
+    expect(execution.scoreValues.get("score")).toBe(10);
+    expect(execution.visibleWorkflowBindings).toEqual([
+      expect.objectContaining({ id: "score-label", text: "Score: 10", value: 10 }),
+      expect.objectContaining({ id: "time-label", text: expect.stringMatching(/^Time: (?!0\.0$)\d+\.\d$/) }),
+    ]);
   });
 });

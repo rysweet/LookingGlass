@@ -5,6 +5,8 @@ import {
   parseA3PFromZip,
   readA3PXmlEntry,
   type AliceProject,
+  type AliceMethod,
+  type AliceStatement,
   type A3PParseOptions,
 } from "./a3p-parser.js";
 import { writeA3P } from "./a3p-writer.js";
@@ -28,6 +30,10 @@ import {
   serializeProjectAudioWorkflowManifest,
   type ProjectAudioWorkflowState,
 } from "./project-audio.js";
+import {
+  validateAliceWorkflowState,
+  type AliceWorkflowState,
+} from "./alice-workflow-state.js";
 import {
   ORIGINAL_XML_RESOURCE_PATH,
   ProjectIoError,
@@ -72,6 +78,10 @@ export async function readProject(
 
   const project = await parseProject(zip, options);
   project.version = migration.versionInfo.detectedAliceVersion;
+  const aliceWorkflowMethods = readAliceWorkflowMethods(nextManifest);
+  if (aliceWorkflowMethods) {
+    project.methods = aliceWorkflowMethods;
+  }
 
   const storedXmlBytes = encodeOriginalXml({
     entryName: xmlEntry.name,
@@ -85,6 +95,7 @@ export async function readProject(
     resources.set(record.path, record.bytes);
   }
   const aliceAudio = readAliceAudioState(nextManifest, resources);
+  const aliceWorkflow = readAliceWorkflowState(nextManifest);
 
   return {
     project,
@@ -98,6 +109,7 @@ export async function readProject(
     thumbnail,
     versionInfo: migration.versionInfo,
     ...(aliceAudio ? { aliceAudio } : {}),
+    ...(aliceWorkflow ? { aliceWorkflow } : {}),
   };
 }
 
@@ -111,12 +123,7 @@ export async function writeProject(
 ): Promise<Uint8Array> {
   const originalXml = selectOriginalXmlForWrite(archive.resources);
   const thumbnail = await resolveThumbnailForWrite(archive, options);
-  const manifest = archive.aliceAudio
-    ? {
-      ...(archive.manifest ?? {}),
-      [AUDIO_MANIFEST_KEY]: serializeProjectAudioWorkflowManifest(archive.aliceAudio),
-    }
-    : archive.manifest;
+  const manifest = buildManifestForWrite(archive);
 
   return writeA3P(archive.project, {
     xmlEntryName: originalXml?.entryName ?? DEFAULT_A3P_XML_ENTRY,
@@ -126,6 +133,26 @@ export async function writeProject(
     resources: archive.resources,
     preserveSourceEntries: false,
   });
+}
+
+function buildManifestForWrite(archive: AliceProjectArchive): Record<string, unknown> | null {
+  const baseManifest = archive.manifest ?? null;
+  if (!archive.aliceAudio && !archive.aliceWorkflow) {
+    return baseManifest;
+  }
+
+  return {
+    ...(baseManifest ?? {}),
+    ...(archive.aliceAudio
+      ? { [AUDIO_MANIFEST_KEY]: serializeProjectAudioWorkflowManifest(archive.aliceAudio) }
+      : {}),
+    ...(archive.aliceWorkflow
+      ? {
+        aliceWorkflow: validateAliceWorkflowState(archive.aliceWorkflow),
+        aliceWorkflowMethods: archive.project.methods.map(cloneAliceWorkflowMethod),
+      }
+      : {}),
+  };
 }
 
 function readAliceAudioState(
@@ -146,6 +173,182 @@ function readAliceAudioState(
       throw new ProjectIoError("missing-audio-resource", error.message, error);
     }
     throw new ProjectIoError("invalid-manifest", "Invalid aliceAudio manifest.", error);
+  }
+}
+
+function readAliceWorkflowState(
+  manifest: Record<string, unknown> | null,
+): AliceWorkflowState | null {
+  const workflowManifest = manifest?.aliceWorkflow;
+  if (!workflowManifest || typeof workflowManifest !== "object" || Array.isArray(workflowManifest)) {
+    return null;
+  }
+
+  if (!("schemaVersion" in workflowManifest)) {
+    return null;
+  }
+  try {
+    return validateAliceWorkflowState(workflowManifest);
+  } catch (error) {
+    throw new ProjectIoError("invalid-manifest", "Invalid aliceWorkflow manifest.", error);
+  }
+}
+
+function readAliceWorkflowMethods(
+  manifest: Record<string, unknown> | null,
+): AliceMethod[] | null {
+  const workflowMethods = manifest?.aliceWorkflowMethods;
+  if (workflowMethods === undefined) {
+    return null;
+  }
+  if (!Array.isArray(workflowMethods)) {
+    throw new ProjectIoError("invalid-manifest", "aliceWorkflowMethods must be an array.");
+  }
+  try {
+    return workflowMethods.map((method, index) => validateAliceWorkflowMethod(method, `aliceWorkflowMethods[${index}]`));
+  } catch (error) {
+    if (error instanceof ProjectIoError) {
+      throw error;
+    }
+    throw new ProjectIoError("invalid-manifest", "Invalid aliceWorkflowMethods manifest.", error);
+  }
+}
+
+function validateAliceWorkflowMethod(value: unknown, path: string): AliceMethod {
+  assertManifestRecord(value, path);
+  const method = value as Record<string, unknown>;
+  return {
+    name: readManifestString(method.name, `${path}.name`),
+    isFunction: readManifestBoolean(method.isFunction, `${path}.isFunction`),
+    returnType: readManifestString(method.returnType, `${path}.returnType`),
+    parameters: readManifestParameters(method.parameters, `${path}.parameters`),
+    statements: readManifestStatements(method.statements, `${path}.statements`),
+  };
+}
+
+function cloneAliceWorkflowMethod(method: AliceMethod): AliceMethod {
+  return {
+    name: method.name,
+    isFunction: method.isFunction,
+    returnType: method.returnType,
+    parameters: method.parameters.map((parameter) => ({ name: parameter.name, type: parameter.type })),
+    statements: method.statements.map(cloneAliceWorkflowStatement),
+  };
+}
+
+function cloneAliceWorkflowStatement(statement: AliceStatement): AliceStatement {
+  return {
+    ...statement,
+    arguments: statement.arguments ? [...statement.arguments] : undefined,
+    body: statement.body?.map(cloneAliceWorkflowStatement),
+    ifBody: statement.ifBody?.map(cloneAliceWorkflowStatement),
+    elseBody: statement.elseBody?.map(cloneAliceWorkflowStatement),
+    tryBody: statement.tryBody?.map(cloneAliceWorkflowStatement),
+    catchBody: statement.catchBody?.map(cloneAliceWorkflowStatement),
+    cases: statement.cases?.map((entry) => ({
+      value: entry.value,
+      body: entry.body.map(cloneAliceWorkflowStatement),
+    })),
+    defaultCase: statement.defaultCase?.map(cloneAliceWorkflowStatement) ?? statement.defaultCase,
+  };
+}
+
+function readManifestParameters(value: unknown, path: string): Array<{ name: string; type: string }> {
+  if (!Array.isArray(value)) {
+    throw new ProjectIoError("invalid-manifest", `${path} must be an array.`);
+  }
+  return value.map((parameter, index) => {
+    assertManifestRecord(parameter, `${path}[${index}]`);
+    return {
+      name: readManifestString(parameter.name, `${path}[${index}].name`),
+      type: readManifestString(parameter.type, `${path}[${index}].type`),
+    };
+  });
+}
+
+function readManifestStatements(value: unknown, path: string): AliceStatement[] {
+  if (!Array.isArray(value)) {
+    throw new ProjectIoError("invalid-manifest", `${path} must be an array.`);
+  }
+  return value.map((statement, index) => validateAliceWorkflowStatement(statement, `${path}[${index}]`));
+}
+
+function validateAliceWorkflowStatement(value: unknown, path: string): AliceStatement {
+  assertManifestRecord(value, path);
+  const statement = value as Record<string, unknown>;
+  const result: AliceStatement = {
+    kind: readManifestString(statement.kind, `${path}.kind`),
+  };
+  copyOptionalString(statement, result, "object", path);
+  copyOptionalString(statement, result, "method", path);
+  copyOptionalString(statement, result, "collection", path);
+  copyOptionalString(statement, result, "condition", path);
+  copyOptionalString(statement, result, "event", path);
+  copyOptionalString(statement, result, "expression", path);
+  copyOptionalString(statement, result, "name", path);
+  copyOptionalString(statement, result, "varType", path);
+  copyOptionalString(statement, result, "value", path);
+  copyOptionalString(statement, result, "countExpression", path);
+  if (statement.arguments !== undefined) {
+    result.arguments = readManifestStringArray(statement.arguments, `${path}.arguments`);
+  }
+  if (statement.count !== undefined) {
+    result.count = readManifestNumber(statement.count, `${path}.count`);
+  }
+  if (statement.body !== undefined) {
+    result.body = readManifestStatements(statement.body, `${path}.body`);
+  }
+  if (statement.ifBody !== undefined) {
+    result.ifBody = readManifestStatements(statement.ifBody, `${path}.ifBody`);
+  }
+  if (statement.elseBody !== undefined) {
+    result.elseBody = readManifestStatements(statement.elseBody, `${path}.elseBody`);
+  }
+  return result;
+}
+
+function assertManifestRecord(value: unknown, path: string): asserts value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ProjectIoError("invalid-manifest", `${path} must be an object.`);
+  }
+}
+
+function readManifestString(value: unknown, path: string): string {
+  if (typeof value !== "string") {
+    throw new ProjectIoError("invalid-manifest", `${path} must be a string.`);
+  }
+  return value;
+}
+
+function readManifestBoolean(value: unknown, path: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new ProjectIoError("invalid-manifest", `${path} must be a boolean.`);
+  }
+  return value;
+}
+
+function readManifestNumber(value: unknown, path: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new ProjectIoError("invalid-manifest", `${path} must be a finite number.`);
+  }
+  return value;
+}
+
+function readManifestStringArray(value: unknown, path: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new ProjectIoError("invalid-manifest", `${path} must be an array.`);
+  }
+  return value.map((entry, index) => readManifestString(entry, `${path}[${index}]`));
+}
+
+function copyOptionalString(
+  source: Record<string, unknown>,
+  target: AliceStatement,
+  key: keyof AliceStatement,
+  path: string,
+): void {
+  if (source[key] !== undefined) {
+    target[key] = readManifestString(source[key], `${path}.${String(key)}`) as never;
   }
 }
 
