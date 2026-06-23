@@ -1,5 +1,6 @@
 import type JSZip from "jszip";
 import type { CameraWorkflowState } from "../camera-workflow";
+import type { JointStateSnapshot } from "../joint-system";
 import type { BoundingBox, JointNode } from "../story-api/types";
 
 export interface AliceObject {
@@ -99,6 +100,7 @@ export interface AliceProject {
   importedAssets?: ImportedProjectAsset[];
   textureAssignments?: TextureAssignment[];
   cameraWorkflow?: CameraWorkflowState;
+  jointState?: JointStateSnapshot;
 }
 
 export interface A3PSourceMetadata {
