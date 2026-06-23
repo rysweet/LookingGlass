@@ -242,11 +242,11 @@ interface AliceEvidenceRuntimeReview {
 ```
 
 These fields are deterministic and browser-safe. Runtime review sections are
-optional and bounded: parsed artifacts reject undocumented runtime review fields,
-and known arrays are capped by implementation constants. Runtime review strings
-are contract fields supplied by the caller; callers must not put camera frames,
-audio, raw user transcript text, tokens, local paths, permission internals,
-cookies, or backend data in those fields.
+optional and bounded: parse helpers sanitize undocumented runtime review fields,
+raw validation rejects them, and known arrays are capped by implementation
+constants. Runtime review strings are contract fields supplied by the caller;
+callers must not put camera frames, audio, raw user transcript text, tokens,
+local paths, permission internals, cookies, or backend data in those fields.
 
 ## Validation rules
 
