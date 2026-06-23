@@ -258,6 +258,27 @@ describe("joint manipulation server contract", () => {
     });
   });
 
+  it("clears stale joint state when launching a replacement project", async () => {
+    const evidenceDir = makeTempDir("alice-joints-reset-");
+    const app = createTestServer(evidenceDir);
+    await localPost(app, "/api/launch").send({}).expect(200);
+    await localPost(app, "/api/scene/add-jointed-object")
+      .send({
+        name: "robotArm",
+        className: "org.lgna.story.SProp",
+        joints: robotArmHierarchy(),
+      })
+      .expect(200);
+
+    await localPost(app, "/api/launch").send({}).expect(200);
+    await localPost(app, "/api/project/save")
+      .send({ saveSelector: "scene.myFirstMethod" })
+      .expect(200);
+
+    const savedSidecarPath = path.join(evidenceDir, "project-save", "alice-web", "joint-state.json");
+    expect(fs.existsSync(savedSidecarPath)).toBe(false);
+  });
+
   it("rejects unknown mutating joints without changing persisted sidecar state", async () => {
     const evidenceDir = makeTempDir("alice-joints-server-");
     const app = createTestServer(evidenceDir);

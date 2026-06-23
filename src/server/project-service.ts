@@ -37,6 +37,7 @@ import { executeProject, type LogEntry } from "../tweedle-vm.js";
 import { jointStateSidecarPath, writeJointStateSidecar } from "./joint-state-sidecar.js";
 import {
   buildCurrentProject,
+  resetJointState,
   seedDefaultSceneObjects,
   syncServerMethodDefinitionsFromProject,
   syncServerSceneObjectsFromProject,
@@ -349,6 +350,7 @@ export const projectService: ProjectService = {
     if (!resolvedProjectFile) {
       state.cameraWorkflow = createDefaultCameraWorkflowState();
     }
+    resetJointState(state);
 
     seedDefaultSceneObjects(state);
     state.eventSystem.reset();

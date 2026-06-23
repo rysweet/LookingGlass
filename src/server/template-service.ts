@@ -7,7 +7,7 @@ import {
   createEmptyProjectAudioState,
 } from "../project-audio.js";
 import type { TemplateDescriptor } from "../project-templates.js";
-import { DEFAULT_POSITION, syncServerMethodDefinitionsFromProject, type ServerState } from "./state.js";
+import { DEFAULT_POSITION, resetJointState, syncServerMethodDefinitionsFromProject, type ServerState } from "./state.js";
 import { sanitizeFilename } from "./validation.js";
 
 export interface TemplateService {
@@ -54,6 +54,7 @@ export const templateService: TemplateService = {
     state.projectName = project.projectName;
     state.projectPath = newProjectPath;
     state.cameraWorkflow = createDefaultCameraWorkflowState();
+    resetJointState(state);
     state.sceneObjects.clear();
     for (const obj of project.sceneObjects) {
       state.sceneObjects.set(obj.name, {
