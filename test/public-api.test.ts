@@ -76,6 +76,7 @@ describe("Alice evidence artifact public API", () => {
       "createAliceEvidenceArtifact",
       "parseAliceEvidenceArtifact",
       "prepareAliceEvidenceShare",
+      "sanitizeAliceEvidenceArtifactForImport",
       "serializeAliceEvidenceArtifact",
       "summarizeAliceEvidenceArtifact",
       "validateAliceEvidenceArtifact",

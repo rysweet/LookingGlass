@@ -2,10 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 
 export const MAX_ROUTE_BODY_STRING_LENGTH = 1024;
+const MAX_SAFE_FILENAME_LENGTH = 120;
 
 /** Strip path separators and traversal sequences from a user-supplied name. */
 export function sanitizeFilename(name: string): string {
-  return name.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
+  return name.replace(/[/\\]/g, "_").replace(/\.\./g, "_").slice(0, MAX_SAFE_FILENAME_LENGTH);
 }
 
 export type JsonObjectBodyResult =

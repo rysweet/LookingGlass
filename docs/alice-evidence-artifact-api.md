@@ -34,6 +34,10 @@ const summary = AliceEvidenceArtifact.summarizeAliceEvidenceArtifact(parsed);
 
 `validateAliceEvidenceArtifact` returns `{ valid: boolean; errors: string[] }`.
 Callers check `valid` before exporting or trusting metadata.
+`parseAliceEvidenceArtifact` is strict: it parses raw JSON, validates the raw
+artifact, throws on invalid unsupported VR/live-studio claims, then returns the
+canonicalized artifact. Cleanup flows that intentionally repair legacy imported
+objects must call `sanitizeAliceEvidenceArtifactForImport(value)` explicitly.
 
 ## JSON shape
 
@@ -259,7 +263,7 @@ internals, cookies, or backend data in those fields.
 | Run | ID is non-empty; capture time parses as a timestamp |
 | Visible behavior | Status, viewport, camera, and at least one object are required |
 | Objects | Name, type name, visibility, and finite position values are required |
-| Runtime review | Optional `runtimeReview` sections are sanitized to documented fields when present |
+| Runtime review | Optional `runtimeReview` sections must already satisfy the documented contract when parsed; explicit import sanitization is a separate helper |
 | Camera/VR comfort | `runtimeReview.cameraVrComfort` records browser camera evidence; `trueHeadsetVrSupported` and `nativeVrSupported` are always `false` |
 | Accessibility/captions | `runtimeReview.accessibilityRescueCaptions` records aria-live, camera, and scene-object captions plus keyboard/high-contrast review booleans |
 | Gallery/review | `runtimeReview.galleryWalkRubric` records gallery item count, rubric support, and `liveStudioSupported: false` |

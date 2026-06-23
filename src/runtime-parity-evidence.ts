@@ -5,6 +5,7 @@ import type { WebXRCapabilityReport, WebXREvidenceCode } from "./webxr-capabilit
 export const CAMERA_VR_COMFORT_SCHEMA_VERSION = "alice.camera-vr-comfort-evidence/v1" as const;
 export const ACCESSIBILITY_RESCUE_CAPTIONS_SCHEMA_VERSION = "alice.accessibility-rescue-camera-captions/v1" as const;
 export const GALLERY_WALK_RUBRIC_SCHEMA_VERSION = "alice.gallery-walk-rubric-evidence/v1" as const;
+const MAX_RUNTIME_REVIEW_STRING_LENGTH = 500;
 
 export type RuntimeParityStatus = "partial";
 export type RuntimeParityMeasuredBoolean = boolean | "unknown";
@@ -107,13 +108,13 @@ export function createAccessibilityRescueCaptionEvidence(input: {
   readonly highContrastReviewAvailable?: boolean;
 }): AccessibilityRescueCaptionEvidence {
   const objectNames = (input.project?.sceneObjects ?? [])
-    .map((object) => object.name.trim())
+    .map((object) => boundedRuntimeReviewString(object.name))
     .filter(Boolean);
-  const objectCaption = objectNames.length > 0
+  const objectCaption = boundedRuntimeReviewString(objectNames.length > 0
     ? `Scene contains ${objectNames.slice(0, 4).join(", ")}${objectNames.length > 4 ? ", and more" : ""}.`
-    : "Scene has no authored objects yet.";
-  const cameraCaption = `Camera ${input.camera.mode} view at ${formatNumber(input.camera.position.x)}, ${formatNumber(input.camera.position.y)}, ${formatNumber(input.camera.position.z)}.`;
-  const ariaLiveCaption = input.statusText?.trim() || "Alice web scene is ready for accessible review.";
+    : "Scene has no authored objects yet.");
+  const cameraCaption = boundedRuntimeReviewString(`Camera ${input.camera.mode} view at ${formatNumber(input.camera.position.x)}, ${formatNumber(input.camera.position.y)}, ${formatNumber(input.camera.position.z)}.`);
+  const ariaLiveCaption = nonEmptyRuntimeReviewString(input.statusText, "Alice web scene is ready for accessible review.");
 
   return {
     schema_version: ACCESSIBILITY_RESCUE_CAPTIONS_SCHEMA_VERSION,
@@ -134,18 +135,21 @@ export function createAccessibilityRescueCaptionEvidence(input: {
 export function createGalleryWalkRubricEvidence(input: {
   readonly project?: AliceProject | null;
 }): GalleryWalkRubricEvidence {
-  const projectName = input.project?.projectName?.trim() || "Alice web project";
+  const projectName = nonEmptyRuntimeReviewString(input.project?.projectName, "Alice web project");
   const objects = input.project?.sceneObjects ?? [];
   const galleryItems = objects.length > 0
-    ? objects.slice(0, 12).map((object, index) => ({
-        id: `scene-object-${index + 1}`,
-        title: object.name,
-        reviewPrompt: `Review how ${object.name} supports the story, game goal, or scene composition.`,
-      }))
+    ? objects.slice(0, 12).map((object, index) => {
+        const title = nonEmptyRuntimeReviewString(object.name, `Scene object ${index + 1}`);
+        return {
+          id: `scene-object-${index + 1}`,
+          title,
+          reviewPrompt: boundedRuntimeReviewString(`Review how ${title} supports the story, game goal, or scene composition.`),
+        };
+      })
     : [{
         id: "starter-project",
         title: projectName,
-        reviewPrompt: "Review the starter scene and add at least one visible object before final scoring.",
+        reviewPrompt: boundedRuntimeReviewString("Review the starter scene and add at least one visible object before final scoring."),
       }];
 
   return {
@@ -213,4 +217,13 @@ export function createRuntimeParityEvidence(input: {
 
 function formatNumber(value: number): string {
   return Number.isFinite(value) ? value.toFixed(2) : "0.00";
+}
+
+function nonEmptyRuntimeReviewString(value: unknown, fallback: string): string {
+  return boundedRuntimeReviewString(value) || boundedRuntimeReviewString(fallback);
+}
+
+function boundedRuntimeReviewString(value: unknown): string {
+  const text = typeof value === "string" ? value.trim() : String(value ?? "").trim();
+  return text.slice(0, MAX_RUNTIME_REVIEW_STRING_LENGTH);
 }

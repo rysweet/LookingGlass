@@ -10,6 +10,7 @@ import type { Express } from "express";
 import request from "supertest";
 import { LOCAL_API_TOKEN_HEADER } from "../src/server/security";
 import { REPOSITORY_A3P_FIXTURE } from "./fixtures/a3p-fixtures";
+import { validateAliceEvidenceArtifact, type AliceEvidenceRuntimeReview } from "../src/alice-evidence-artifact";
 
 const TEST_LOCAL_API_TOKEN = "test-local-api-token";
 const EXCESSIVE_ROUTE_STRING = "x".repeat(1025);
@@ -31,6 +32,45 @@ function localGet(app: Express, apiPath: string) {
   return request(app)
     .get(apiPath)
     .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN);
+}
+
+function expectRuntimeReviewContract(runtimeReview: AliceEvidenceRuntimeReview): void {
+  const validation = validateAliceEvidenceArtifact({
+    format: "alice-visible-behavior-evidence",
+    version: 1,
+    application: { name: "Alice", runtime: "alice-web" },
+    world: { name: "Runtime parity test", aliceVersion: "3.10", objectCount: 1 },
+    run: { id: "run-2026-06-23T09-21-35-874Z", capturedAt: "2026-06-23T09:21:35.874Z" },
+    visibleBehavior: {
+      statusText: "Runtime parity test",
+      viewport: {
+        width: 800,
+        height: 600,
+        canvasSnapshot: { available: false },
+      },
+      camera: {
+        mode: "orbit",
+        position: { x: 0, y: 1, z: 6 },
+        target: { x: 0, y: 1, z: 0 },
+      },
+      objects: [
+        {
+          name: "test-object",
+          typeName: "org.lgna.story.SProp",
+          visible: true,
+          position: { x: 0, y: 0, z: 0 },
+        },
+      ],
+    },
+    runtimeReview,
+    export: {
+      method: "download",
+      requestedAt: "2026-06-23T09:21:35.874Z",
+      filename: "runtime-parity-test.json",
+      mimeType: "application/json",
+    },
+  });
+  expect(validation).toEqual({ valid: true, errors: [] });
 }
 
 function decodeBase64Package(base64: string): Buffer {
@@ -284,6 +324,28 @@ describe("server API", () => {
       expect(res.body.rubricRecordingSupported).toBe(false);
       expect(res.body.liveStudioSupported).toBe(false);
       expect(res.body.galleryItems.map((item: { title: string }) => item.title)).toContain("checkpoint");
+    });
+
+    it("bounds 1024-character project and object strings before returning runtime review sections", async () => {
+      const longValue = "x".repeat(1024);
+      await localPost(app, "/api/project/new")
+        .send({ templateId: "blank", projectName: longValue })
+        .expect(200);
+      await localPost(app, "/api/scene/add-object")
+        .send({ className: "org.lgna.story.SProp", name: longValue })
+        .expect(200);
+
+      const captions = await localGet(app, "/api/accessibility/rescue-camera-captions").expect(200);
+      const gallery = await localGet(app, "/api/review/gallery-walk-rubric").expect(200);
+
+      expect(captions.body.objectCaption.length).toBeLessThanOrEqual(500);
+      expect(captions.body.captionChecks.every((check: { text: string }) => check.text.length <= 500)).toBe(true);
+      expect(gallery.body.projectName).toHaveLength(500);
+      expect(gallery.body.galleryItems.every((item: { title: string; reviewPrompt: string }) =>
+        item.title.length <= 500 && item.reviewPrompt.length <= 500,
+      )).toBe(true);
+      expectRuntimeReviewContract({ accessibilityRescueCaptions: captions.body });
+      expectRuntimeReviewContract({ galleryWalkRubric: gallery.body });
     });
 
     it("bundles the runtime parity evidence sections", async () => {

@@ -326,6 +326,14 @@ export function serializeAliceEvidenceArtifact(artifact: AliceEvidenceArtifact):
   return `${JSON.stringify(sanitized, null, 2)}\n`;
 }
 
+export function sanitizeAliceEvidenceArtifactForImport(value: unknown): AliceEvidenceArtifact {
+  const sanitized = recordValue(value)
+    ? sanitizeArtifactRuntimeReview(value as AliceEvidenceArtifact)
+    : value;
+  assertValidAliceEvidenceArtifact(sanitized);
+  return sanitized as AliceEvidenceArtifact;
+}
+
 export function parseAliceEvidenceArtifact(json: string): AliceEvidenceArtifact {
   let parsed: unknown;
   try {
@@ -337,11 +345,8 @@ export function parseAliceEvidenceArtifact(json: string): AliceEvidenceArtifact 
     );
   }
 
-  const sanitized = recordValue(parsed)
-    ? sanitizeArtifactRuntimeReview(parsed as AliceEvidenceArtifact)
-    : parsed;
-  assertValidAliceEvidenceArtifact(sanitized);
-  return sanitized as AliceEvidenceArtifact;
+  assertValidAliceEvidenceArtifact(parsed);
+  return sanitizeArtifactRuntimeReview(parsed as AliceEvidenceArtifact);
 }
 
 export function summarizeAliceEvidenceArtifact(artifact: AliceEvidenceArtifact): AliceEvidenceSummary {

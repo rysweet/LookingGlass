@@ -73,7 +73,8 @@ serialized artifact before `export.share` is attached.
 | `createAliceEvidenceArtifact(input)` | Normalizes input, sets Alice identity, bounds visible objects, and returns an artifact |
 | `validateAliceEvidenceArtifact(value)` | Returns `{ valid, errors }` without throwing |
 | `serializeAliceEvidenceArtifact(artifact)` | Validates and emits deterministic pretty JSON with a trailing newline |
-| `parseAliceEvidenceArtifact(json)` | Parses JSON and throws `AliceEvidenceArtifactError` if invalid |
+| `parseAliceEvidenceArtifact(json)` | Strictly parses raw JSON, validates the raw artifact before canonicalizing, and throws `AliceEvidenceArtifactError` if invalid |
+| `sanitizeAliceEvidenceArtifactForImport(value)` | Explicitly sanitizes a legacy/imported artifact object before validation; use only for cleanup flows, not trust decisions |
 | `summarizeAliceEvidenceArtifact(artifact)` | Returns safe plain-text summary fields for UI or logs |
 | `prepareAliceEvidenceShare(artifact, input?)` | Replaces stale share metadata, hashes the pre-share artifact, and validates the result |
 

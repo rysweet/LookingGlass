@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
+  AliceEvidenceArtifactError,
   createAliceEvidenceArtifact,
   parseAliceEvidenceArtifact,
   prepareAliceEvidenceShare,
+  sanitizeAliceEvidenceArtifactForImport,
   serializeAliceEvidenceArtifact,
   summarizeAliceEvidenceArtifact,
   type AliceEvidenceArtifact,
@@ -253,6 +255,51 @@ describe("Alice evidence artifact", () => {
     ]));
   });
 
+  it("strictly rejects parsed artifacts that tamper unsupported VR or live studio claims", () => {
+    const artifact = createAliceEvidenceArtifact({
+      ...baseArtifactInput(),
+      runtimeReview: {
+        cameraVrComfort: {
+          schema_version: "alice.camera-vr-comfort-evidence/v1",
+          status: "partial",
+          trueHeadsetVrSupported: false,
+          nativeVrSupported: false,
+        },
+        galleryWalkRubric: {
+          schema_version: "alice.gallery-walk-rubric-evidence/v1",
+          status: "partial",
+          liveStudioSupported: false,
+        },
+      },
+    });
+    const tampered = {
+      ...artifact,
+      runtimeReview: {
+        ...artifact.runtimeReview,
+        cameraVrComfort: {
+          ...(artifact.runtimeReview?.cameraVrComfort as unknown as Record<string, unknown>),
+          trueHeadsetVrSupported: true,
+          nativeVrSupported: true,
+        },
+        galleryWalkRubric: {
+          ...(artifact.runtimeReview?.galleryWalkRubric as unknown as Record<string, unknown>),
+          liveStudioSupported: true,
+        },
+      },
+    };
+
+    expect(() => parseAliceEvidenceArtifact(JSON.stringify(tampered))).toThrow(AliceEvidenceArtifactError);
+    try {
+      parseAliceEvidenceArtifact(JSON.stringify(tampered));
+    } catch (error) {
+      expect((error as AliceEvidenceArtifactError).errors).toEqual(expect.arrayContaining([
+        "runtimeReview.cameraVrComfort.trueHeadsetVrSupported must be false.",
+        "runtimeReview.cameraVrComfort.nativeVrSupported must be false.",
+        "runtimeReview.galleryWalkRubric.liveStudioSupported must be false.",
+      ]));
+    }
+  });
+
   it("sanitizes caller-supplied runtime review evidence to preserve unsupported parity boundaries", () => {
     const untrustedRuntimeReview = {
       cameraVrComfort: {
@@ -386,7 +433,7 @@ describe("Alice evidence artifact", () => {
     expect(artifact.runtimeReview?.galleryWalkRubric?.rubricRecordingSupported).toBe(false);
   });
 
-  it("sanitizes malformed parsed and serialized runtime review evidence", () => {
+  it("strict parse rejects malformed runtime review evidence while explicit import sanitization repairs it", () => {
     const many = Array.from({ length: 75 }, (_, index) => index);
     const artifact = createAliceEvidenceArtifact(baseArtifactInput());
     const oversized = {
@@ -458,7 +505,8 @@ describe("Alice evidence artifact", () => {
       "runtimeReview.galleryWalkRubric.rubric[0].maxScore must be a non-negative integer.",
       "runtimeReview.galleryWalkRubric.galleryItems must include 50 items or fewer.",
     ]));
-    const parsed = parseAliceEvidenceArtifact(JSON.stringify(oversized));
+    expect(() => parseAliceEvidenceArtifact(JSON.stringify(oversized))).toThrow(AliceEvidenceArtifactError);
+    const parsed = sanitizeAliceEvidenceArtifactForImport(oversized);
     const serialized = serializeAliceEvidenceArtifact(oversized as unknown as AliceEvidenceArtifact);
     expect(parsed.runtimeReview?.cameraVrComfort?.evidenceCodes).toEqual([]);
     expect(parsed.runtimeReview?.accessibilityRescueCaptions?.captionChecks).toEqual([]);
@@ -474,7 +522,7 @@ describe("Alice evidence artifact", () => {
     expect(validateAliceEvidenceArtifact(parsed)).toEqual({ valid: true, errors: [] });
   });
 
-  it("rejects prior malformed runtime review edge cases before sanitizing parse output", () => {
+  it("keeps strict parse separate from explicit malformed runtime review import sanitization", () => {
     const artifact = createAliceEvidenceArtifact(baseArtifactInput());
     const malformed = {
       ...artifact,
@@ -512,7 +560,8 @@ describe("Alice evidence artifact", () => {
       "runtimeReview.galleryWalkRubric.galleryItems[0] must be an object.",
     ]));
 
-    const parsed = parseAliceEvidenceArtifact(JSON.stringify(malformed));
+    expect(() => parseAliceEvidenceArtifact(JSON.stringify(malformed))).toThrow(AliceEvidenceArtifactError);
+    const parsed = sanitizeAliceEvidenceArtifactForImport(malformed);
     expect(parsed.runtimeReview?.cameraVrComfort).toEqual({
       schema_version: "alice.camera-vr-comfort-evidence/v1",
       status: "partial",
