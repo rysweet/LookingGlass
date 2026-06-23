@@ -149,7 +149,7 @@ Query parameters:
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `scenario` | `string` | no | One of `setup-preflight-ready-to-create`, `setup-support-lab-readiness`, `instructor-classroom-setup-readiness`, `instructor-student-launch-evidence-handoff`, or `setup-readiness` |
+| `scenario` | `string` | no | One of `setup-preflight-ready-to-create`, `setup-support-lab-readiness`, `instructor-classroom-setup-readiness`, `instructor-student-launch-evidence-handoff`, or `setup-readiness`. Omitted values default to `setup-readiness`. |
 
 Abbreviated example response. The `checks`, `unsupportedCapabilities`, and
 `classroomReadiness.studentFallbackRoles` arrays may contain additional stable
