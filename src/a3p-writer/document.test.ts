@@ -95,4 +95,36 @@ describe("a3p-writer/document class behavior XML", () => {
     expect(sceneSection).not.toContain("hop");
     expect(xml).toContain("custom type method survives");
   });
+
+  it("does not use imported class metadata for same-name empty Scene methods", async () => {
+    await ensureXmlTools();
+
+    const project = createProject();
+    const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
+    const sceneMethod = {
+      name: "collide",
+      isFunction: false,
+      returnType: "void",
+      parameters: [],
+      statements: [],
+    };
+    sceneType!.methods = [sceneMethod];
+    project.methods = [
+      sceneMethod,
+      {
+        name: "collide",
+        isFunction: true,
+        returnType: "DecimalNumber",
+        parameters: [{ name: "amount", type: "DecimalNumber" }],
+        statements: [],
+      },
+    ];
+
+    const xml = buildProjectXml(project, MINIMAL_PROJECT_XML_TEMPLATE);
+    const sceneSection = xml.slice(xml.indexOf("Scene"), xml.indexOf("SanitizedBunny"));
+
+    expect(sceneSection).toContain("collide");
+    expect(sceneSection).not.toContain("DecimalNumber");
+    expect(sceneSection).not.toContain("amount");
+  });
 });

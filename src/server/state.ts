@@ -1,7 +1,14 @@
 import { EventSystem } from "../events.js";
 import { JointStateStore } from "../joint-system.js";
 import { TemplateLibrary } from "../project-templates.js";
-import { getA3PMethodSource, type AliceMethod, type AliceProject, type AliceStatement, type AliceTypeDefinition } from "../a3p-parser.js";
+import {
+  getA3PMethodSource,
+  snapshotAliceStatements,
+  type AliceMethod,
+  type AliceProject,
+  type AliceStatement,
+  type AliceTypeDefinition,
+} from "../a3p-parser.js";
 import {
   createDefaultCameraWorkflowState,
   type CameraWorkflowState,
@@ -289,6 +296,13 @@ function getServerOwnedProjectMethods(project: AliceProject): AliceMethod[] {
 
 function rootLegacySceneMethods(project: AliceProject, sceneType: AliceTypeDefinition | undefined): AliceMethod[] {
   if (!sceneType) return project.methods;
+  const sceneMethodKeys = new Set((sceneType.methods ?? []).map(methodOwnerKey));
+  const sceneMethodNames = new Set((sceneType.methods ?? []).map((method) => method.name));
+  const ownedTypeMethodKeys = new Set(
+    (project.types ?? [])
+      .flatMap((type) => type.methods ?? [])
+      .map(methodOwnerKey),
+  );
   const sceneMethods = new Set(sceneType.methods ?? []);
   const nonSceneMethods = new Set((project.types ?? [])
     .filter((type) => type !== sceneType)
@@ -298,7 +312,13 @@ function rootLegacySceneMethods(project: AliceProject, sceneType: AliceTypeDefin
     if (ownerTypeName !== undefined) {
       return ownerTypeName === sceneType.name;
     }
-    return sceneMethods.has(method) || !nonSceneMethods.has(method);
+    if (sceneMethods.has(method)) {
+      return true;
+    }
+    const key = methodOwnerKey(method);
+    return sceneMethodNames.has(method.name)
+      ? sceneMethodKeys.has(key)
+      : !ownedTypeMethodKeys.has(key) && !nonSceneMethods.has(method);
   });
 }
 
@@ -312,6 +332,20 @@ function mergeMethodsByName(primary: AliceMethod[], secondary: AliceMethod[]): A
     }
   }
   return merged;
+}
+
+function methodOwnerKey(method: AliceMethod): string {
+  return [
+    method.name,
+    method.isFunction ? "function" : "procedure",
+    method.returnType,
+    snapshotMethodParameters(method.parameters),
+    snapshotAliceStatements(method.statements),
+  ].join("\u0000");
+}
+
+function snapshotMethodParameters(parameters: MethodParam[] | undefined): string {
+  return JSON.stringify(parameters ?? []);
 }
 
 export function parseMethodParams(

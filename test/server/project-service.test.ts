@@ -234,6 +234,66 @@ describe("ProjectService.exportTypeScript", () => {
     });
   });
 
+  it("keeps same-name empty class method metadata out of Scene methods", () => {
+    const state = createInitialServerState();
+    state.parsedProject = {
+      version: "3.10",
+      projectName: "Same Name Ownership",
+      sceneObjects: [],
+      methods: [
+        {
+          name: "collide",
+          isFunction: false,
+          returnType: "void",
+          parameters: [],
+          statements: [],
+        },
+        {
+          name: "collide",
+          isFunction: true,
+          returnType: "DecimalNumber",
+          parameters: [{ name: "amount", type: "DecimalNumber" }],
+          statements: [],
+        },
+      ],
+      types: [
+        {
+          name: "Scene",
+          superTypeName: "org.lgna.story.SScene",
+          methods: [{
+            name: "collide",
+            isFunction: false,
+            returnType: "void",
+            parameters: [],
+            statements: [],
+          }],
+        },
+        {
+          name: "ReusableDoor",
+          superTypeName: "org.lgna.story.SModel",
+          methods: [{
+            name: "collide",
+            isFunction: true,
+            returnType: "DecimalNumber",
+            parameters: [{ name: "amount", type: "DecimalNumber" }],
+            statements: [],
+          }],
+        },
+      ],
+    };
+
+    const project = buildCurrentProject(state);
+    const sceneMethod = project.types
+      ?.find((type) => type.name === "Scene")
+      ?.methods?.find((method) => method.name === "collide");
+
+    expect(sceneMethod).toMatchObject({
+      isFunction: false,
+      returnType: "void",
+      parameters: [],
+    });
+  });
+
   it("preserves newly registered function metadata for default in-memory projects", () => {
     const state = createInitialServerState();
 

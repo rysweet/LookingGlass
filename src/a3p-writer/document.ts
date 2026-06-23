@@ -103,8 +103,15 @@ function buildDesiredSceneFields(project: AliceProject, sceneType: AliceTypeDefi
 
 function buildDesiredSceneMethods(project: AliceProject, sceneType: AliceTypeDefinition | null): AliceMethod[] {
   const methods = [...(sceneType?.methods ?? [])];
+  const sceneMethodKeys = new Set((sceneType?.methods ?? []).map(methodOwnerKey));
+  const sceneMethodNames = new Set((sceneType?.methods ?? []).map((method) => method.name));
+  const ownedTypeMethodKeys = sceneType
+    ? new Set((project.types ?? [])
+      .flatMap((type) => type.methods ?? [])
+      .map(methodOwnerKey))
+    : new Set<string>();
   const sceneMethods = new Set(sceneType?.methods ?? []);
-  const nonSceneMethods = new Set(sceneType
+  const nonSceneMethodRefs = new Set(sceneType
     ? (project.types ?? [])
       .filter((type) => type !== sceneType)
       .flatMap((type) => type.methods ?? [])
@@ -116,7 +123,13 @@ function buildDesiredSceneMethods(project: AliceProject, sceneType: AliceTypeDef
     if (ownerTypeName !== undefined) {
       return ownerTypeName === sceneTypeName;
     }
-    return sceneMethods.has(candidate) || !nonSceneMethods.has(candidate);
+    if (sceneMethods.has(candidate)) {
+      return true;
+    }
+    const key = methodOwnerKey(candidate);
+    return sceneMethodNames.has(candidate.name)
+      ? sceneMethodKeys.has(key)
+      : !ownedTypeMethodKeys.has(key) && !nonSceneMethodRefs.has(candidate);
   })) {
     if (!seen.has(method.name)) {
       methods.push(method);
@@ -124,6 +137,20 @@ function buildDesiredSceneMethods(project: AliceProject, sceneType: AliceTypeDef
     }
   }
   return methods;
+}
+
+function methodOwnerKey(method: AliceMethod): string {
+  return [
+    method.name,
+    method.isFunction ? "function" : "procedure",
+    method.returnType,
+    snapshotMethodParameters(method.parameters),
+    snapshotAliceStatements(method.statements),
+  ].join("\u0000");
+}
+
+function snapshotMethodParameters(parameters: AliceMethod["parameters"] | undefined): string {
+  return JSON.stringify(parameters ?? []);
 }
 
 function fieldFromSceneObject(object: AliceObject): AliceFieldDefinition {
