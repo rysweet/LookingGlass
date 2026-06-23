@@ -251,8 +251,8 @@ describe("ProjectService.exportTypeScript", () => {
         returnType: "void",
         parameters: [],
         statements: [
-          { kind: "Comment", text: "existing one" },
-          { kind: "Comment", text: "existing two" },
+          { kind: "Comment", expression: "existing one" },
+          { kind: "Comment", expression: "existing two" },
         ],
       });
 
