@@ -360,3 +360,48 @@ describe("Alice HowTo parity audit baseline-only check computation", () => {
     expect(detailText).not.toContain("RabbitHole");
   });
 });
+
+describe("scheduled Alice HowTo parity validation workflow", () => {
+  const workflowPath = resolve(repoRoot, ".github/workflows/howto-parity-validation.yml");
+
+  it("runs the audit on a schedule against the approved RabbitHole baseline and uploads artifacts", () => {
+    const workflow = readFileSync(workflowPath, "utf8");
+
+    expect(workflow).toContain("name: Alice HowTo Parity Validation");
+    expect(workflow).toContain("cron: '17 6 * * *'");
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("permissions:\n  contents: read\n  issues: write");
+    expect(workflow).toContain("actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5");
+    expect(workflow).toContain("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020");
+    expect(workflow).toContain("npm ci");
+    expect(workflow).toContain("npm run build:server");
+    expect(workflow).toContain("git clone --depth=1 --branch develop https://github.com/rysweet/RabbitHole.git");
+    expect(workflow).toContain('BASELINE_SHA="$(git -C "$BASELINE_DIR" rev-parse HEAD)"');
+    expect(workflow).toContain('CANDIDATE_SHA="$(git rev-parse HEAD)"');
+    expect(workflow).toContain('CANDIDATE_REF="${GITHUB_REF:-}"');
+    expect(workflow).toContain('test -f "$BASELINE_DIR/pom.xml"');
+    expect(workflow).toContain('test -d "$BASELINE_DIR/core/ide"');
+    expect(workflow).toContain("node dist-server/cli.js alice-howto-parity-audit --output \"$AUDIT_JSON\" --pretty");
+    expect(workflow).toContain('AUDIT_STATUS="$?"');
+    expect(workflow).toContain("auditExitCode");
+    expect(workflow).toContain('if [ "$AUDIT_STATUS" -ne 0 ]; then');
+    expect(workflow).toContain("alice-web.scheduled-howto-parity-validation/v1");
+    expect(workflow).toContain("RabbitHole develop checkout");
+    expect(workflow).toContain("LookingGlass workflow checkout");
+    expect(workflow).toContain("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+    expect(workflow).toContain("alice-howto-parity-validation");
+    expect(workflow).toContain("File scheduled parity regression");
+    expect(workflow).toContain("github.event_name == 'schedule'");
+    expect(workflow).toContain("failed before audit metadata was written");
+    expect(workflow).toContain("gh issue create");
+  });
+
+  it("keeps scheduled validation evidence out of the committed docs tree", () => {
+    const workflow = readFileSync(workflowPath, "utf8");
+
+    expect(workflow).toContain('AUDIT_DIR="$RUNNER_TEMP/alice-howto-parity"');
+    expect(workflow).not.toContain("docs/");
+    expect(workflow).not.toContain("git add");
+    expect(workflow).not.toContain("git commit");
+  });
+});
