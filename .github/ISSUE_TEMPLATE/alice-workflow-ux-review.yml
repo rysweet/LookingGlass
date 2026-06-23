@@ -1,0 +1,63 @@
+name: Alice workflow UX review
+description: Record a human review checkpoint for Alice workflows that automated tests cannot fully judge.
+title: "[Alice UX review]: "
+labels:
+  - alice-ux-review
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for human workflow review notes. Store review outcomes in this issue or a PR comment; do not commit generated review reports to the repository.
+  - type: dropdown
+    id: checkpoint
+    attributes:
+      label: Review checkpoint
+      description: Select the workflow area under review.
+      options:
+        - scene-editor
+        - code-editor
+        - camera
+        - joints
+        - player-export
+    validations:
+      required: true
+  - type: input
+    id: scenario
+    attributes:
+      label: Scenario or PR
+      description: Link the PR, issue, HowTo id, or scenario id that triggered this review.
+      placeholder: "PR #123, issue #456, or alice-howto:<id>"
+    validations:
+      required: true
+  - type: textarea
+    id: review-steps
+    attributes:
+      label: Human review steps
+      description: Describe the exact user actions performed during review.
+      placeholder: "Opened project, added an object, adjusted camera marker, exported player package..."
+    validations:
+      required: true
+  - type: textarea
+    id: observations
+    attributes:
+      label: Observations
+      description: Record what a person noticed that automated tests do not prove.
+    validations:
+      required: true
+  - type: dropdown
+    id: verdict
+    attributes:
+      label: Verdict
+      options:
+        - pass
+        - needs-follow-up
+        - blocked
+    validations:
+      required: true
+  - type: textarea
+    id: follow-up
+    attributes:
+      label: Follow-up
+      description: Link follow-up issues or explain why none are needed.
+    validations:
+      required: true
