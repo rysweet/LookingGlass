@@ -23,7 +23,11 @@ same value as `X-Alice-Local-Api-Token`.
 
 Read-only `GET /api/audio/formats` does not require launch or the local API
 token. `GET /api/audio/state` uses the same local API token as the camera state
-routes when the server is started with `--api-token`.
+routes when the server is started with `--api-token`. Runtime parity read routes
+(`/api/vr/camera-comfort`, `/api/accessibility/rescue-camera-captions`,
+`/api/review/gallery-walk-rubric`, and `/api/review/runtime-parity`) always
+require `X-Alice-Local-Api-Token` and fail closed with `401` if no token is
+configured.
 
 ## Endpoint summary
 

@@ -225,7 +225,14 @@ describe("server API", () => {
         port: 0,
         evidenceDir: path.join(evidenceDir, "no-runtime-token"),
       });
-      await request(unconfiguredApp).get("/api/vr/camera-comfort").expect(401);
+      for (const endpoint of [
+        "/api/vr/camera-comfort",
+        "/api/accessibility/rescue-camera-captions",
+        "/api/review/gallery-walk-rubric",
+        "/api/review/runtime-parity",
+      ]) {
+        await request(unconfiguredApp).get(endpoint).expect(401);
+      }
     });
 
     it("reports camera comfort evidence without claiming true headset VR", async () => {

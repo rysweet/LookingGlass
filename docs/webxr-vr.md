@@ -60,8 +60,9 @@ served from a secure context: `https://`, `http://localhost`, or
 
 If WebXR is unavailable, Alice keeps the browser camera workflow available and
 renders fallback evidence such as `webxr-unavailable`,
-`immersive-vr-unsupported`, `secure-context-required`, or
-`desktop-camera-fallback`. This is a valid evidence result, not a failure.
+`immersive-vr-unsupported`, `secure-context-required`,
+`desktop-camera-fallback`, or `true-vr-unsupported`. This is a valid evidence
+result, not a true headset/native VR support claim.
 
 ## Browser and device requirements
 
@@ -93,13 +94,18 @@ startup:
 ## Runtime behavior
 
 The WebXR implementation keeps desktop scene behavior available regardless of VR
-capability. Camera/WebXR evidence has three browser-visible outcomes:
+capability. WebXR capability reports use the actual
+`WebXRCapabilityStatus` values:
 
 | Outcome | Meaning |
 | --- | --- |
-| `available` | The browser exposes WebXR capability information and Alice can render capability evidence |
-| `fallback` | Alice renders desktop camera controls and WebXR fallback evidence |
-| `unsupported` | A required browser condition is missing and Alice renders unsupported evidence |
+| `supported` | Required WebXR capability checks passed without degraded evidence |
+| `degraded` | WebXR is partly available, but optional reference space or input capability evidence was recorded |
+| `unsupported` | A required browser condition is missing; Alice still renders desktop camera fallback evidence |
+
+The UI may label the desktop camera path as fallback when the capability report
+is `unsupported`, but exported runtime evidence keeps
+`trueHeadsetVrSupported: false` and `nativeVrSupported: false`.
 
 When an immersive WebXR session is explicitly started in an environment that
 supports it, Alice records session state. That session state is browser WebXR
@@ -212,6 +218,10 @@ Example degraded report:
 | `invalid-movement-target` | degraded | A click/move ray hit a surface that is not a valid movement target. |
 | `non-finite-pose` | degraded | XR pose data contained `NaN`, `Infinity`, or invalid matrix values. |
 | `locomotion-disabled` | degraded | Movement input was received while locomotion is disabled. |
+| `desktop-camera-fallback` | degraded | Alice recorded desktop browser camera fallback evidence instead of claiming headset VR. |
+| `true-vr-unsupported` | unsupported | Alice explicitly records that true headset/native VR parity is unsupported. |
+| `keyboard-camera-movement` | degraded | Keyboard or desktop camera movement evidence was recorded. |
+| `reduced-motion-respected` | degraded | Reduced-motion camera comfort evidence was recorded. |
 
 ## VR session lifecycle
 

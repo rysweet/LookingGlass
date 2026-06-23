@@ -294,21 +294,24 @@ describe("Alice evidence artifact", () => {
           nativeVrSupported: false,
           keyboardMovementAvailable: "unknown",
           reducedMotionRespected: "unknown",
-          evidenceCodes: many.map((index) => `code-${index}`),
+          evidenceCodes: many.map((index) => index % 2 === 0 ? "webxr-unavailable" : "immersive-vr-unsupported"),
         },
         accessibilityRescueCaptions: {
           schema_version: "alice.accessibility-rescue-camera-captions/v1",
           status: "partial",
           keyboardReviewAvailable: "unknown",
           highContrastReviewAvailable: "unknown",
-          captionChecks: many.map((index) => ({ id: `caption-${index}`, present: true })),
+          captionChecks: many.map((index) => ({
+            id: ["aria-live-status", "camera-caption", "scene-object-caption"][index % 3],
+            present: true,
+          })),
         },
         galleryWalkRubric: {
           schema_version: "alice.gallery-walk-rubric-evidence/v1",
           status: "partial",
           liveStudioSupported: false,
           rubric: many.map((index) => ({
-            id: `rubric-${index}`,
+            id: ["visible-world", "camera-framing", "accessibility-captions"][index % 3],
             label: `Rubric ${index}`,
             maxScore: 4,
             evidenceRequired: `Evidence ${index}`,
@@ -356,7 +359,7 @@ describe("Alice evidence artifact", () => {
           status: "partial",
           keyboardReviewAvailable: "false" as unknown as boolean,
           highContrastReviewAvailable: "false" as unknown as boolean,
-          captionChecks: [{ id: "caption", present: "yes" as unknown as boolean }],
+          captionChecks: [{ id: "camera-caption", present: "yes" as unknown as boolean }],
         },
         galleryWalkRubric: {
           schema_version: "alice.gallery-walk-rubric-evidence/v1",
@@ -383,7 +386,7 @@ describe("Alice evidence artifact", () => {
     expect(artifact.runtimeReview?.galleryWalkRubric?.rubricRecordingSupported).toBeUndefined();
   });
 
-  it("rejects malformed parsed runtime review evidence", () => {
+  it("sanitizes malformed parsed and serialized runtime review evidence", () => {
     const many = Array.from({ length: 75 }, (_, index) => index);
     const artifact = createAliceEvidenceArtifact(baseArtifactInput());
     const oversized = {
@@ -435,18 +438,30 @@ describe("Alice evidence artifact", () => {
       "runtimeReview.cameraVrComfort.desktopCameraAvailable must be boolean.",
       "runtimeReview.cameraVrComfort.keyboardMovementAvailable must be true, false, or unknown.",
       "runtimeReview.cameraVrComfort.evidenceCodes must include 50 items or fewer.",
+      "runtimeReview.cameraVrComfort.evidenceCodes[0] must be one of: secure-context-required, webxr-unavailable, immersive-vr-unsupported, session-request-failed, reference-space-unavailable, reference-space-local-fallback, input-sources-unavailable, controller-missing-target-ray, controller-missing-grip, controller-missing-gamepad, hand-tracking-unsupported, hand-pose-unavailable, invalid-movement-target, non-finite-pose, locomotion-disabled, desktop-camera-fallback, true-vr-unsupported, keyboard-camera-movement, reduced-motion-respected.",
       "runtimeReview.cameraVrComfort.comfortChecks.discreteMovementStep must be boolean.",
       "runtimeReview.accessibilityRescueCaptions.rawDomDump is not supported.",
       "runtimeReview.accessibilityRescueCaptions.keyboardReviewAvailable must be true, false, or unknown.",
       "runtimeReview.accessibilityRescueCaptions.captionChecks must include 50 items or fewer.",
+      "runtimeReview.accessibilityRescueCaptions.captionChecks[0].id must be one of: aria-live-status, camera-caption, scene-object-caption.",
       "runtimeReview.accessibilityRescueCaptions.captionChecks[0].present must be boolean.",
       "runtimeReview.galleryWalkRubric.reviewerToken is not supported.",
       "runtimeReview.galleryWalkRubric.reviewWorkflowSupported must be boolean.",
       "runtimeReview.galleryWalkRubric.rubric must include 50 items or fewer.",
+      "runtimeReview.galleryWalkRubric.rubric[0].id must be one of: visible-world, camera-framing, accessibility-captions.",
       "runtimeReview.galleryWalkRubric.rubric[0].maxScore must be a non-negative integer.",
       "runtimeReview.galleryWalkRubric.galleryItems must include 50 items or fewer.",
     ]));
-    expect(() => parseAliceEvidenceArtifact(JSON.stringify(oversized))).toThrow(/50 items or fewer/);
+    const parsed = parseAliceEvidenceArtifact(JSON.stringify(oversized));
+    const serialized = serializeAliceEvidenceArtifact(oversized as unknown as AliceEvidenceArtifact);
+    expect(parsed.runtimeReview?.cameraVrComfort?.evidenceCodes).toEqual([]);
+    expect(parsed.runtimeReview?.accessibilityRescueCaptions?.captionChecks).toEqual([]);
+    expect(parsed.runtimeReview?.galleryWalkRubric?.rubric).toEqual([]);
+    expect(parsed.runtimeReview?.galleryWalkRubric?.galleryItems).toHaveLength(50);
+    expect(serialized).not.toContain("rawDomDump");
+    expect(serialized).not.toContain("secretBackendPath");
+    expect(serialized).not.toContain("reviewerToken");
+    expect(validateAliceEvidenceArtifact(parsed)).toEqual({ valid: true, errors: [] });
   });
 
   it("prepares native share metadata from the pre-share artifact hash", () => {
