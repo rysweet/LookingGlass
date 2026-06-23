@@ -8,6 +8,7 @@ import {
   summarizeAliceEvidenceArtifact,
   type AliceEvidenceArtifact,
   type AliceEvidenceArtifactInput,
+  type AliceEvidenceRuntimeReview,
   validateAliceEvidenceArtifact,
 } from "../src/alice-evidence-artifact";
 
@@ -170,29 +171,30 @@ describe("Alice evidence artifact", () => {
   });
 
   it("preserves runtime review evidence for camera comfort, captions, and gallery rubric", () => {
+    const untrustedRuntimeReview = {
+      cameraVrComfort: {
+        schema_version: "alice.camera-vr-comfort-evidence/v1",
+        status: "partial",
+        trueHeadsetVrSupported: false,
+        nativeVrSupported: false,
+        secretBackendPath: "/tmp/alice",
+      },
+      accessibilityRescueCaptions: {
+        schema_version: "alice.accessibility-rescue-camera-captions/v1",
+        status: "partial",
+        captionChecks: [{ id: "camera-caption", present: true }],
+        rawDomDump: "<main>hidden</main>",
+      },
+      galleryWalkRubric: {
+        schema_version: "alice.gallery-walk-rubric-evidence/v1",
+        status: "partial",
+        liveStudioSupported: false,
+        reviewerToken: "hidden",
+      },
+    } as unknown as AliceEvidenceRuntimeReview;
     const artifact = createAliceEvidenceArtifact({
       ...baseArtifactInput(),
-      runtimeReview: {
-        cameraVrComfort: {
-          schema_version: "alice.camera-vr-comfort-evidence/v1",
-          status: "partial",
-          trueHeadsetVrSupported: false,
-          nativeVrSupported: false,
-          secretBackendPath: "/tmp/alice",
-        },
-        accessibilityRescueCaptions: {
-          schema_version: "alice.accessibility-rescue-camera-captions/v1",
-          status: "partial",
-          captionChecks: [{ id: "camera-caption", present: true }],
-          rawDomDump: "<main>hidden</main>",
-        },
-        galleryWalkRubric: {
-          schema_version: "alice.gallery-walk-rubric-evidence/v1",
-          status: "partial",
-          liveStudioSupported: false,
-          reviewerToken: "hidden",
-        },
-      },
+      runtimeReview: untrustedRuntimeReview,
     });
 
     expect(artifact.runtimeReview?.cameraVrComfort).toMatchObject({
@@ -234,11 +236,11 @@ describe("Alice evidence artifact", () => {
       runtimeReview: {
         ...artifact.runtimeReview,
         cameraVrComfort: {
-          ...(artifact.runtimeReview?.cameraVrComfort as Record<string, unknown>),
+          ...(artifact.runtimeReview?.cameraVrComfort as unknown as Record<string, unknown>),
           trueHeadsetVrSupported: true,
         },
         galleryWalkRubric: {
-          ...(artifact.runtimeReview?.galleryWalkRubric as Record<string, unknown>),
+          ...(artifact.runtimeReview?.galleryWalkRubric as unknown as Record<string, unknown>),
           liveStudioSupported: true,
         },
       },
@@ -252,21 +254,22 @@ describe("Alice evidence artifact", () => {
   });
 
   it("sanitizes caller-supplied runtime review evidence to preserve unsupported parity boundaries", () => {
+    const untrustedRuntimeReview = {
+      cameraVrComfort: {
+        schema_version: "alice.camera-vr-comfort-evidence/v1",
+        status: "partial",
+        trueHeadsetVrSupported: true,
+        nativeVrSupported: true,
+      },
+      galleryWalkRubric: {
+        schema_version: "alice.gallery-walk-rubric-evidence/v1",
+        status: "partial",
+        liveStudioSupported: true,
+      },
+    } as unknown as AliceEvidenceRuntimeReview;
     const artifact = createAliceEvidenceArtifact({
       ...baseArtifactInput(),
-      runtimeReview: {
-        cameraVrComfort: {
-          schema_version: "alice.camera-vr-comfort-evidence/v1",
-          status: "partial",
-          trueHeadsetVrSupported: true,
-          nativeVrSupported: true,
-        },
-        galleryWalkRubric: {
-          schema_version: "alice.gallery-walk-rubric-evidence/v1",
-          status: "partial",
-          liveStudioSupported: true,
-        },
-      },
+      runtimeReview: untrustedRuntimeReview,
     });
 
     expect(artifact.runtimeReview?.cameraVrComfort).toMatchObject({

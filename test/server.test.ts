@@ -220,6 +220,12 @@ describe("server API", () => {
         .get("/api/review/runtime-parity")
         .set(LOCAL_API_TOKEN_HEADER, "wrong-token")
         .expect(401);
+
+      const unconfiguredApp = createServer({
+        port: 0,
+        evidenceDir: path.join(evidenceDir, "no-runtime-token"),
+      });
+      await request(unconfiguredApp).get("/api/vr/camera-comfort").expect(401);
     });
 
     it("reports camera comfort evidence without claiming true headset VR", async () => {

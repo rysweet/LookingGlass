@@ -47,7 +47,7 @@ export function registerRuntimeParityRoutes(app: Express, context: ServerContext
 function requireRuntimeParityReadToken(context: ServerContext) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const token = context.localApiSecurity.token;
-    if (token && !hasValidToken(req.get(LOCAL_API_TOKEN_HEADER), token)) {
+    if (!token || !hasValidToken(req.get(LOCAL_API_TOKEN_HEADER), token)) {
       res.status(401).json({ error: "Missing or invalid local API token" });
       return;
     }

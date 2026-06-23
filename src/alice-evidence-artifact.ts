@@ -54,7 +54,7 @@ export interface AliceEvidenceCameraVrComfort {
   trueHeadsetVrSupported: false;
   nativeVrSupported: false;
   cameraMode?: string;
-  evidenceCodes?: string[];
+  evidenceCodes?: readonly string[];
   comfortChecks?: {
     discreteMovementStep?: boolean;
     stableHorizon?: boolean;
@@ -71,7 +71,7 @@ export interface AliceEvidenceAccessibilityCaptions {
   objectCaption?: string;
   keyboardReviewAvailable?: boolean;
   highContrastReviewAvailable?: boolean;
-  captionChecks?: {
+  captionChecks?: readonly {
     id: string;
     present: boolean;
     channel?: "aria-live" | "visible-text";
@@ -88,13 +88,13 @@ export interface AliceEvidenceGalleryReview {
   rubricRecordingSupported?: boolean;
   liveStudioSupported: false;
   unsupportedLiveStudioReason?: string;
-  rubric?: {
+  rubric?: readonly {
     id: string;
     label: string;
     maxScore: number;
     evidenceRequired: string;
   }[];
-  galleryItems?: {
+  galleryItems?: readonly {
     id: string;
     title: string;
     reviewPrompt: string;
