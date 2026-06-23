@@ -501,7 +501,12 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
   }
 
   const duplicateRequiredFiles = findDuplicateRequiredFiles(decoded.bytes);
-  if (duplicateRequiredFiles.length === 0) {
+  if (duplicateRequiredFiles === null) {
+    errors.push({
+      code: "duplicate-check-inconclusive",
+      message: "package central directory could not be parsed for duplicate required-file checks",
+    });
+  } else if (duplicateRequiredFiles.length === 0) {
     evidence.push("no-duplicate-required-files");
   } else {
     for (const path of duplicateRequiredFiles) {
@@ -1333,10 +1338,10 @@ function readUnsafeOriginalName(file: JSZip.JSZipObject): string | null {
   return typeof value === "string" ? value : null;
 }
 
-function findDuplicateRequiredFiles(bytes: Uint8Array): string[] {
+function findDuplicateRequiredFiles(bytes: Uint8Array): string[] | null {
   const buffer = Buffer.from(bytes);
   const centralDirectory = findCentralDirectoryRange(buffer);
-  if (!centralDirectory) return [];
+  if (!centralDirectory) return null;
 
   const counts = new Map<string, number>();
   for (let offset = centralDirectory.start; offset <= centralDirectory.end - 46;) {

@@ -41,6 +41,7 @@ const CONTENT_TYPES: Record<string, string> = {
 export function createImportedProjectAsset(
   upload: ImportedAssetUpload,
   existingAssets: ImportedProjectAsset[] = [],
+  existingArchivePaths: Iterable<string> = [],
 ): ImportedAssetCreation {
   if (upload.bytes.byteLength === 0) {
     throw new Error("Imported asset payload must not be empty");
@@ -59,6 +60,7 @@ export function createImportedProjectAsset(
     parsed.extension,
     upload.kind,
     existingAssets,
+    existingArchivePaths,
   );
   const projectResourceId = projectResourceIdFor(upload.kind, fileName);
   const archivePath = projectResourceIdToArchivePath(projectResourceId);
@@ -189,12 +191,17 @@ function dedupeFileName(
   extension: string,
   kind: ImportedProjectAssetKind,
   existingAssets: ImportedProjectAsset[],
+  existingArchivePaths: Iterable<string>,
 ): string {
   const existingIds = new Set(existingAssets.map((asset) => asset.id));
+  const existingPaths = new Set(existingArchivePaths);
   let suffix = 1;
   let candidate = `${baseSlug}${extension}`;
 
-  while (existingIds.has(projectResourceIdFor(kind, candidate))) {
+  while (
+    existingIds.has(projectResourceIdFor(kind, candidate))
+    || existingPaths.has(projectResourceIdToArchivePath(projectResourceIdFor(kind, candidate)))
+  ) {
     suffix += 1;
     candidate = `${baseSlug}-${suffix}${extension}`;
   }

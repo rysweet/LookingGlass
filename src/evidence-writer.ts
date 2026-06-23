@@ -234,7 +234,7 @@ export function writeAudioWorkflowEvidence(
       schema_version: AUDIO_WORKFLOW_SCHEMA,
       timestamp: Date.now(),
       source: "alice-web",
-      status: "bounded",
+      status: "proved",
       support_level: "metadata-and-playback-bridge",
       supported_formats: evidence.supportedFormats,
       asset_count: evidence.assetCount,

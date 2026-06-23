@@ -555,6 +555,30 @@ describe("project-export", () => {
       expect.objectContaining({ code: "duplicate-required-file" }),
     ]));
 
+    const cleanPackageBase64 = await makeZip({
+      "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+      "manifest.json": JSON.stringify({
+        schemaVersion: "alice-web.package/v1",
+        product: "Alice",
+        packageName: "alice-web",
+        runtimeIdentity: "alice-web-player",
+        entrypoint: "index.html",
+        package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+      }),
+      "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+      "preview.png": new Uint8Array([137, 80, 78, 71]),
+      "project/project.json": "{}",
+      "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+    });
+    const cleanPackageBytes = Buffer.from(cleanPackageBase64, "base64");
+    const trailingBytes = await projectExportApi.validateWebPackage!({
+      packageBase64: Buffer.concat([cleanPackageBytes, Buffer.from("trailing")]).toString("base64"),
+    });
+    expect(trailingBytes.evidence).not.toContain("no-duplicate-required-files");
+    expect(trailingBytes.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "duplicate-check-inconclusive" }),
+    ]));
+
     const identityDrift = await projectExportApi.validateWebPackage!({
       packageBase64: await makeZip({
         "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-standalone-player'}</script>",

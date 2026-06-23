@@ -122,7 +122,7 @@ function handleAssetImport(
       fileName: fileName.value,
       ...(displayName.value !== undefined ? { displayName: displayName.value } : {}),
       bytes: Buffer.from(contentBase64.value, "base64"),
-    }, project.importedAssets ?? []);
+    }, project.importedAssets ?? [], context.state.resources.keys());
 
     project.importedAssets = [...(project.importedAssets ?? []), creation.asset];
     context.state.resources.set(creation.archivePath, creation.resourceBytes);

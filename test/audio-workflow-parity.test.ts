@@ -311,7 +311,7 @@ describe("Alice audio workflow end-to-end evidence contract", () => {
       expect(written).toMatchObject({
         schema_version: "alice.audio-workflow/v1",
         source: "alice-web",
-        status: "bounded",
+        status: "proved",
         support_level: "metadata-and-playback-bridge",
         supported_formats: [".mp3", ".wav", ".ogg", ".m4a"],
         asset_count: 2,

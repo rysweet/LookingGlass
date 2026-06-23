@@ -373,11 +373,11 @@ The active state tracks:
 - the template library used by project creation
 - the active camera workflow state and in-memory camera markers
 
-Issue #221 adds state for imported model and texture asset descriptors,
-one active archive resource map for imported bytes and parsed archive resources,
-and scene object model resource IDs plus surface material bindings. Imported
-bytes should use the same resource map seeded from `readProject()` and passed to
-`writeProject()`; they should not live in a second imported-byte-only map.
+The server state carries imported model and texture asset descriptors, one
+active archive resource map for imported bytes and parsed archive resources, and
+scene object model resource IDs plus surface material bindings. Imported bytes
+use the same resource map seeded from `readProject()` and passed to
+`writeProject()`; they do not live in a second imported-byte-only map.
 
 Launching a project seeds default `ground` and `camera` scene objects when the
 project has no loaded scene objects and restores saved camera workflow state
@@ -448,8 +448,8 @@ curl -X POST http://127.0.0.1:3000/api/scene/add-object \
   -d '{"className":"org.lgna.story.SBiped","name":"bunny"}'
 ```
 
-Issue #221 plans texture import and application routes. After that
-implementation lands, import a texture and apply it to an object:
+Use the texture import and application routes to import a texture and apply it to
+an object:
 
 ```bash
 TEXTURE_BASE64="$(base64 -w0 assets/textures/checker.png)"
