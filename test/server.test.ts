@@ -215,12 +215,6 @@ describe("server API", () => {
 
   describe("runtime parity evidence APIs", () => {
     it("requires the local API token for runtime parity reads", async () => {
-      await request(app).get("/api/vr/camera-comfort").expect(401);
-      await request(app)
-        .get("/api/review/runtime-parity")
-        .set(LOCAL_API_TOKEN_HEADER, "wrong-token")
-        .expect(401);
-
       const unconfiguredApp = createServer({
         port: 0,
         evidenceDir: path.join(evidenceDir, "no-runtime-token"),
@@ -231,7 +225,13 @@ describe("server API", () => {
         "/api/review/gallery-walk-rubric",
         "/api/review/runtime-parity",
       ]) {
+        await request(app).get(endpoint).expect(401);
+        await request(app)
+          .get(endpoint)
+          .set(LOCAL_API_TOKEN_HEADER, "wrong-token")
+          .expect(401);
         await request(unconfiguredApp).get(endpoint).expect(401);
+        await localGet(app, endpoint).expect(200);
       }
     });
 

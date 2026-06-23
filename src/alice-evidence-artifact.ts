@@ -5,6 +5,7 @@ const ALICE_EVIDENCE_MIME_TYPE = "application/json" as const;
 const MAX_VISIBLE_OBJECTS = 200;
 const MAX_FILENAME_LENGTH = 120;
 const MAX_RUNTIME_REVIEW_ITEMS = 50;
+const MAX_RUNTIME_REVIEW_STRING_LENGTH = 500;
 
 const CAMERA_MODES = new Set(["orbit", "first-person"]);
 const WEBXR_CAPABILITY_STATUSES = new Set(["supported", "degraded", "unsupported", "unknown"]);
@@ -154,8 +155,8 @@ export interface AliceEvidenceGalleryReview {
   status: "partial";
   projectName?: string;
   galleryItemCount?: number;
-  reviewWorkflowSupported?: boolean;
-  rubricRecordingSupported?: boolean;
+  reviewWorkflowSupported?: false;
+  rubricRecordingSupported?: false;
   liveStudioSupported: false;
   unsupportedLiveStudioReason?: string;
   rubric?: readonly {
@@ -483,8 +484,8 @@ export function validateAliceEvidenceArtifact(value: unknown): AliceEvidenceVali
           expectEqual(galleryWalkRubric.status, "partial", "runtimeReview.galleryWalkRubric.status", errors);
           expectOptionalString(galleryWalkRubric.projectName, "runtimeReview.galleryWalkRubric.projectName", errors);
           expectOptionalNonNegativeInteger(galleryWalkRubric.galleryItemCount, "runtimeReview.galleryWalkRubric.galleryItemCount", errors);
-          expectOptionalBoolean(galleryWalkRubric.reviewWorkflowSupported, "runtimeReview.galleryWalkRubric.reviewWorkflowSupported", errors);
-          expectOptionalBoolean(galleryWalkRubric.rubricRecordingSupported, "runtimeReview.galleryWalkRubric.rubricRecordingSupported", errors);
+          expectOptionalLiteralFalse(galleryWalkRubric.reviewWorkflowSupported, "runtimeReview.galleryWalkRubric.reviewWorkflowSupported", errors);
+          expectOptionalLiteralFalse(galleryWalkRubric.rubricRecordingSupported, "runtimeReview.galleryWalkRubric.rubricRecordingSupported", errors);
           expectLiteralFalse(galleryWalkRubric.liveStudioSupported, "runtimeReview.galleryWalkRubric.liveStudioSupported", errors);
           expectOptionalString(galleryWalkRubric.unsupportedLiveStudioReason, "runtimeReview.galleryWalkRubric.unsupportedLiveStudioReason", errors);
           expectMaxArrayLength(galleryWalkRubric.rubric, "runtimeReview.galleryWalkRubric.rubric", errors);
@@ -689,8 +690,8 @@ function sanitizeGalleryWalkRubricReview(input: unknown): AliceEvidenceGalleryRe
     status: "partial",
     ...(value.projectName ? { projectName: stringValue(value.projectName) } : {}),
     ...(value.galleryItemCount !== undefined ? { galleryItemCount: finiteNonNegativeInteger(value.galleryItemCount) } : {}),
-    ...(optionalBoolean(value.reviewWorkflowSupported) !== undefined ? { reviewWorkflowSupported: optionalBoolean(value.reviewWorkflowSupported)! } : {}),
-    ...(optionalBoolean(value.rubricRecordingSupported) !== undefined ? { rubricRecordingSupported: optionalBoolean(value.rubricRecordingSupported)! } : {}),
+    ...(value.reviewWorkflowSupported !== undefined ? { reviewWorkflowSupported: false as const } : {}),
+    ...(value.rubricRecordingSupported !== undefined ? { rubricRecordingSupported: false as const } : {}),
     liveStudioSupported: false,
     ...(value.unsupportedLiveStudioReason ? { unsupportedLiveStudioReason: stringValue(value.unsupportedLiveStudioReason) } : {}),
     ...(Array.isArray(value.rubric) ? {
@@ -788,7 +789,8 @@ function sanitizeVector(vector: AliceEvidenceVector): AliceEvidenceVector {
 }
 
 function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : String(value ?? "").trim();
+  const text = typeof value === "string" ? value.trim() : String(value ?? "").trim();
+  return text.slice(0, MAX_RUNTIME_REVIEW_STRING_LENGTH);
 }
 
 function finiteNumber(value: unknown): number {
@@ -862,8 +864,13 @@ function expectOptionalMeasuredBoolean(value: unknown, label: string, errors: st
 }
 
 function expectOptionalString(value: unknown, label: string, errors: string[]): void {
-  if (value !== undefined && typeof value !== "string") {
+  if (value === undefined) return;
+  if (typeof value !== "string") {
     errors.push(`${label} must be a string.`);
+    return;
+  }
+  if (value.trim().length > MAX_RUNTIME_REVIEW_STRING_LENGTH) {
+    errors.push(`${label} must be ${MAX_RUNTIME_REVIEW_STRING_LENGTH} characters or fewer.`);
   }
 }
 
@@ -933,6 +940,16 @@ function validateRecordArray(
 function expectNonEmptyString(value: unknown, label: string, errors: string[]): void {
   if (typeof value !== "string" || value.trim().length === 0) {
     errors.push(`${label} must be a non-empty string.`);
+    return;
+  }
+  if (value.trim().length > MAX_RUNTIME_REVIEW_STRING_LENGTH) {
+    errors.push(`${label} must be ${MAX_RUNTIME_REVIEW_STRING_LENGTH} characters or fewer.`);
+  }
+}
+
+function expectOptionalLiteralFalse(value: unknown, label: string, errors: string[]): void {
+  if (value !== undefined && value !== false) {
+    errors.push(`${label} must be false.`);
   }
 }
 

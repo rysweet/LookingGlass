@@ -49,8 +49,8 @@ export interface GalleryWalkRubricEvidence {
   readonly status: RuntimeParityStatus;
   readonly projectName: string;
   readonly galleryItemCount: number;
-  readonly reviewWorkflowSupported: boolean;
-  readonly rubricRecordingSupported: boolean;
+  readonly reviewWorkflowSupported: false;
+  readonly rubricRecordingSupported: false;
   readonly liveStudioSupported: false;
   readonly unsupportedLiveStudioReason: string;
   readonly rubric: readonly {

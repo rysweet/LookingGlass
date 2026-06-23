@@ -207,8 +207,8 @@ interface AliceAccessibilityCaptionsEvidence {
   captionChecks?: {
     id: string;
     present: boolean;
-    channel: "aria-live" | "visible-text";
-    text: string;
+    channel?: "aria-live" | "visible-text";
+    text?: string;
   }[];
 }
 
@@ -217,8 +217,8 @@ interface AliceGalleryReviewEvidence {
   status: "partial";
   projectName?: string;
   galleryItemCount?: number;
-  reviewWorkflowSupported?: boolean;
-  rubricRecordingSupported?: boolean;
+  reviewWorkflowSupported?: false;
+  rubricRecordingSupported?: false;
   liveStudioSupported: false;
   unsupportedLiveStudioReason?: string;
   rubric?: {
@@ -243,10 +243,11 @@ interface AliceEvidenceRuntimeReview {
 
 These fields are deterministic and browser-safe. Runtime review sections are
 optional and bounded: parse helpers sanitize undocumented runtime review fields,
-raw validation rejects them, and known arrays are capped by implementation
-constants. Runtime review strings are contract fields supplied by the caller;
-callers must not put camera frames, audio, raw user transcript text, tokens,
-local paths, permission internals, cookies, or backend data in those fields.
+raw validation rejects them, known arrays are capped by implementation
+constants, and runtime review strings are trimmed and length-bounded. Runtime
+review strings are contract fields supplied by the caller; callers must not put
+camera frames, audio, raw user transcript text, tokens, local paths, permission
+internals, cookies, or backend data in those fields.
 
 ## Validation rules
 
@@ -265,9 +266,12 @@ local paths, permission internals, cookies, or backend data in those fields.
 | Export | Method is `download` or `native-share`; filename is a safe `.json` name; MIME type is `application/json` |
 | Size | Object evidence is bounded to 200 entries; rubric criteria and evidence lists are bounded by implementation constants |
 
-The artifact does not include secrets, absolute paths, hostnames, environment
-values, full project data, image bytes, screenshots, media bytes, raw user
-transcripts, or `data:` URLs.
+Generated Alice runtime evidence does not intentionally include secrets,
+absolute paths, hostnames, environment values, full project data, image bytes,
+screenshots, media bytes, raw user transcripts, or `data:` URLs. Caller-supplied
+allowed string fields are trimmed and structurally bounded, but are not
+content-filtered; callers must not place secrets, paths, tokens, hostnames, or
+transcripts in them.
 
 ## Serialization
 
