@@ -305,8 +305,8 @@ Example response:
 
 Validation rejects missing fields, invalid base64, empty decoded bytes, unsafe
 filenames, unsupported extensions, and decoded resources that exceed Project
-IO's archive size limit. Duplicate asset IDs get `-2`, `-3`, and later suffixes
-before the extension.
+IO's archive size limit. Duplicate asset IDs or existing descriptor-less archive
+resource paths get `-2`, `-3`, and later suffixes before the extension.
 
 ## `POST /api/assets/import-texture`
 
@@ -349,8 +349,8 @@ Example response:
 
 Validation rejects missing fields, invalid base64, empty decoded bytes, unsafe
 filenames, unsupported extensions, and decoded resources that exceed Project
-IO's archive size limit. Duplicate asset IDs get `-2`, `-3`, and later suffixes
-before the extension.
+IO's archive size limit. Duplicate asset IDs or existing descriptor-less archive
+resource paths get `-2`, `-3`, and later suffixes before the extension.
 
 ## `POST /api/scene/apply-texture`
 
