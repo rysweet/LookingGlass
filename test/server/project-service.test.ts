@@ -238,6 +238,51 @@ describe("ProjectService.exportTypeScript", () => {
     }
   });
 
+  it("counts existing reopened procedure statements in edit proof artifacts", async () => {
+    const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-edit-count-test-"));
+    try {
+      const state = createInitialServerState();
+      const project = createMinimalProject();
+      const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
+      const methods = sceneType?.methods ?? project.methods;
+      methods.push({
+        name: "myFirstMethod",
+        isFunction: false,
+        returnType: "void",
+        parameters: [],
+        statements: [
+          { kind: "Comment", text: "existing one" },
+          { kind: "Comment", text: "existing two" },
+        ],
+      });
+
+      state.launched = true;
+      state.projectName = project.projectName;
+      state.parsedProject = project;
+      state.procedures = new Map([["myFirstMethod", []]]);
+
+      await projectService.editProcedure(state, evidenceDir, evidenceService, {
+        procedureSelector: "scene.myFirstMethod",
+        editSpec: "append-comment:reopened-count-proof",
+      });
+
+      const proof = JSON.parse(
+        fs.readFileSync(path.join(evidenceDir, "first-lesson-code-editor-action-proof.json"), "utf8"),
+      );
+      expect(proof.before_statement_count).toBe(2);
+      expect(proof.after_statement_count).toBe(3);
+
+      const archive = await readProject(fs.readFileSync(path.join(evidenceDir, "edited-project.a3p")));
+      const editedMethod = archive.project.methods.find((candidate) => candidate.name === "myFirstMethod")
+        ?? archive.project.types
+          ?.flatMap((type) => type.methods ?? [])
+          .find((candidate) => candidate.name === "myFirstMethod");
+      expect(editedMethod?.statements).toHaveLength(3);
+    } finally {
+      fs.rmSync(evidenceDir, { recursive: true, force: true });
+    }
+  });
+
   it("preserves an existing target when an allowed project file write fails before rename", async () => {
     const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-atomic-save-test-"));
     try {

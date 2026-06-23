@@ -368,7 +368,7 @@ export const projectService: ProjectService = {
       state.procedures.set(methodName, []);
     }
     const statements = state.procedures.get(methodName)!;
-    const beforeStatementCount = statements.length;
+    const beforeStatementCount = effectiveProcedureStatementCount(state, methodName, statements.length);
 
     let marker: string;
     if (editSpec.startsWith("append-comment:")) {
@@ -380,7 +380,7 @@ export const projectService: ProjectService = {
     }
 
     statements.push(marker);
-    const afterStatementCount = statements.length;
+    const afterStatementCount = effectiveProcedureStatementCount(state, methodName, statements.length);
 
     const methodNames = Array.from(state.procedures.keys());
 
@@ -590,6 +590,24 @@ export const projectService: ProjectService = {
     return result;
   },
 };
+
+function effectiveProcedureStatementCount(
+  state: ServerState,
+  methodName: string,
+  liveEditStatementCount: number,
+): number {
+  return parsedProcedureStatementCount(state.parsedProject, methodName) + liveEditStatementCount;
+}
+
+function parsedProcedureStatementCount(project: AliceProject | null, methodName: string): number {
+  if (!project) {
+    return 0;
+  }
+
+  const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
+  const method = (sceneType?.methods ?? project.methods).find((candidate) => candidate.name === methodName);
+  return method?.statements?.length ?? 0;
+}
 
 function archiveForCurrentProject(state: ServerState, project: AliceProject): AliceProjectArchive {
   if (state.projectArchive) {
