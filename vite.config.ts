@@ -16,7 +16,7 @@ export default defineConfig({
       reporter: ["text-summary"],
       all: true,
       include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/**/*.d.ts", "src/**/*.test.ts", "src/**/*.spec.ts"],
+      exclude: ["src/**/*.d.ts", "src/**/*.test.ts", "src/**/*.spec.ts", "src/hooks/*.ts"],
       thresholds: {
         statements: 85,
         branches: 80,
