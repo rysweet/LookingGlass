@@ -1105,6 +1105,13 @@ function validateShareDelivery(share: AliceWebShareDocument): WebPackageValidati
   if (share.delivery === undefined) {
     return [];
   }
+  if (share.delivery === null || typeof share.delivery !== "object") {
+    return [{
+      code: "invalid-share-delivery",
+      message: "share delivery must be browser-download-fallback with nativeWebShare false and requiresUserDownload true",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    }];
+  }
   if (
     share.delivery.mode === "browser-download-fallback"
     && share.delivery.nativeWebShare === false
