@@ -468,7 +468,7 @@ describe("server API response contracts", () => {
     expect(audioEvidence).toMatchObject({
       schema_version: "alice.audio-workflow/v1",
       source: "alice-web",
-      status: "proved",
+      status: "bounded",
       support_level: "metadata-and-playback-bridge",
       supported_formats: [".mp3", ".wav", ".ogg", ".m4a"],
       asset_count: 1,
