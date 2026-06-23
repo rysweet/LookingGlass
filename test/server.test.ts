@@ -925,6 +925,9 @@ describe("server API", () => {
         })
         .expect(200);
 
+      await localPost(app, "/api/code/create-procedure")
+        .send({ name: "myFirstMethod" })
+        .expect(400);
       await localPost(app, "/api/project/save").send({}).expect(200);
       const savedProject = await parseA3P(fs.readFileSync(path.join(evidenceDir, "project-save", "saved-project.a3p")));
       const method = savedProject.methods.find((candidate) => candidate.name === "myFirstMethod");

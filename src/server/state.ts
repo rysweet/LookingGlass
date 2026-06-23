@@ -242,9 +242,7 @@ export function syncServerProceduresFromProject(state: ServerState, project: Ali
     return;
   }
 
-  const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
-  const sceneMethods = sceneType?.methods ?? (project.types?.length ? [] : project.methods);
-  state.procedures = new Map(sceneMethods.map((method) => [method.name, []]));
+  state.procedures = new Map(getServerOwnedProjectMethods(project).map((method) => [method.name, []]));
 }
 
 export function syncServerMethodDefinitionsFromProject(state: ServerState, project: AliceProject | null): void {
@@ -262,7 +260,9 @@ export function syncServerMethodDefinitionsFromProject(state: ServerState, proje
 
 function getServerOwnedProjectMethods(project: AliceProject): AliceMethod[] {
   const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
-  return sceneType?.methods ?? (project.types?.length ? [] : project.methods);
+  return project.methods.length > 0
+    ? project.methods
+    : sceneType ? (sceneType.methods ?? []) : [];
 }
 
 export function parseMethodParams(
