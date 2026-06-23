@@ -178,16 +178,19 @@ describe("Alice evidence artifact", () => {
           status: "partial",
           trueHeadsetVrSupported: false,
           nativeVrSupported: false,
+          secretBackendPath: "/tmp/alice",
         },
         accessibilityRescueCaptions: {
           schema_version: "alice.accessibility-rescue-camera-captions/v1",
           status: "partial",
           captionChecks: [{ id: "camera-caption", present: true }],
+          rawDomDump: "<main>hidden</main>",
         },
         galleryWalkRubric: {
           schema_version: "alice.gallery-walk-rubric-evidence/v1",
           status: "partial",
           liveStudioSupported: false,
+          reviewerToken: "hidden",
         },
       },
     });
@@ -202,6 +205,9 @@ describe("Alice evidence artifact", () => {
     expect(artifact.runtimeReview?.galleryWalkRubric).toMatchObject({
       liveStudioSupported: false,
     });
+    expect(JSON.stringify(artifact.runtimeReview)).not.toContain("secretBackendPath");
+    expect(JSON.stringify(artifact.runtimeReview)).not.toContain("rawDomDump");
+    expect(JSON.stringify(artifact.runtimeReview)).not.toContain("reviewerToken");
     expect(validateAliceEvidenceArtifact(artifact)).toEqual({ valid: true, errors: [] });
   });
 

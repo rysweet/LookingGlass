@@ -98,7 +98,7 @@ Callers check `valid` before exporting or trusting metadata.
         "stableHorizon": true,
         "noForcedHeadset": true
       },
-      "unsupportedReason": "LookingGlass records browser WebXR and desktop camera comfort evidence only; true headset/native VR remains unsupported."
+      "unsupportedReason": "Alice records browser WebXR and desktop camera comfort evidence only; true headset/native VR remains unsupported."
     },
     "accessibilityRescueCaptions": {
       "schema_version": "alice.accessibility-rescue-camera-captions/v1",
@@ -131,7 +131,7 @@ Callers check `valid` before exporting or trusting metadata.
       "reviewWorkflowSupported": true,
       "rubricRecordingSupported": true,
       "liveStudioSupported": false,
-      "unsupportedLiveStudioReason": "LookingGlass provides web gallery review and rubric evidence, not a synchronized live workshop studio.",
+      "unsupportedLiveStudioReason": "Alice provides web gallery review and rubric evidence, not a synchronized live workshop studio.",
       "rubric": [
         {
           "id": "visible-world",
