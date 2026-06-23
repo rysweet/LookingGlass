@@ -498,11 +498,10 @@ export const projectService: ProjectService = {
     let executionLog: LogEntry[] = [];
     let statementsExecuted = 0;
 
-    if (state.parsedProject) {
-      const vmResult = executeProject(state.parsedProject);
-      executionLog = vmResult.execution_log;
-      statementsExecuted = executionLog.length;
-    }
+    const currentProject = buildCurrentProject(state);
+    const vmResult = executeProject(currentProject);
+    executionLog = vmResult.execution_log;
+    statementsExecuted = executionLog.length;
 
     const jointSidecarArtifact = jointStateSidecarPath(evidenceDir);
     const jointRuntime = state.jointState.executePendingAnimations(jointSidecarArtifact);

@@ -202,7 +202,6 @@ export function addSceneObjectToCurrentProject(
     size: null,
     ...(input.modelResourceId !== undefined ? { modelResourceId: input.modelResourceId } : {}),
   });
-  syncServerProceduresFromProject(state, project);
 }
 
 export function resetJointState(state: ServerState): void {

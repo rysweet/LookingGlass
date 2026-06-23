@@ -8,6 +8,7 @@ import { projectService, writeAllowedProjectFile } from "../../src/server/projec
 import { evidenceService } from "../../src/server/evidence-service.js";
 import { readProject } from "../../src/project-io.js";
 import {
+  addSceneObjectToCurrentProject,
   buildCurrentProject,
   createInitialServerState,
   registerMethod,
@@ -309,6 +310,86 @@ describe("ProjectService.exportTypeScript", () => {
           ?.flatMap((type) => type.methods ?? [])
           .find((candidate) => candidate.name === "myFirstMethod");
       expect(editedMethod?.statements).toHaveLength(3);
+    } finally {
+      fs.rmSync(evidenceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves reopened live edits across add-object transitions before save", async () => {
+    const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-edit-add-save-test-"));
+    try {
+      const state = createInitialServerState();
+      const project = createMinimalProject();
+      const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
+      const methods = sceneType?.methods ?? project.methods;
+      methods.push({
+        name: "myFirstMethod",
+        isFunction: false,
+        returnType: "void",
+        parameters: [],
+        statements: [],
+      });
+
+      state.launched = true;
+      state.projectName = project.projectName;
+      state.parsedProject = project;
+      state.procedures = new Map([["myFirstMethod", []]]);
+
+      await projectService.editProcedure(state, evidenceDir, evidenceService, {
+        procedureSelector: "scene.myFirstMethod",
+        editSpec: "append-comment:edit-before-add-object",
+      });
+      addSceneObjectToCurrentProject(state, {
+        name: "postEditBunny",
+        className: "org.lgna.story.SBiped",
+      });
+
+      const saved = await projectService.saveProject(state, evidenceDir, evidenceService, {});
+      expect(saved.status).toBe("saved");
+
+      const archive = await readProject(fs.readFileSync(path.join(evidenceDir, "project-save", "saved-project.a3p")));
+      const editedMethod = archive.project.methods.find((candidate) => candidate.name === "myFirstMethod")
+        ?? archive.project.types
+          ?.flatMap((type) => type.methods ?? [])
+          .find((candidate) => candidate.name === "myFirstMethod");
+      expect(editedMethod?.statements).toEqual([
+        expect.objectContaining({ kind: "MethodCall", method: "edit-before-add-object" }),
+      ]);
+      expect(archive.project.sceneObjects.map((object) => object.name)).toContain("postEditBunny");
+    } finally {
+      fs.rmSync(evidenceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("runs the current project view after reopened live edits", async () => {
+    const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-edit-run-test-"));
+    try {
+      const state = createInitialServerState();
+      const project = createMinimalProject();
+      const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
+      const methods = sceneType?.methods ?? project.methods;
+      methods.push({
+        name: "myFirstMethod",
+        isFunction: false,
+        returnType: "void",
+        parameters: [],
+        statements: [],
+      });
+
+      state.launched = true;
+      state.projectName = project.projectName;
+      state.parsedProject = project;
+      state.procedures = new Map([["myFirstMethod", []]]);
+
+      await projectService.editProcedure(state, evidenceDir, evidenceService, {
+        procedureSelector: "scene.myFirstMethod",
+        editSpec: "append-comment:run-current-project-edit",
+      });
+
+      const run = await projectService.runWorld(state, evidenceDir, evidenceService);
+      expect(run.status).toBe("completed");
+      expect(run.statements_executed).toBeGreaterThan(0);
+      expect(JSON.stringify(run.execution_log)).toContain("run-current-project-edit");
     } finally {
       fs.rmSync(evidenceDir, { recursive: true, force: true });
     }
