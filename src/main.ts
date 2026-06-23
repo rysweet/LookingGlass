@@ -238,6 +238,22 @@ function markProjectChanged(): void {
   markWebPackageStale();
 }
 
+function currentExportProject(archive: AliceProjectArchive): AliceProject {
+  return {
+    ...(JSON.parse(JSON.stringify(archive.project)) as AliceProject),
+    cameraWorkflow,
+    ...(jointState.listObjectNames().length > 0 ? { jointState: jointState.toJSON() } : {}),
+  };
+}
+
+function currentExportArchive(): AliceProjectArchive {
+  const archive = ensureArchive();
+  return {
+    ...archive,
+    project: currentExportProject(archive),
+  };
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
@@ -562,6 +578,9 @@ function updateCameraWorkflow(
 ): void {
   try {
     cameraWorkflow = updater();
+    const archive = ensureArchive();
+    archive.project.cameraWorkflow = cameraWorkflow;
+    markProjectChanged();
     renderCameraWorkflow();
     setCameraStatusMessage(successMessage);
   } catch (error) {
@@ -1120,7 +1139,7 @@ async function handleShareEvidence(): Promise<void> {
 
 async function exportWebPackage(): Promise<void> {
       try {
-        const archive = ensureArchive();
+        const archive = currentExportArchive();
         const project = archive.project;
         const archiveBytes = await ProjectIo.writeProject(archive, { generateThumbnailFromScene: false });
         const response = await fetch("/api/project/export/web-package", {

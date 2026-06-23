@@ -156,10 +156,20 @@ describe("Alice browser workflow UI contract", () => {
   it("invalidates cached web packages after project mutations before share", () => {
     const main = readText("src/main.ts");
 
+    expectFunctionContains(main, "updateCameraWorkflow", "markProjectChanged();");
     expectFunctionContains(main, "updateAliceWorkflow", "markProjectChanged();");
     expectFunctionContains(main, "handleClassBehaviorImport", "markProjectChanged();");
     expectFunctionContains(main, "handleRunWorld", "markProjectChanged();");
     expectFunctionContains(main, "exportWebPackage", "lastWebPackageBase64 = exported.package.base64");
     expectFunctionContains(main, "generateShareArtifacts", "if (!lastWebPackageBase64)");
+  });
+
+  it("exports browser-only camera and joint state with the current archive", () => {
+    const main = readText("src/main.ts");
+
+    expectFunctionContains(main, "currentExportProject", "cameraWorkflow,");
+    expectFunctionContains(main, "currentExportProject", "jointState.toJSON()");
+    expectFunctionContains(main, "currentExportArchive", "project: currentExportProject(archive)");
+    expectFunctionContains(main, "exportWebPackage", "currentExportArchive()");
   });
 });
