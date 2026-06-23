@@ -59,8 +59,11 @@ The exported JSON includes:
 | Gallery/review | Gallery item count, review prompts, rubric criteria, live-studio unsupported status |
 | Export | Download/native-share method, timestamp, filename, MIME type |
 
-Canvas evidence is metadata only. The artifact does not embed screenshots, image
-bytes, media files, raw user transcripts, local paths, tokens, or `data:` URLs.
+Generated capture evidence is metadata only and does not intentionally embed
+screenshots, image bytes, media files, raw user transcripts, local paths,
+tokens, or `data:` URLs. Caller-supplied allowed strings are trimmed and
+length-bounded, but are not content-filtered; callers must not put secrets,
+paths, tokens, hostnames, or transcripts in them.
 
 ## Export
 

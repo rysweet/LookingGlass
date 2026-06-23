@@ -59,10 +59,12 @@ Alice captures bounded visible-scene evidence:
 | Accessibility/captions | ARIA/live caption, camera caption, scene-object caption, keyboard review, high-contrast review |
 | Gallery/review | Gallery item count, review prompts, rubric criteria, live-studio unsupported status |
 
-Alice does not capture secrets, environment values, absolute paths, hostnames,
-dependency versions, full project dumps, screenshots, image bytes, camera frames,
-audio, raw user transcript text, permission internals, cookies, tokens, or media
-files.
+Generated Alice evidence does not intentionally capture secrets, environment
+values, absolute paths, hostnames, dependency versions, full project dumps,
+screenshots, image bytes, camera frames, audio, raw user transcript text,
+permission internals, cookies, tokens, or media files. Caller-supplied allowed
+strings are trimmed and length-bounded, but are not content-filtered; callers
+must not put secrets, paths, tokens, hostnames, or transcripts in them.
 
 ## Browser capability defaults
 

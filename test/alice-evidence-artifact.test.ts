@@ -494,7 +494,7 @@ describe("Alice evidence artifact", () => {
           liveStudioSupported: false,
           reviewWorkflowSupported: true,
           rubricRecordingSupported: true,
-          unsupportedLiveStudioReason: "x".repeat(600),
+          unsupportedLiveStudioReason: `ok${" ".repeat(600)}`,
           rubric: [null],
           galleryItems: [null],
         },
@@ -524,7 +524,7 @@ describe("Alice evidence artifact", () => {
     ]);
     expect(parsed.runtimeReview?.galleryWalkRubric?.reviewWorkflowSupported).toBe(false);
     expect(parsed.runtimeReview?.galleryWalkRubric?.rubricRecordingSupported).toBe(false);
-    expect(parsed.runtimeReview?.galleryWalkRubric?.unsupportedLiveStudioReason).toHaveLength(500);
+    expect(parsed.runtimeReview?.galleryWalkRubric?.unsupportedLiveStudioReason).toBe("ok");
     expect(parsed.runtimeReview?.galleryWalkRubric?.rubric).toEqual([]);
     expect(parsed.runtimeReview?.galleryWalkRubric?.galleryItems).toEqual([]);
     expect(validateAliceEvidenceArtifact(parsed)).toEqual({ valid: true, errors: [] });
