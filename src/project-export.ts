@@ -433,9 +433,7 @@ export async function exportWebPackage(
   });
   const html = injectBeforeBodyEnd(
     htmlDocument.html,
-    buildResourceScript(Object.fromEntries(
-      resources.map((resource) => [resource.path, resourceToDataUrl(resource)]),
-    )),
+    buildResourceScript(buildPlayerResourceMap(resources)),
   );
   const manifest = buildPackageManifest(filename);
   const share = buildShareDocument(normalized, filename);
@@ -714,11 +712,30 @@ export class TypeScriptExporter {
   }
 }
 
-function buildResourceScript(resources: Record<string, string>): string {
+type PlayerResourceValue = string | true;
+
+function buildResourceScript(resources: Record<string, PlayerResourceValue>): string {
   if (Object.keys(resources).length === 0) {
     return "";
   }
   return `<script id="alice-export-resources" type="application/json">${escapeScriptText(JSON.stringify(resources))}</script>`;
+}
+
+function buildPlayerResourceMap(resources: readonly ProjectExportResource[]): Record<string, PlayerResourceValue> {
+  return Object.fromEntries(
+    resources
+      .map((resource): [string, PlayerResourceValue] | null => {
+        const mimeType = resource.mimeType ?? inferMimeType(resource.path);
+        if (mimeType.startsWith("image/")) {
+          return [resource.path, resourceToDataUrl(resource)];
+        }
+        if (mimeType.startsWith("model/")) {
+          return [resource.path, true];
+        }
+        return null;
+      })
+      .filter((entry): entry is [string, PlayerResourceValue] => entry !== null),
+  );
 }
 
 function addZipFile(zip: JSZip, path: string, bytes: Uint8Array | string): string {

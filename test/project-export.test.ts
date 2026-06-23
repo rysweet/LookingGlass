@@ -221,6 +221,7 @@ describe("project-export", () => {
       resources: [
         { path: "resources/models/bunny.glb", bytes: new Uint8Array([1, 2, 3]) },
         { path: "resources/textures/bunny.png", bytes: new Uint8Array([137, 80, 78, 71]) },
+        { path: "resources/audio/theme.mp3", bytes: new Uint8Array([4, 5, 6]) },
       ],
     });
     const packageBytes = decodePackage(exported.package.base64);
@@ -253,10 +254,12 @@ describe("project-export", () => {
       "share.json",
       "preview.png",
       "project/project.json",
+      "resources/audio/theme.mp3",
       "resources/models/bunny.glb",
       "resources/textures/bunny.png",
       "validation.json",
     ]));
+    expect(await zip.file("resources/audio/theme.mp3")?.async("uint8array")).toEqual(new Uint8Array([4, 5, 6]));
     expect(await zip.file("resources/models/bunny.glb")?.async("uint8array")).toEqual(new Uint8Array([1, 2, 3]));
     expect(await zip.file("resources/textures/bunny.png")?.async("uint8array")).toEqual(new Uint8Array([137, 80, 78, 71]));
 
@@ -313,6 +316,11 @@ describe("project-export", () => {
     expect(indexHtml).toContain("alice-export-resources");
     expect(indexHtml).toContain('JSON.parse(readText("alice-export-resources") || "{}")');
     expect(indexHtml).toContain("new THREE.TextureLoader().load");
+    expect(indexHtml).toContain('"resources/models/bunny.glb":true');
+    expect(indexHtml).toContain("data:image/png;base64");
+    expect(indexHtml).not.toContain("data:model/gltf-binary");
+    expect(indexHtml).not.toContain("resources/audio/theme.mp3");
+    expect(indexHtml).not.toContain("data:application/octet-stream");
     expect(indexHtml).toContain("mesh.userData.aliceResources");
     expect(indexHtml).toContain("modelResourceAvailable");
     expect(indexHtml).toContain("textureResourceAvailable");
