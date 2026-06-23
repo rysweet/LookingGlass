@@ -240,21 +240,17 @@ function markProjectChanged(): void {
 
 function currentExportProject(archive: AliceProjectArchive): AliceProject {
   const liveJointState = jointState.listObjectNames().length > 0 ? jointState.toJSON() : null;
-  return {
-    ...(JSON.parse(JSON.stringify(archive.project)) as AliceProject),
-    cameraWorkflow,
-    ...(liveJointState
-      ? {
-        jointState: {
-          ...liveJointState,
-          objects: {
-            ...(archive.project.jointState?.objects ?? {}),
-            ...liveJointState.objects,
-          },
-        },
-      }
-      : {}),
-  };
+  archive.project.cameraWorkflow = cameraWorkflow;
+  if (liveJointState) {
+    archive.project.jointState = {
+      ...liveJointState,
+      objects: {
+        ...(archive.project.jointState?.objects ?? {}),
+        ...liveJointState.objects,
+      },
+    };
+  }
+  return archive.project;
 }
 
 function currentExportArchive(): AliceProjectArchive {
