@@ -132,11 +132,15 @@ describe("renderWebXRStatus", () => {
     });
 
     expect(root.querySelector("[data-testid=\"alice-camera-vr-comfort-panel\"]")).not.toBeNull();
+    expect(root.querySelector("#camera-vr-comfort-panel")).not.toBeNull();
+    expect(root.querySelector("#camera-vr-comfort-status")).not.toBeNull();
     expect(root.querySelector("[data-testid=\"alice-camera-keyboard-movement\"]")?.textContent)
       .toContain("Keyboard camera movement available");
     expect(root.querySelector("[data-testid=\"alice-camera-reduced-motion\"]")?.textContent)
       .toContain("Reduced-motion comfort check respected");
     expect(root.querySelector("[data-testid=\"alice-true-vr-unsupported\"]")?.textContent)
+      .toContain("true headset/native VR remains unsupported");
+    expect(root.querySelector("#true-vr-unsupported")?.textContent)
       .toContain("true headset/native VR remains unsupported");
   });
 });

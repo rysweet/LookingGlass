@@ -351,12 +351,12 @@ Stable data attributes and test ids:
 | Attribute or selector | Element | Values |
 | --- | --- | --- |
 | `[data-testid="alice-camera-vr-comfort-panel"]` | Camera/WebXR comfort panel | Present when evidence is rendered |
-| `[data-testid="alice-camera-vr-comfort-status"]` | Status text | `available`, `fallback`, or `unsupported` |
+| `[data-testid="alice-camera-vr-comfort-status"]` | Runtime review status text | `partial` |
 | `[data-testid="alice-camera-keyboard-movement"]` | Keyboard/camera movement evidence | Text-rendered availability |
 | `[data-testid="alice-camera-reduced-motion"]` | Reduced-motion evidence | Text-rendered status |
 | `[data-testid="alice-true-vr-unsupported"]` | Unsupported true VR statement | Always visible in the evidence workflow |
 | `data-alice-webxr-vr-button` | WebXR action button, when present | `enter`, `exit`, `disabled` |
-| `data-alice-webxr-status` | Status container | `available`, `fallback`, `unsupported`, `idle`, `starting`, `active`, `ended`, `failed`, or `degraded` |
+| `data-alice-webxr-status` | WebXR session state container | `idle`, `unsupported`, `starting`, `active`, `ended`, or `failed` |
 | `data-alice-webxr-evidence` | Evidence list | Present when evidence is rendered |
 | `data-alice-webxr-evidence-code` | Evidence item | Evidence code such as `desktop-camera-fallback` or `immersive-vr-unsupported` |
 | `data-alice-webxr-locomotion-mode` | Mode label/control | Active locomotion mode when WebXR locomotion is available |
