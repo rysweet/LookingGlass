@@ -524,12 +524,41 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
     }
   }
 
-  const filename = manifest?.package?.filename ?? `${manifest?.packageName ?? ALICE_WEB_PACKAGE}.zip`;
-  if (!manifest?.package || manifest.package.filename !== filename || manifest.package.mimeType !== ZIP_MIME_TYPE) {
+  const manifestPackageFilename = manifest?.package?.filename;
+  const filename = typeof manifestPackageFilename === "string" && isSafePackageFilename(manifestPackageFilename)
+    ? manifestPackageFilename
+    : `${ALICE_WEB_PACKAGE}.zip`;
+  if (
+    !manifest?.package
+    || manifest.package.filename !== filename
+    || manifest.package.mimeType !== ZIP_MIME_TYPE
+    || manifest.entrypoint !== WEB_PACKAGE_ARTIFACTS.entrypoint
+    || manifest.preview !== WEB_PACKAGE_ARTIFACTS.preview
+    || manifest.share !== WEB_PACKAGE_ARTIFACTS.share
+    || manifest.validation !== WEB_PACKAGE_ARTIFACTS.validation
+    || manifest.project !== WEB_PACKAGE_ARTIFACTS.project
+  ) {
     errors.push({
       code: "invalid-package-reference",
       message: "manifest package must include the validated ZIP filename and application/zip MIME type",
       path: WEB_PACKAGE_ARTIFACTS.manifest,
+    });
+  }
+  if (
+    share
+    && (
+      share.package?.filename !== filename
+      || share.package?.mimeType !== ZIP_MIME_TYPE
+      || share.links?.package !== filename
+      || share.links?.html !== WEB_PACKAGE_ARTIFACTS.entrypoint
+      || share.links?.preview !== WEB_PACKAGE_ARTIFACTS.preview
+      || share.preview !== WEB_PACKAGE_ARTIFACTS.preview
+    )
+  ) {
+    errors.push({
+      code: "invalid-share-package-reference",
+      message: "share package links must match the manifest package filename and fixed artifact paths",
+      path: WEB_PACKAGE_ARTIFACTS.share,
     });
   }
   return buildValidationResult(evidence, errors, {
@@ -924,6 +953,19 @@ function isSafeHttpUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
     return parsed.href === value && (parsed.protocol === "http:" || parsed.protocol === "https:");
+  } catch {
+    return false;
+  }
+}
+
+function isSafePackageFilename(value: string): boolean {
+  try {
+    const safe = assertSafeWritablePath(value);
+    return safe === value
+      && !value.includes("/")
+      && !value.includes("\\")
+      && !URL_CONTROL_OR_SPACE_RE.test(value)
+      && value.endsWith(".alice-web.zip");
   } catch {
     return false;
   }
