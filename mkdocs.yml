@@ -18,6 +18,7 @@ nav:
     - "Testing": "testing.md"
     - "IDE operations": "ide-operations.md"
     - "Gadugi test scenarios": "gadugi-test-scenarios.md"
+    - "Alice workflow UX review": "alice-workflow-ux-review.md"
   - "Reference":
     - "API reference": "api-reference.md"
     - "Animation system": "animation.md"
