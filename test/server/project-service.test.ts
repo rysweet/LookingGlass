@@ -181,6 +181,37 @@ describe("ProjectService.exportTypeScript", () => {
     });
   });
 
+  it("keeps manifest workflow method metadata authoritative for reopened typed projects", () => {
+    const state = createInitialServerState();
+    state.parsedProject = createMinimalProject();
+    state.parsedProject.methods = [{
+      name: "distanceToTarget",
+      isFunction: true,
+      returnType: "DecimalNumber",
+      parameters: [{ name: "target", type: "SModel" }],
+      statements: [],
+    }];
+    const sceneType = state.parsedProject.types?.find((type) => type.superTypeName?.includes("SScene"));
+    if (sceneType) {
+      sceneType.methods = [{
+        name: "distanceToTarget",
+        isFunction: false,
+        returnType: "void",
+        parameters: [],
+        statements: [],
+      }];
+    }
+
+    const project = buildCurrentProject(state);
+    const method = project.methods.find((candidate) => candidate.name === "distanceToTarget");
+
+    expect(method).toMatchObject({
+      isFunction: true,
+      returnType: "DecimalNumber",
+      parameters: [{ name: "target", type: "SModel" }],
+    });
+  });
+
   it("preserves newly registered function metadata for default in-memory projects", () => {
     const state = createInitialServerState();
 

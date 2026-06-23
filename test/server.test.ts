@@ -749,6 +749,26 @@ describe("server API", () => {
       expect(exportedText).toContain(secondEditMarker);
     });
 
+    it("does not duplicate procedure edits when a later object materializes the current project", async () => {
+      await localPost(app, "/api/launch").send({}).expect(200);
+      const marker = "editBeforeAddMaterializationProof";
+      await localPost(app, "/api/code/edit-procedure")
+        .send({
+          procedureSelector: "scene.myFirstMethod",
+          editSpec: `append-comment:${marker}`,
+        })
+        .expect(200);
+      await localPost(app, "/api/scene/add-object")
+        .send({ className: "org.lgna.story.SBiped", name: "lateBunny" })
+        .expect(200);
+      await localPost(app, "/api/project/save").send({}).expect(200);
+
+      const savedProject = await parseA3P(fs.readFileSync(path.join(evidenceDir, "project-save", "saved-project.a3p")));
+      const method = savedProject.methods.find((candidate) => candidate.name === "myFirstMethod");
+      expect(method?.statements.map((statement) => statement.method).filter((methodName) => methodName === marker))
+        .toHaveLength(1);
+    });
+
     it("rejects malformed save fields", async () => {
       await localPost(app, "/api/project/save")
         .send({ saveSelector: 123 })

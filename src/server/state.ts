@@ -116,7 +116,9 @@ export function buildCurrentProject(state: ServerState): AliceProject {
   baseProject.sceneObjects = Array.from(sceneObjectsByName.values());
 
   const sceneType = baseProject.types?.find((type) => type.superTypeName?.includes("SScene"));
-  const sourceMethods = sceneType ? (sceneType.methods ?? []) : baseProject.methods;
+  const sourceMethods = baseProject.methods.length > 0
+    ? baseProject.methods
+    : sceneType ? (sceneType.methods ?? []) : baseProject.methods;
   const methodsByName = new Map(sourceMethods.map((method) => [method.name, method]));
   for (const [name, statements] of state.procedures.entries()) {
     if (state.parsedProject && statements.length === 0 && methodsByName.has(name)) {
@@ -139,14 +141,19 @@ export function buildCurrentProject(state: ServerState): AliceProject {
 }
 
 function mergeProcedureStatements(existing: AliceStatement[], methods: string[]): AliceStatement[] {
+  const existingMethodCalls = new Set(existing
+    .filter((statement) => statement.kind === "MethodCall")
+    .map((statement) => statement.method));
   return [
     ...existing,
-    ...methods.map((method) => ({
-      kind: "MethodCall" as const,
-      object: "this",
-      method,
-      arguments: [],
-    })),
+    ...methods
+      .filter((method) => !existingMethodCalls.has(method))
+      .map((method) => ({
+        kind: "MethodCall" as const,
+        object: "this",
+        method,
+        arguments: [],
+      })),
   ];
 }
 
@@ -196,6 +203,11 @@ export function addSceneObjectToCurrentProject(
     size: null,
     ...(input.modelResourceId !== undefined ? { modelResourceId: input.modelResourceId } : {}),
   });
+  syncServerProceduresFromProject(state, project);
+}
+
+export function resetJointState(state: ServerState): void {
+  state.jointState = new JointStateStore();
 }
 
 export function seedDefaultSceneObjects(state: ServerState): void {
