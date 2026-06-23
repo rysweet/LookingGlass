@@ -333,6 +333,72 @@ describe("Alice evidence artifact", () => {
     expect(validateAliceEvidenceArtifact(artifact)).toEqual({ valid: true, errors: [] });
   });
 
+  it("does not coerce malformed measured runtime flags to true", () => {
+    const artifact = createAliceEvidenceArtifact({
+      ...baseArtifactInput(),
+      runtimeReview: {
+        cameraVrComfort: {
+          schema_version: "alice.camera-vr-comfort-evidence/v1",
+          status: "partial",
+          trueHeadsetVrSupported: false,
+          nativeVrSupported: false,
+          keyboardMovementAvailable: "false" as unknown as boolean,
+          reducedMotionRespected: "false" as unknown as boolean,
+        },
+        accessibilityRescueCaptions: {
+          schema_version: "alice.accessibility-rescue-camera-captions/v1",
+          status: "partial",
+          keyboardReviewAvailable: "false" as unknown as boolean,
+          highContrastReviewAvailable: "false" as unknown as boolean,
+        },
+      },
+    });
+
+    expect(artifact.runtimeReview?.cameraVrComfort?.keyboardMovementAvailable).toBe("unknown");
+    expect(artifact.runtimeReview?.cameraVrComfort?.reducedMotionRespected).toBe("unknown");
+    expect(artifact.runtimeReview?.accessibilityRescueCaptions?.keyboardReviewAvailable).toBe("unknown");
+    expect(artifact.runtimeReview?.accessibilityRescueCaptions?.highContrastReviewAvailable).toBe("unknown");
+  });
+
+  it("rejects parsed runtime review arrays beyond the evidence bound", () => {
+    const many = Array.from({ length: 75 }, (_, index) => index);
+    const artifact = createAliceEvidenceArtifact(baseArtifactInput());
+    const oversized = {
+      ...artifact,
+      runtimeReview: {
+        cameraVrComfort: {
+          schema_version: "alice.camera-vr-comfort-evidence/v1",
+          status: "partial",
+          trueHeadsetVrSupported: false,
+          nativeVrSupported: false,
+          evidenceCodes: many.map((index) => `code-${index}`),
+        },
+        accessibilityRescueCaptions: {
+          schema_version: "alice.accessibility-rescue-camera-captions/v1",
+          status: "partial",
+          captionChecks: many.map((index) => ({ id: `caption-${index}`, present: true })),
+        },
+        galleryWalkRubric: {
+          schema_version: "alice.gallery-walk-rubric-evidence/v1",
+          status: "partial",
+          liveStudioSupported: false,
+          rubric: many.map((index) => ({ id: `rubric-${index}`, label: `Rubric ${index}`, maxScore: 4, evidenceRequired: "Evidence" })),
+          galleryItems: many.map((index) => ({ id: `item-${index}`, title: `Item ${index}`, reviewPrompt: "Review" })),
+        },
+      },
+    };
+
+    const validation = validateAliceEvidenceArtifact(oversized);
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      "runtimeReview.cameraVrComfort.evidenceCodes must include 50 items or fewer.",
+      "runtimeReview.accessibilityRescueCaptions.captionChecks must include 50 items or fewer.",
+      "runtimeReview.galleryWalkRubric.rubric must include 50 items or fewer.",
+      "runtimeReview.galleryWalkRubric.galleryItems must include 50 items or fewer.",
+    ]));
+    expect(() => parseAliceEvidenceArtifact(JSON.stringify(oversized))).toThrow(/50 items or fewer/);
+  });
+
   it("prepares native share metadata from the pre-share artifact hash", () => {
     const artifact = createAliceEvidenceArtifact(baseArtifactInput());
     const staleSharedArtifact: AliceEvidenceArtifact = {

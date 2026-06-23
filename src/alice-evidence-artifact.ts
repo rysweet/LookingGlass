@@ -360,6 +360,7 @@ export function validateAliceEvidenceArtifact(value: unknown): AliceEvidenceVali
           expectEqual(cameraVrComfort.status, "partial", "runtimeReview.cameraVrComfort.status", errors);
           expectLiteralFalse(cameraVrComfort.trueHeadsetVrSupported, "runtimeReview.cameraVrComfort.trueHeadsetVrSupported", errors);
           expectLiteralFalse(cameraVrComfort.nativeVrSupported, "runtimeReview.cameraVrComfort.nativeVrSupported", errors);
+          expectMaxArrayLength(cameraVrComfort.evidenceCodes, "runtimeReview.cameraVrComfort.evidenceCodes", errors);
         }
       }
       if (runtimeReview.accessibilityRescueCaptions !== undefined) {
@@ -367,6 +368,7 @@ export function validateAliceEvidenceArtifact(value: unknown): AliceEvidenceVali
         if (captions) {
           expectEqual(captions.schema_version, "alice.accessibility-rescue-camera-captions/v1", "runtimeReview.accessibilityRescueCaptions.schema_version", errors);
           expectEqual(captions.status, "partial", "runtimeReview.accessibilityRescueCaptions.status", errors);
+          expectMaxArrayLength(captions.captionChecks, "runtimeReview.accessibilityRescueCaptions.captionChecks", errors);
         }
       }
       if (runtimeReview.galleryWalkRubric !== undefined) {
@@ -375,6 +377,8 @@ export function validateAliceEvidenceArtifact(value: unknown): AliceEvidenceVali
           expectEqual(galleryWalkRubric.schema_version, "alice.gallery-walk-rubric-evidence/v1", "runtimeReview.galleryWalkRubric.schema_version", errors);
           expectEqual(galleryWalkRubric.status, "partial", "runtimeReview.galleryWalkRubric.status", errors);
           expectLiteralFalse(galleryWalkRubric.liveStudioSupported, "runtimeReview.galleryWalkRubric.liveStudioSupported", errors);
+          expectMaxArrayLength(galleryWalkRubric.rubric, "runtimeReview.galleryWalkRubric.rubric", errors);
+          expectMaxArrayLength(galleryWalkRubric.galleryItems, "runtimeReview.galleryWalkRubric.galleryItems", errors);
         }
       }
     }
@@ -473,7 +477,10 @@ function sanitizeCanvasSnapshot(snapshot: AliceEvidenceCanvasSnapshot): AliceEvi
 }
 
 function measuredBoolean(value: unknown): boolean | "unknown" {
-  return value === "unknown" ? "unknown" : Boolean(value);
+  if (value === true || value === false || value === "unknown") {
+    return value;
+  }
+  return "unknown";
 }
 
 function sanitizeRuntimeReview(review: AliceEvidenceRuntimeReview): AliceEvidenceRuntimeReview {
@@ -609,6 +616,12 @@ function expectLiteralFalse(value: unknown, label: string, errors: string[]): vo
 function expectEqual(actual: unknown, expected: unknown, label: string, errors: string[]): void {
   if (actual !== expected) {
     errors.push(`${label} must be ${String(expected)}.`);
+  }
+}
+
+function expectMaxArrayLength(value: unknown, label: string, errors: string[]): void {
+  if (Array.isArray(value) && value.length > MAX_RUNTIME_REVIEW_ITEMS) {
+    errors.push(`${label} must include ${MAX_RUNTIME_REVIEW_ITEMS} items or fewer.`);
   }
 }
 

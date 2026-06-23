@@ -71,8 +71,8 @@ Alice uses safe defaults when browser capability information is missing:
 | Capability | Default evidence |
 | --- | --- |
 | `navigator.xr` missing or unsupported | `runtimeReview.cameraVrComfort.browserWebXrStatus: "unsupported"` and visible desktop camera fallback |
-| Reduced-motion media query unavailable | `reducedMotionRespected: true` when Alice avoids motion-heavy auto-start behavior |
-| Keyboard camera controls unavailable | `keyboardMovementAvailable: false` with visible status text |
+| Reduced-motion behavior not measured | `reducedMotionRespected: "unknown"` until Alice verifies reduced-motion behavior |
+| Keyboard camera controls not measured | `keyboardMovementAvailable: "unknown"` with visible status text |
 | Captions unavailable | `runtimeReview.accessibilityRescueCaptions.status: "partial"` with visible caption text |
 | Gallery has no selectable item | `runtimeReview.galleryWalkRubric.galleryItemCount: 1` starter review prompt |
 

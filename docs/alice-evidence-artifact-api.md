@@ -87,8 +87,8 @@ Callers check `valid` before exporting or trusting metadata.
       "status": "partial",
       "browserWebXrStatus": "unsupported",
       "desktopCameraAvailable": true,
-      "keyboardMovementAvailable": true,
-      "reducedMotionRespected": true,
+      "keyboardMovementAvailable": "unknown",
+      "reducedMotionRespected": "unknown",
       "trueHeadsetVrSupported": false,
       "nativeVrSupported": false,
       "cameraMode": "orbit",
@@ -106,8 +106,8 @@ Callers check `valid` before exporting or trusting metadata.
       "ariaLiveCaption": "Loaded Program.",
       "cameraCaption": "Camera orbit view at 0.00, 1.60, 6.00.",
       "objectCaption": "Scene contains alice.",
-      "keyboardReviewAvailable": true,
-      "highContrastReviewAvailable": true,
+      "keyboardReviewAvailable": "unknown",
+      "highContrastReviewAvailable": "unknown",
       "captionChecks": [
         {
           "id": "aria-live-status",
@@ -182,8 +182,8 @@ interface AliceCameraVrComfortEvidence {
   status: "partial";
   browserWebXrStatus: "supported" | "degraded" | "unsupported" | "unknown";
   desktopCameraAvailable: boolean;
-  keyboardMovementAvailable: boolean;
-  reducedMotionRespected: boolean;
+  keyboardMovementAvailable: boolean | "unknown";
+  reducedMotionRespected: boolean | "unknown";
   trueHeadsetVrSupported: false;
   nativeVrSupported: false;
   cameraMode: string;
@@ -202,8 +202,8 @@ interface AliceAccessibilityCaptionsEvidence {
   ariaLiveCaption: string;
   cameraCaption: string;
   objectCaption: string;
-  keyboardReviewAvailable: boolean;
-  highContrastReviewAvailable: boolean;
+  keyboardReviewAvailable: boolean | "unknown";
+  highContrastReviewAvailable: boolean | "unknown";
   captionChecks: {
     id: string;
     present: boolean;
