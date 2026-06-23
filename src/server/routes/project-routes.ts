@@ -11,6 +11,7 @@ import {
 import { ProjectIoError } from "../../project-io.js";
 import { A3PArchiveLimitError } from "../../a3p-parser/limits.js";
 import type { ServerContext } from "../context.js";
+import { removeJointStateSidecar } from "../joint-state-sidecar.js";
 import {
   readJsonObjectBody,
   readOptionalStringField,
@@ -168,6 +169,7 @@ export function registerProjectRoutes(app: Express, context: ServerContext): voi
       res.status(400).json({ error: launchResult.error });
       return;
     }
+    await removeJointStateSidecar(context.evidenceDir);
 
     res.json({
       status: "reopened",

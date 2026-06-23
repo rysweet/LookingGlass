@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context.js";
+import { removeJointStateSidecar } from "../joint-state-sidecar.js";
 import { validateExistingProjectRealPath, validateProjectPath } from "../validation.js";
 
 export function registerLaunchRoutes(app: Express, context: ServerContext): void {
@@ -39,6 +40,7 @@ export function registerLaunchRoutes(app: Express, context: ServerContext): void
       res.status(400).json({ error: launchResult.error });
       return;
     }
+    await removeJointStateSidecar(context.evidenceDir);
 
     res.json({
       status: "launched",

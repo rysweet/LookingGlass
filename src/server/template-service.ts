@@ -7,6 +7,7 @@ import {
   createEmptyProjectAudioState,
 } from "../project-audio.js";
 import type { TemplateDescriptor } from "../project-templates.js";
+import { removeJointStateSidecar } from "./joint-state-sidecar.js";
 import { DEFAULT_POSITION, resetJointState, syncServerMethodDefinitionsFromProject, type ServerState } from "./state.js";
 import { sanitizeFilename } from "./validation.js";
 
@@ -55,6 +56,7 @@ export const templateService: TemplateService = {
     state.projectPath = newProjectPath;
     state.cameraWorkflow = createDefaultCameraWorkflowState();
     resetJointState(state);
+    await removeJointStateSidecar(evidenceDir);
     state.sceneObjects.clear();
     for (const obj of project.sceneObjects) {
       state.sceneObjects.set(obj.name, {

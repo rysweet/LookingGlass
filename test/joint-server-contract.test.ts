@@ -29,6 +29,15 @@ function createTestServer(evidenceDir: string): Express {
   });
 }
 
+function createTestServerWithProjectAccess(evidenceDir: string): Express {
+  return createServer({
+    port: 0,
+    evidenceDir,
+    localApiToken: TEST_LOCAL_API_TOKEN,
+    allowedProjectDirs: [evidenceDir],
+  });
+}
+
 function localPost(app: Express, apiPath: string) {
   return request(app)
     .post(apiPath)
@@ -237,7 +246,9 @@ describe("joint manipulation server contract", () => {
     await localPost(app, "/api/project/save")
       .send({ saveSelector: "scene.myFirstMethod" })
       .expect(200);
+    const runtimeSidecarPath = path.join(evidenceDir, "alice-web", "joint-state.json");
     const savedSidecarPath = path.join(evidenceDir, "project-save", "alice-web", "joint-state.json");
+    expect(fs.existsSync(runtimeSidecarPath)).toBe(true);
     expect(fs.existsSync(savedSidecarPath)).toBe(true);
     expect(readJsonObject(savedSidecarPath)).toMatchObject({
       schema_version: "alice.joint-state/v1",
@@ -272,7 +283,9 @@ describe("joint manipulation server contract", () => {
     await localPost(app, "/api/project/save")
       .send({ saveSelector: "scene.myFirstMethod" })
       .expect(200);
+    const runtimeSidecarPath = path.join(evidenceDir, "alice-web", "joint-state.json");
     const savedSidecarPath = path.join(evidenceDir, "project-save", "alice-web", "joint-state.json");
+    expect(fs.existsSync(runtimeSidecarPath)).toBe(true);
     expect(fs.existsSync(savedSidecarPath)).toBe(true);
 
     await localPost(app, "/api/launch").send({}).expect(200);
@@ -280,6 +293,7 @@ describe("joint manipulation server contract", () => {
       .send({ saveSelector: "scene.myFirstMethod" })
       .expect(200);
 
+    expect(fs.existsSync(runtimeSidecarPath)).toBe(false);
     expect(fs.existsSync(savedSidecarPath)).toBe(false);
   });
 
@@ -297,7 +311,9 @@ describe("joint manipulation server contract", () => {
     await localPost(app, "/api/project/save")
       .send({ saveSelector: "scene.myFirstMethod" })
       .expect(200);
+    const runtimeSidecarPath = path.join(evidenceDir, "alice-web", "joint-state.json");
     const savedSidecarPath = path.join(evidenceDir, "project-save", "alice-web", "joint-state.json");
+    expect(fs.existsSync(runtimeSidecarPath)).toBe(true);
     expect(fs.existsSync(savedSidecarPath)).toBe(true);
 
     await localPost(app, "/api/project/new")
@@ -307,7 +323,34 @@ describe("joint manipulation server contract", () => {
       .send({ saveSelector: "scene.myFirstMethod" })
       .expect(200);
 
+    expect(fs.existsSync(runtimeSidecarPath)).toBe(false);
     expect(fs.existsSync(savedSidecarPath)).toBe(false);
+  });
+
+  it("clears stale joint state when reopening a replacement project", async () => {
+    const evidenceDir = makeTempDir("alice-joints-reopen-reset-");
+    const app = createTestServerWithProjectAccess(evidenceDir);
+    await localPost(app, "/api/launch").send({}).expect(200);
+    await localPost(app, "/api/scene/add-jointed-object")
+      .send({
+        name: "robotArm",
+        className: "org.lgna.story.SProp",
+        joints: robotArmHierarchy(),
+      })
+      .expect(200);
+    await localPost(app, "/api/project/save")
+      .send({ saveSelector: "scene.myFirstMethod" })
+      .expect(200);
+    const runtimeSidecarPath = path.join(evidenceDir, "alice-web", "joint-state.json");
+    const savedProjectPath = path.join(evidenceDir, "project-save", "saved-project.a3p");
+    expect(fs.existsSync(runtimeSidecarPath)).toBe(true);
+    expect(fs.existsSync(savedProjectPath)).toBe(true);
+
+    await localPost(app, "/api/project/reopen")
+      .send({ project: savedProjectPath })
+      .expect(200);
+
+    expect(fs.existsSync(runtimeSidecarPath)).toBe(false);
   });
 
   it("rejects unknown mutating joints without changing persisted sidecar state", async () => {
