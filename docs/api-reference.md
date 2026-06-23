@@ -1047,7 +1047,7 @@ Evidence artifact shape:
   "schema_version": "alice.audio-workflow/v1",
   "timestamp": 1710000000000,
   "source": "alice-web",
-  "status": "bounded",
+  "status": "proved",
   "support_level": "metadata-and-playback-bridge",
   "supported_formats": [".mp3", ".wav", ".ogg", ".m4a"],
   "asset_count": 1,
