@@ -20,6 +20,7 @@ outside the committed source tree.
 ## Contents
 
 - [Run sequence](#run-sequence)
+- [Scheduled validation](#scheduled-validation)
 - [Gadugi scenario](#gadugi-scenario)
 - [Authoritative coverage source](#authoritative-coverage-source)
 - [Evidence output](#evidence-output)
@@ -62,6 +63,21 @@ evidence location:
 ```bash
 rm -rf "$AUDIT_DIR"
 ```
+
+## Scheduled validation
+
+`.github/workflows/howto-parity-validation.yml` runs the same audit on a
+calendar schedule and by manual dispatch. The workflow checks out Alice main for
+scheduled runs, checks out `rysweet/RabbitHole` `refs/heads/develop` as the
+comparison source, builds the server CLI, runs `alice-howto-parity-audit`, and
+uploads JSON evidence as the `alice-howto-parity-validation` CI artifact.
+
+The scheduled artifact contains the audit result plus the resolved RabbitHole
+baseline SHA and the actual Alice commit SHA checked out by the workflow. It is
+intentionally a CI artifact only; do not commit generated validation output to
+the repository.
+When a scheduled run fails, the workflow opens a GitHub issue with the baseline
+SHA, candidate SHA, workflow run URL, and artifact name.
 
 ## Gadugi scenario
 

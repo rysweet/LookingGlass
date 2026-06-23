@@ -1,0 +1,140 @@
+name: Alice HowTo Parity Validation
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/howto-parity-validation.yml'
+      - 'src/server/alice-howto-parity-*.ts'
+      - 'test/alice-howto-parity-audit.test.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate-howto-parity:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'main' || github.ref }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build:server
+
+      - name: Run Alice HowTo parity audit
+        env:
+          NODE_OPTIONS: --max-old-space-size=32768
+        run: |
+          set -euo pipefail
+          AUDIT_DIR="$RUNNER_TEMP/alice-howto-parity"
+          BASELINE_DIR="$RUNNER_TEMP/rabbithole-develop"
+          mkdir -p "$AUDIT_DIR"
+          AUDIT_JSON="$AUDIT_DIR/alice-howto-parity-audit.json"
+          ISSUE_BODY="$AUDIT_DIR/regression-issue.md"
+          CANDIDATE_SHA="$(git rev-parse HEAD)"
+          CANDIDATE_REF="${GITHUB_REF:-}"
+
+          git clone --depth=1 --branch develop https://github.com/rysweet/RabbitHole.git "$BASELINE_DIR"
+          BASELINE_SHA="$(git -C "$BASELINE_DIR" rev-parse HEAD)"
+          test -f "$BASELINE_DIR/pom.xml"
+          test -d "$BASELINE_DIR/core/ide"
+
+          set +e
+          node dist-server/cli.js alice-howto-parity-audit --output "$AUDIT_JSON" --pretty
+          AUDIT_STATUS="$?"
+          set -e
+
+          node --input-type=module - "$AUDIT_JSON" "$AUDIT_DIR/scheduled-parity-validation.json" "$ISSUE_BODY" "$BASELINE_SHA" "$CANDIDATE_SHA" "$CANDIDATE_REF" "$AUDIT_STATUS" <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const [auditPath, outputPath, issueBodyPath, baselineSha, candidateSha, candidateRef, auditStatus] =
+            process.argv.slice(2);
+          const audit = JSON.parse(readFileSync(auditPath, "utf8"));
+          const artifact = {
+            schemaVersion: "alice-web.scheduled-howto-parity-validation/v1",
+            product: "Alice",
+            runtime: "alice-web",
+            baseline: {
+              repository: "rysweet/RabbitHole",
+              ref: "refs/heads/develop",
+              sha: baselineSha,
+              checkout: "runner-temp/rabbithole-develop",
+            },
+            candidate: {
+              repository: "rysweet/LookingGlass",
+              ref: candidateRef,
+              sha: candidateSha,
+            },
+            comparison: {
+              scenarioSet: "Alice.org HowTo coverage",
+              baselineSource: "RabbitHole develop checkout",
+              candidateSource: "LookingGlass workflow checkout",
+              status: audit.summary?.status === "passed" ? "passed" : "failed",
+            },
+            auditExitCode: Number.parseInt(auditStatus, 10),
+            audit,
+          };
+          writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+          if (artifact.comparison.status !== "passed") {
+            writeFileSync(
+              issueBodyPath,
+              [
+                "Scheduled Alice HowTo parity validation failed.",
+                "",
+                `- RabbitHole baseline: rysweet/RabbitHole refs/heads/develop @ ${baselineSha}`,
+                `- LookingGlass candidate: rysweet/LookingGlass ${candidateRef} @ ${candidateSha}`,
+                `- Workflow run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+                "",
+                "Use the uploaded `alice-howto-parity-validation` artifact for the audit JSON and scheduled validation metadata.",
+                "",
+              ].join("\n"),
+              "utf8",
+            );
+          }
+          NODE
+
+          if [ "$AUDIT_STATUS" -ne 0 ]; then
+            exit "$AUDIT_STATUS"
+          fi
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: alice-howto-parity-validation
+          path: ${{ runner.temp }}/alice-howto-parity/*.json
+          if-no-files-found: error
+
+      - name: File scheduled parity regression
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_BODY: ${{ runner.temp }}/alice-howto-parity/regression-issue.md
+        run: |
+          set -euo pipefail
+          if [ ! -f "$ISSUE_BODY" ]; then
+            mkdir -p "$(dirname "$ISSUE_BODY")"
+            cat > "$ISSUE_BODY" <<EOF
+          Scheduled Alice HowTo parity validation failed before audit metadata was written.
+
+          - Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Event: ${GITHUB_EVENT_NAME}
+
+          Inspect the failed workflow logs for the earliest failing step.
+          EOF
+          fi
+          gh issue create \
+            --title "Scheduled Alice HowTo parity validation failed" \
+            --body-file "$ISSUE_BODY"
