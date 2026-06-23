@@ -86,10 +86,6 @@ implemented export/share routes. `/api/audio/*` exposes the audio workflow; see
 curl http://127.0.0.1:3000/api/health
 ```
 
-Abbreviated example response. The `checks`, `unsupportedCapabilities`, and
-`classroomReadiness.studentFallbackRoles` arrays may contain additional stable
-entries; clients should treat them as arrays, not singletons.
-
 ```json
 {
   "status": "running",
@@ -110,9 +106,6 @@ filesystem paths.
 ```bash
 curl http://127.0.0.1:3000/api/config
 ```
-
-Abbreviated example response. The `handoff.readinessSignals` array may contain
-additional stable entries; clients should treat it as an array, not a singleton.
 
 ```json
 {
@@ -158,7 +151,9 @@ Query parameters:
 | --- | --- | --- | --- |
 | `scenario` | `string` | no | One of `setup-preflight-ready-to-create`, `setup-support-lab-readiness`, `instructor-classroom-setup-readiness`, `instructor-student-launch-evidence-handoff`, or `setup-readiness` |
 
-Example response:
+Abbreviated example response. The `checks`, `unsupportedCapabilities`, and
+`classroomReadiness.studentFallbackRoles` arrays may contain additional stable
+entries; clients should treat them as arrays, not singletons.
 
 ```json
 {
@@ -229,7 +224,8 @@ Request body:
 | --- | --- | --- | --- |
 | `scenario` | `string` | no | One setup scenario or `setup-readiness`; defaults to `setup-readiness` |
 
-Example response:
+Abbreviated example response. The `handoff.readinessSignals` array may contain
+additional stable entries; clients should treat it as an array, not a singleton.
 
 ```json
 {
