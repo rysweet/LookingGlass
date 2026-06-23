@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createHash } from "node:crypto";
 import JSZip from "jszip";
 import { parseA3P } from "../src/a3p-parser";
+import { readProject } from "../src/project-io";
 import { createServer } from "../src/server";
 import * as fs from "fs";
 import * as os from "os";
@@ -356,6 +357,143 @@ describe("server API", () => {
           name: EXCESSIVE_ROUTE_STRING,
         })
         .expect(400);
+    });
+
+    it("attaches imported model resources to newly added scene objects", async () => {
+      await localPost(app, "/api/launch").send({}).expect(200);
+      const imported = await localPost(app, "/api/assets/import-model")
+        .send({
+          fileName: "moon-rover.glb",
+          contentBase64: Buffer.from([1, 2, 3, 4]).toString("base64"),
+        })
+        .expect(200);
+      const modelResourceId = imported.body.asset.id;
+
+      const added = await localPost(app, "/api/scene/add-object")
+        .send({
+          className: "org.lgna.story.SProp",
+          name: "moonRover",
+          modelResourceId,
+        })
+        .expect(200);
+      expect(added.body.modelResourceId).toBe(modelResourceId);
+
+      const save = await localPost(app, "/api/project/save")
+        .send({})
+        .expect(200);
+      const savedProject = await parseA3P(fs.readFileSync(path.join(evidenceDir, "project-save", "saved-project.a3p")));
+      expect(save.body.status).toBe("saved");
+      expect(savedProject.sceneObjects.find((object) => object.name === "moonRover")?.modelResourceId)
+        .toBe(modelResourceId);
+
+      await localPost(app, "/api/scene/add-object")
+        .send({
+          className: "org.lgna.story.SProp",
+          name: "badModel",
+          modelResourceId: "project/models/missing.glb",
+        })
+        .expect(400);
+
+      await localPost(app, "/api/launch").send({}).expect(200);
+      const freshExport = await localPost(app, "/api/project/export/web-package")
+        .send({ title: "Fresh Launch" })
+        .expect(200);
+      const freshZip = await JSZip.loadAsync(decodeBase64Package(freshExport.body.package.base64));
+      const freshProject = JSON.parse(await freshZip.file("project/project.json")!.async("string"));
+      expect(JSON.stringify(freshProject)).not.toContain(modelResourceId);
+      expect(freshZip.file("resources/models/moon-rover.glb")).toBeNull();
+    });
+
+    it("persists applied texture assignments through save and web package export", async () => {
+      await localPost(app, "/api/launch").send({}).expect(200);
+      await localPost(app, "/api/scene/add-object")
+        .send({
+          className: "org.lgna.story.SBiped",
+          name: "bunny",
+        })
+        .expect(200);
+      const importedTexture = await localPost(app, "/api/assets/import-texture")
+        .send({
+          fileName: "moon-rock.png",
+          contentBase64: Buffer.from([137, 80, 78, 71]).toString("base64"),
+        })
+        .expect(200);
+
+      const applied = await localPost(app, "/api/scene/apply-texture")
+        .send({
+          objectName: "bunny",
+          textureResourceId: importedTexture.body.asset.id,
+        })
+        .expect(200);
+      expect(applied.body.materialBindings).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          target: "surface",
+          textureResourceId: importedTexture.body.asset.id,
+        }),
+      ]));
+
+      await localPost(app, "/api/project/save").send({}).expect(200);
+      const savedProject = await parseA3P(fs.readFileSync(path.join(evidenceDir, "project-save", "saved-project.a3p")));
+      expect(savedProject.textureAssignments).toEqual([
+        { objectName: "bunny", texturePath: importedTexture.body.asset.resourcePath },
+      ]);
+
+      const exportRes = await localPost(app, "/api/project/export/web-package")
+        .send({ title: "Texture Assignment" })
+        .expect(200);
+      const zip = await JSZip.loadAsync(decodeBase64Package(exportRes.body.package.base64));
+      const projectJson = JSON.parse(await zip.file("project/project.json")!.async("string"));
+      expect(projectJson.textureAssignments).toEqual([
+        { objectName: "bunny", texturePath: importedTexture.body.asset.resourcePath },
+      ]);
+
+      await localPost(app, "/api/project/new")
+        .send({ templateId: "blank", projectName: "Fresh Project" })
+        .expect(200);
+      const freshExport = await localPost(app, "/api/project/export/web-package")
+        .send({ title: "Fresh Project" })
+        .expect(200);
+      const freshZip = await JSZip.loadAsync(decodeBase64Package(freshExport.body.package.base64));
+      expect(freshZip.file(importedTexture.body.asset.resourcePath)).toBeNull();
+      expect(await freshZip.file("index.html")!.async("string")).not.toContain(importedTexture.body.asset.resourcePath);
+    });
+
+    it("clears stale audio metadata and resources when creating a replacement project", async () => {
+      await localPost(app, "/api/launch").send({}).expect(200);
+      await localPost(app, "/api/audio/assets")
+        .send({
+          fileName: "theme.mp3",
+          dataBase64: Buffer.from([1, 2, 3, 4]).toString("base64"),
+          durationSeconds: 1,
+        })
+        .expect(200);
+      await localPost(app, "/api/audio/resources")
+        .send({
+          id: "project-audio-theme",
+          name: "Theme",
+          path: "resources/audio/theme.mp3",
+          format: "mp3",
+          bytesBase64: Buffer.from([1, 2, 3, 4]).toString("base64"),
+          duration: 1,
+        })
+        .expect(200);
+
+      await localPost(app, "/api/project/new")
+        .send({ templateId: "blank", projectName: "Fresh Audio Free Project" })
+        .expect(200);
+
+      const audioState = await request(app)
+        .get("/api/audio/state")
+        .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN)
+        .expect(200);
+      expect(audioState.body.assets).toEqual([]);
+      expect(audioState.body.audio.resources).toEqual([]);
+
+      await localPost(app, "/api/project/save").send({}).expect(200);
+      const savedBytes = fs.readFileSync(path.join(evidenceDir, "project-save", "saved-project.a3p"));
+      const savedArchive = await readProject(savedBytes);
+      expect(savedArchive.aliceAudio).toBeUndefined();
+      expect(savedArchive.resources.has("resources/audio/theme.mp3")).toBe(false);
     });
   });
 

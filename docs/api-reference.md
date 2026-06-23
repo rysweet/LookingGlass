@@ -62,7 +62,7 @@ implemented export/share routes. `/api/audio/*` exposes the audio workflow; see
 | `/api/audio/assets` | `POST` | Register a base64-encoded audio asset |
 | `/api/audio/background` | `POST` | Select a registered asset as background music |
 | `/api/audio/cues` | `POST` | Add an animation-timed audio cue |
-| `/api/audio/evidence` | `POST` | Write audio workflow proof evidence |
+| `/api/audio/evidence` | `POST` | Write bounded audio workflow evidence |
 | `/api/world/run` | `POST` | Run the cached project through the Tweedle VM |
 | `/api/screenshot` | `POST` | Render the current scene to a PNG file |
 | `/api/camera/state` | `GET` | Read the active camera workflow state |
@@ -304,9 +304,9 @@ Example response:
 ```
 
 Validation rejects missing fields, invalid base64, empty decoded bytes, unsafe
-filenames, unsupported extensions, and decoded resources that exceed Project
-IO's archive size limit. Duplicate asset IDs get `-2`, `-3`, and later suffixes
-before the extension.
+filenames, and unsupported extensions. The route rejects encoded request bodies
+over its JSON upload limit. Duplicate asset IDs or existing descriptor-less
+archive resource paths get `-2`, `-3`, and later suffixes before the extension.
 
 ## `POST /api/assets/import-texture`
 
@@ -348,9 +348,9 @@ Example response:
 ```
 
 Validation rejects missing fields, invalid base64, empty decoded bytes, unsafe
-filenames, unsupported extensions, and decoded resources that exceed Project
-IO's archive size limit. Duplicate asset IDs get `-2`, `-3`, and later suffixes
-before the extension.
+filenames, and unsupported extensions. The route rejects encoded request bodies
+over its JSON upload limit. Duplicate asset IDs or existing descriptor-less
+archive resource paths get `-2`, `-3`, and later suffixes before the extension.
 
 ## `POST /api/scene/apply-texture`
 
@@ -653,6 +653,8 @@ runtime, API, player, manifest, share, or validation metadata.
 Web-package feature contract: create share artifacts from an exported package.
 The server validates `packageBase64` before generating the share response, then
 links the package by filename, byte size, and SHA-256 digest.
+Package filenames are accepted only when the validated package manifest contains
+a safe filename without directory traversal.
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/project/share \
@@ -690,6 +692,11 @@ Example response:
       "mimeType": "application/zip",
       "sizeBytes": 24576,
       "sha256": "8ad0e9b4f5d8f2d3b30f6d3f6f0f4e6d4f3b2a1900e4c4a1f03f7c2cb72f47cc"
+    },
+    "delivery": {
+      "mode": "browser-download-fallback",
+      "nativeWebShare": false,
+      "requiresUserDownload": true
     },
     "links": {
       "html": "index.html",
@@ -793,9 +800,10 @@ Invalid packages return HTTP `400` with explicit validation errors:
 
 Validation rejects malformed base64, empty packages, unreadable ZIP data,
 absolute paths, parent traversal, backslash traversal, duplicate required
-entries, missing required files, wrong schema identity, wrong runtime identity,
-unsafe package filenames, package/share link mismatches, unsafe `canonicalUrl`
-values, and generated metadata that uses repository nickname identity.
+entries, encoded path controls, missing required files, unsafe package
+filenames, wrong schema identity, wrong runtime identity, package/share link
+mismatches, unsupported share delivery modes, unsafe `canonicalUrl` values, and
+generated metadata that uses repository nickname identity.
 
 ## `GET /api/projects/current/export/typescript`
 
@@ -1020,7 +1028,7 @@ once when the named animation timeline reaches or crosses the configured time.
 
 ## `POST /api/audio/evidence`
 
-Write the audio workflow proof artifact.
+Write the bounded audio workflow evidence artifact.
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/audio/evidence \
@@ -1034,7 +1042,7 @@ Request body:
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `savedProjectArtifact` | `string` | no | Saved project artifact name to record in evidence |
-| `reloaded` | `boolean` | no | Whether the proof was collected after reloading a saved project |
+| `reloaded` | `boolean` | no | Whether the evidence was collected after reloading a saved project |
 
 Example response:
 
@@ -1054,6 +1062,7 @@ Evidence artifact shape:
   "timestamp": 1710000000000,
   "source": "alice-web",
   "status": "proved",
+  "support_level": "metadata-and-playback-bridge",
   "supported_formats": [".mp3", ".wav", ".ogg", ".m4a"],
   "asset_count": 1,
   "asset_names": ["intro.wav"],
@@ -1062,8 +1071,17 @@ Evidence artifact shape:
   "cue_ids": ["intro-cue"],
   "saved_project_artifact": "saved-project.a3p",
   "reloaded": true,
+  "playback": {
+    "mode": "simulated-output-bridge",
+    "native_audio_playback": false,
+    "background_music_started": true,
+    "triggered_cue_ids": ["intro-cue"],
+    "synchronized_animation_ids": ["scene.myFirstMethod"]
+  },
   "doesNotClaim": [
-    "audible speaker output in the test environment",
+    "native audio playback",
+    "real speaker output in the browser or operating system",
+    "full audio authoring pipeline",
     "native desktop audio stack coverage",
     "visible rendering correctness"
   ]

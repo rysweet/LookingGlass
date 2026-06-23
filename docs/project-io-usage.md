@@ -100,12 +100,13 @@ Rejected paths throw `ProjectIoError` with code `unsafe-path`.
 
 ## Add imported model and texture assets
 
-Issue #221 imported assets need both project metadata and archive bytes. Store
+Imported assets need both project metadata and archive bytes. Store
 scene-facing IDs under `project/models/` or `project/textures/`, and store bytes
 under the matching `resources/` archive path.
 
 ```typescript
 import { readFile } from "node:fs/promises";
+import { createImportedProjectAsset } from "./src/imported-project-assets.js";
 import { readProject, writeProject } from "./src/project-io.js";
 
 const archive = await readProject(projectBytes);
@@ -113,43 +114,29 @@ const archive = await readProject(projectBytes);
 const modelBytes = await readFile("assets/models/moon-rover.glb");
 const textureBytes = await readFile("assets/textures/checker.png");
 
-archive.project.importedAssets = [
-  ...(archive.project.importedAssets ?? []),
-  {
-    id: "project/models/moon-rover.glb",
-    kind: "model",
-    name: "Moon Rover",
-    fileName: "moon-rover.glb",
-    resourcePath: "resources/models/moon-rover.glb",
-    contentType: "model/gltf-binary",
-    byteLength: modelBytes.byteLength,
-  },
-  {
-    id: "project/textures/checker.png",
-    kind: "texture",
-    name: "Checker",
-    fileName: "checker.png",
-    resourcePath: "resources/textures/checker.png",
-    contentType: "image/png",
-    byteLength: textureBytes.byteLength,
-  },
-];
+const model = createImportedProjectAsset(
+  { kind: "model", fileName: "moon-rover.glb", bytes: new Uint8Array(modelBytes) },
+  archive.project.importedAssets ?? [],
+  archive.resources.keys(),
+);
+archive.project.importedAssets = [...(archive.project.importedAssets ?? []), model.asset];
+archive.resources.set(model.archivePath, model.resourceBytes);
 
-archive.resources.set(
-  "resources/models/moon-rover.glb",
-  new Uint8Array(modelBytes),
+const texture = createImportedProjectAsset(
+  { kind: "texture", fileName: "checker.png", bytes: new Uint8Array(textureBytes) },
+  archive.project.importedAssets,
+  archive.resources.keys(),
 );
-archive.resources.set(
-  "resources/textures/checker.png",
-  new Uint8Array(textureBytes),
-);
+archive.project.importedAssets = [...archive.project.importedAssets, texture.asset];
+archive.resources.set(texture.archivePath, texture.resourceBytes);
 
 const box = archive.project.sceneObjects.find((object) => object.name === "box");
 if (box) {
+  box.modelResourceId = model.projectResourceId;
   box.materialBindings = [
     {
       target: "surface",
-      textureResourceId: "project/textures/checker.png",
+      textureResourceId: texture.projectResourceId,
     },
   ];
 }

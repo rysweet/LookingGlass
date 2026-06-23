@@ -8,6 +8,7 @@ import { createDefaultCameraWorkflowState } from "../camera-workflow.js";
 import {
   exportWebPackage,
   generateShareArtifacts,
+  isReservedWebPackagePath,
   validateWebPackage,
   type ExportedWebPackage,
   type ShareArtifacts,
@@ -24,6 +25,7 @@ import {
   type ClassBehaviorImportResult,
 } from "../project-io/class-behavior-package.js";
 import { readProject, writeProject, type AliceProjectArchive } from "../project-io.js";
+import { SPECIAL_PROJECT_IO_PATHS } from "../project-io/types.js";
 import {
   applyAudioManifest,
   createDefaultProjectAudioState,
@@ -183,18 +185,22 @@ export const projectService: ProjectService = {
       syncServerSceneObjectsFromProject(state, loadResult.project);
       state.projectAudio = applyAudioManifest(loadResult.archive.manifest);
       state.aliceAudio = loadResult.archive.aliceAudio ?? createDefaultProjectAudioState();
+      state.cameraWorkflow = loadResult.project.cameraWorkflow ?? createDefaultCameraWorkflowState();
     } else {
       state.projectArchive = null;
       state.resources = new Map();
       state.projectAudio = createEmptyProjectAudioState();
       state.aliceAudio = createDefaultProjectAudioState();
+      state.sceneObjects.clear();
     }
 
     state.launched = true;
     state.projectPath = resolvedProjectFile;
     state.projectName = projectName;
     state.parsedProject = parsedProject;
-    state.cameraWorkflow = createDefaultCameraWorkflowState();
+    if (!resolvedProjectFile) {
+      state.cameraWorkflow = createDefaultCameraWorkflowState();
+    }
 
     seedDefaultSceneObjects(state);
     state.eventSystem.reset();
@@ -401,7 +407,17 @@ export const projectService: ProjectService = {
   },
 
   async exportWebPackage(state, input) {
-    return exportWebPackage(buildCurrentProject(state), input);
+    return exportWebPackage(buildCurrentProject(state), {
+      ...input,
+      resources: [
+        ...(input.resources ?? []),
+        ...Array.from(state.resources, ([path, bytes]) => ({ path, bytes }))
+          .filter((resource) =>
+            !SPECIAL_PROJECT_IO_PATHS.has(resource.path)
+            && !isReservedWebPackagePath(resource.path)
+          ),
+      ],
+    });
   },
 
   async validateWebPackage(input) {

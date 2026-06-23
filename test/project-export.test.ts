@@ -95,6 +95,8 @@ function createProjectFixture() {
     position: { x: 0, y: 0, z: 0 },
     orientation: null,
     size: { width: 1, height: 2, depth: 1 },
+    modelResourceId: "project/models/bunny.glb",
+    materialBindings: [{ target: "surface", textureResourceId: "project/textures/bunny.png" }],
   });
   project.methods.push({
     name: "myFirstMethod",
@@ -216,6 +218,11 @@ describe("project-export", () => {
       title: "Winter Story",
       description: "A snow scene with a bunny.",
       canonicalUrl: "https://example.edu/alice/winter-story",
+      resources: [
+        { path: "resources/models/bunny.glb", bytes: new Uint8Array([1, 2, 3]) },
+        { path: "resources/textures/bunny.png", bytes: new Uint8Array([137, 80, 78, 71]) },
+        { path: "resources/audio/theme.mp3", bytes: new Uint8Array([4, 5, 6]) },
+      ],
     });
     const packageBytes = decodePackage(exported.package.base64);
     const zip = await JSZip.loadAsync(packageBytes);
@@ -247,8 +254,14 @@ describe("project-export", () => {
       "share.json",
       "preview.png",
       "project/project.json",
+      "resources/audio/theme.mp3",
+      "resources/models/bunny.glb",
+      "resources/textures/bunny.png",
       "validation.json",
     ]));
+    expect(await zip.file("resources/audio/theme.mp3")?.async("uint8array")).toEqual(new Uint8Array([4, 5, 6]));
+    expect(await zip.file("resources/models/bunny.glb")?.async("uint8array")).toEqual(new Uint8Array([1, 2, 3]));
+    expect(await zip.file("resources/textures/bunny.png")?.async("uint8array")).toEqual(new Uint8Array([137, 80, 78, 71]));
 
     const manifest = await readZipJson(zip, "manifest.json");
     expect(manifest).toMatchObject({
@@ -299,26 +312,51 @@ describe("project-export", () => {
     ]));
     expect(exported.validation).toMatchObject(validation);
 
-    const projectPayload = await readZipJson(zip, "project/project.json");
-    expect(projectPayload.projectName).toBe("Round 84 Demo");
-
     const indexHtml = await readZipText(zip, "index.html");
-    expect(indexHtml).toContain("window.AlicePlayer");
-    expect(indexHtml).toContain("alice-web-player");
-    expect(indexHtml).toContain("alice-project-data");
-    expect(indexHtml).toMatch(/<button\b[^>]*data-alice-player-action=["']play["']/);
+    expect(indexHtml).toContain("alice-export-resources");
+    expect(indexHtml).toContain('JSON.parse(readText("alice-export-resources") || "{}")');
+    expect(indexHtml).toContain("new THREE.TextureLoader().load");
+    expect(indexHtml).toContain('"resources/models/bunny.glb":true');
+    expect(indexHtml).toContain("data:image/png;base64");
+    expect(indexHtml).not.toContain("data:model/gltf-binary");
+    expect(indexHtml).not.toContain("resources/audio/theme.mp3");
+    expect(indexHtml).not.toContain("data:application/octet-stream");
+    expect(indexHtml).toContain("mesh.userData.aliceResources");
+    expect(indexHtml).toContain("modelResourceAvailable");
+    expect(indexHtml).toContain("textureResourceAvailable");
+  });
 
-    const previewBytes = await zip.file("preview.png")!.async("uint8array");
-    expect(Array.from(previewBytes.slice(0, 4))).toEqual([137, 80, 78, 71]);
+  it("exportWebPackage rejects resources that would replace required package artifacts", async () => {
+    await expect(projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Collision",
+      resources: [{ path: "index.html", bytes: "owned" }],
+    })).rejects.toThrow(/resource path conflicts with web package artifact/);
 
-    const generatedText = [
-      indexHtml,
-      JSON.stringify(manifest),
-      JSON.stringify(share),
-      JSON.stringify(validation),
-      JSON.stringify(projectPayload),
-    ].join("\n");
-    expect(generatedText).not.toMatch(/LookingGlass|lookingglass|alice-standalone-player/);
+    await expect(projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Directory Collision",
+      resources: [{ path: "project", bytes: "owned" }],
+    })).rejects.toThrow(/resource path conflicts with web package artifact/);
+
+    await expect(projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Directory Collision",
+      resources: [{ path: "index.html/foo.txt", bytes: "owned" }],
+    })).rejects.toThrow(/resource path conflicts with web package artifact/);
+
+    await expect(projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Case Collision",
+      resources: [{ path: "INDEX.HTML", bytes: "owned" }],
+    })).rejects.toThrow(/resource path conflicts with web package artifact/);
+  });
+
+  it.each([
+    "index%2ehtml",
+    "manifest%2ejson",
+    "project%2fproject.json",
+  ])("exportWebPackage rejects encoded resource path controls %s", async (path) => {
+    await expect(projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Encoded Collision",
+      resources: [{ path, bytes: "owned" }],
+    })).rejects.toThrow(/encoded path controls/);
   });
 
   it("validateWebPackage accepts exported packages and returns explicit validation evidence", async () => {
@@ -358,6 +396,7 @@ describe("project-export", () => {
       "no-duplicate-required-files",
       "alice-web-identity",
       "entrypoint-playable",
+      "share-package-links-match",
     ]));
   });
 
@@ -410,6 +449,136 @@ describe("project-export", () => {
       expect.objectContaining({ code: "unsafe-zip-path" }),
     ]));
 
+    for (const encodedPath of ["index%2ehtml", "manifest%2ejson", "project%2fproject.json"]) {
+      const encodedAlias = await projectExportApi.validateWebPackage!({
+        packageBase64: await makeZip({
+          [encodedPath]: "owned",
+          "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+          "manifest.json": JSON.stringify({
+            schemaVersion: "alice-web.package/v1",
+            product: "Alice",
+            packageName: "alice-web",
+            runtimeIdentity: "alice-web-player",
+            entrypoint: "index.html",
+            package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+          }),
+          "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+          "preview.png": new Uint8Array([137, 80, 78, 71]),
+          "project/project.json": "{}",
+          "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+        }),
+      });
+      expect(encodedAlias.errors, encodedPath).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "unsafe-zip-path" }),
+      ]));
+    }
+
+    for (const reservedDescendant of [
+      "index.html/foo.txt",
+      "manifest.json/foo.txt",
+      "project/project.json/foo.txt",
+      "project",
+      "INDEX.HTML",
+      "Manifest.json/foo.txt",
+      "PROJECT/PROJECT.JSON/foo.txt",
+    ]) {
+      const directoryCollision = await projectExportApi.validateWebPackage!({
+        packageBase64: await makeZip({
+          [reservedDescendant]: "owned",
+          "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+          "manifest.json": JSON.stringify({
+            schemaVersion: "alice-web.package/v1",
+            product: "Alice",
+            packageName: "alice-web",
+            runtimeIdentity: "alice-web-player",
+            entrypoint: "index.html",
+            package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+          }),
+          "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+          "preview.png": new Uint8Array([137, 80, 78, 71]),
+          "project/project.json": "{}",
+          "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+        }),
+      });
+      expect(directoryCollision.errors, reservedDescendant).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "unsafe-zip-path" }),
+      ]));
+    }
+
+    const caseVariantDuplicate = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "INDEX.HTML": "owned",
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(caseVariantDuplicate.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "unsafe-zip-path" }),
+      expect.objectContaining({ code: "duplicate-required-file", path: "index.html" }),
+    ]));
+
+    const fakeCentralDirectoryPayload = new Uint8Array(46 + "index.html".length);
+    const fakeCentralDirectoryView = new DataView(fakeCentralDirectoryPayload.buffer);
+    fakeCentralDirectoryView.setUint32(0, 0x02014b50, true);
+    fakeCentralDirectoryView.setUint16(28, "index.html".length, true);
+    fakeCentralDirectoryPayload.set(Buffer.from("index.html"), 46);
+    const payloadSignature = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "resources/fake-central-directory.bin": fakeCentralDirectoryPayload,
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(payloadSignature.errors).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "duplicate-required-file" }),
+    ]));
+
+    const cleanPackageBase64 = await makeZip({
+      "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+      "manifest.json": JSON.stringify({
+        schemaVersion: "alice-web.package/v1",
+        product: "Alice",
+        packageName: "alice-web",
+        runtimeIdentity: "alice-web-player",
+        entrypoint: "index.html",
+        package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+      }),
+      "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+      "preview.png": new Uint8Array([137, 80, 78, 71]),
+      "project/project.json": "{}",
+      "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+    });
+    const cleanPackageBytes = Buffer.from(cleanPackageBase64, "base64");
+    const trailingBytes = await projectExportApi.validateWebPackage!({
+      packageBase64: Buffer.concat([cleanPackageBytes, Buffer.from("trailing")]).toString("base64"),
+    });
+    expect(trailingBytes.evidence).not.toContain("no-duplicate-required-files");
+    expect(trailingBytes.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "duplicate-zip-entry" }),
+    ]));
+
     const identityDrift = await projectExportApi.validateWebPackage!({
       packageBase64: await makeZip({
         "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-standalone-player'}</script>",
@@ -429,6 +598,27 @@ describe("project-export", () => {
     expect(identityDrift.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "invalid-identity" }),
       expect.objectContaining({ code: "forbidden-repository-identity" }),
+    ]));
+
+    const unsafeManifestFilename = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "../evil.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(unsafeManifestFilename.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-package-filename" }),
     ]));
 
     const caseVariantRepositoryIdentity = await projectExportApi.validateWebPackage!({
@@ -451,6 +641,72 @@ describe("project-export", () => {
       expect.objectContaining({ code: "forbidden-repository-identity" }),
     ]));
 
+    const encodedTraversalFilename = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "%2e%2e%2fevil.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(encodedTraversalFilename.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-package-filename" }),
+    ]));
+
+    for (const filename of ["index.html", "share.json", "story.html", "safe\nname.zip", "safe\"name.zip", "safe:name.zip", "safe%0aname.zip"]) {
+      const invalidManifestFilename = await projectExportApi.validateWebPackage!({
+        packageBase64: await makeZip({
+          "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+          "manifest.json": JSON.stringify({
+            schemaVersion: "alice-web.package/v1",
+            product: "Alice",
+            packageName: "alice-web",
+            runtimeIdentity: "alice-web-player",
+            entrypoint: "index.html",
+            package: { filename, mimeType: "application/zip" },
+          }),
+          "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+          "preview.png": new Uint8Array([137, 80, 78, 71]),
+          "project/project.json": "{}",
+          "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+        }),
+      });
+      expect(invalidManifestFilename.errors, filename).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "invalid-package-filename" }),
+      ]));
+    }
+
+    const missingManifestFilename = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Alice", runtimeIdentity: "alice-web-player" }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(missingManifestFilename.valid).toBe(false);
+    expect(missingManifestFilename.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-package-filename" }),
+    ]));
+
     const unsafeCanonicalUrl = await projectExportApi.validateWebPackage!({
       packageBase64: await makeZip({
         "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
@@ -460,6 +716,7 @@ describe("project-export", () => {
           packageName: "alice-web",
           runtimeIdentity: "alice-web-player",
           entrypoint: "index.html",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
         }),
         "share.json": JSON.stringify({
           schemaVersion: "alice-web.share/v1",
@@ -578,6 +835,7 @@ describe("project-export", () => {
           preview: "preview.png",
           canonicalUrl: "https://example.edu",
           package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+          delivery: { mode: "browser-download-fallback", nativeWebShare: false, requiresUserDownload: true },
           links: { html: "index.html", package: "safe.alice-web.zip", preview: "preview.png" },
         }),
         "preview.png": new Uint8Array([137, 80, 78, 71]),
@@ -587,6 +845,156 @@ describe("project-export", () => {
     });
     expect(validHostOnlyCanonicalUrl.errors).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "invalid-canonical-url" }),
+    ]));
+
+    const legacyShareWithoutDelivery = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          preview: "preview.png",
+          share: "share.json",
+          validation: "validation.json",
+          project: "project/project.json",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({
+          schemaVersion: "alice-web.share/v1",
+          product: "Alice",
+          runtimeIdentity: "alice-web-player",
+          preview: "preview.png",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+          links: { html: "index.html", package: "safe.alice-web.zip", preview: "preview.png" },
+        }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(legacyShareWithoutDelivery.errors).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-share-delivery" }),
+    ]));
+    expect(legacyShareWithoutDelivery.evidence).not.toContain("browser-download-fallback");
+
+    const mismatchedSharePackage = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({
+          schemaVersion: "alice-web.share/v1",
+          product: "Alice",
+          runtimeIdentity: "alice-web-player",
+          package: { filename: "other.alice-web.zip", mimeType: "application/zip" },
+          delivery: { mode: "browser-download-fallback", nativeWebShare: false, requiresUserDownload: true },
+          links: { html: "index.html", package: "other.alice-web.zip", preview: "preview.png" },
+        }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(mismatchedSharePackage.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-share-package-reference" }),
+    ]));
+
+    const mismatchedSharePreview = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          preview: "preview.png",
+          share: "share.json",
+          validation: "validation.json",
+          project: "project/project.json",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({
+          schemaVersion: "alice-web.share/v1",
+          product: "Alice",
+          runtimeIdentity: "alice-web-player",
+          preview: "other-preview.png",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+          delivery: { mode: "browser-download-fallback", nativeWebShare: false, requiresUserDownload: true },
+          links: { html: "index.html", package: "safe.alice-web.zip", preview: "preview.png" },
+        }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(mismatchedSharePreview.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-share-package-reference" }),
+    ]));
+
+    const nativeShareOverclaim = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({
+          schemaVersion: "alice-web.share/v1",
+          product: "Alice",
+          runtimeIdentity: "alice-web-player",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+          delivery: { mode: "native-web-share", nativeWebShare: true, requiresUserDownload: false },
+          links: { html: "index.html", package: "safe.alice-web.zip", preview: "preview.png" },
+        }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(nativeShareOverclaim.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-share-delivery" }),
+    ]));
+
+    const nullDelivery = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({
+          schemaVersion: "alice-web.share/v1",
+          product: "Alice",
+          runtimeIdentity: "alice-web-player",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+          delivery: null,
+          links: { html: "index.html", package: "safe.alice-web.zip", preview: "preview.png" },
+        }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(nullDelivery.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-share-delivery" }),
     ]));
   });
 

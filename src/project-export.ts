@@ -10,6 +10,7 @@ import {
   type HtmlExportOptions,
 } from "./export-html.js";
 import { assertSafeWritablePath, validateArchivePath } from "./project-io/path-security.js";
+import { assertNoDuplicateZipEntries } from "./zip-entry-validation.js";
 import {
   generateTypeScriptSource,
   type TypeScriptSource,
@@ -31,9 +32,34 @@ const WEB_PACKAGE_ARTIFACTS = {
 } as const;
 
 const REQUIRED_WEB_PACKAGE_FILES = Object.values(WEB_PACKAGE_ARTIFACTS);
+const RESERVED_WEB_PACKAGE_PATHS = new Set<string>(REQUIRED_WEB_PACKAGE_FILES);
+const RESERVED_WEB_PACKAGE_PATHS_BY_LOWERCASE = new Map(
+  REQUIRED_WEB_PACKAGE_FILES.map((path) => [path.toLowerCase(), path] as const),
+);
 const FORBIDDEN_IDENTITY_RE = /LookingGlass|alice-standalone-player/i;
+const ENCODED_PATH_CONTROL_RE = /%(?:2e|2f|5c)/i;
 const URL_CONTROL_OR_SPACE_RE = /[\u0000-\u0020\u007f]/u;
 const SAFE_PACKAGE_FILENAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.alice-web\.zip$/;
+
+export function isReservedWebPackagePath(path: string): boolean {
+  const lowerPath = path.toLowerCase();
+  return [...RESERVED_WEB_PACKAGE_PATHS].some((reserved) => {
+    const lowerReserved = reserved.toLowerCase();
+    return lowerPath === lowerReserved
+      || lowerPath.startsWith(`${lowerReserved}/`)
+      || lowerReserved.startsWith(`${lowerPath}/`);
+  });
+}
+
+function conflictsWithReservedWebPackageArtifact(path: string): boolean {
+  const lowerPath = path.toLowerCase();
+  return [...RESERVED_WEB_PACKAGE_PATHS].some((reserved) => {
+    const lowerReserved = reserved.toLowerCase();
+    return (lowerPath === lowerReserved && path !== reserved)
+      || lowerPath.startsWith(`${lowerReserved}/`)
+      || lowerReserved.startsWith(`${lowerPath}/`);
+  });
+}
 
 export interface ProjectExportResource {
   path: string;
@@ -102,6 +128,7 @@ export interface WebPackageOptions {
   title?: string;
   description?: string;
   canonicalUrl?: string;
+  resources?: ProjectExportResource[];
   teacher?: TeacherShareMetadata;
 }
 
@@ -214,6 +241,11 @@ interface AliceWebShareDocument {
   package: {
     filename: string;
     mimeType: typeof ZIP_MIME_TYPE;
+  };
+  delivery: {
+    mode: "browser-download-fallback";
+    nativeWebShare: false;
+    requiresUserDownload: true;
   };
   links: {
     html: typeof WEB_PACKAGE_ARTIFACTS.entrypoint;
@@ -384,6 +416,7 @@ export async function exportWebPackage(
   options: WebPackageOptions = {},
 ): Promise<ExportedWebPackage> {
   const normalized = normalizeWebPackageOptions(project, options);
+  const resources = (options.resources ?? []).map(validateResourcePath);
   const filename = `${slugify(normalized.title)}.alice-web.zip`;
   const preview = await new ScreenshotCapture().capture({
     width: 960,
@@ -399,17 +432,27 @@ export async function exportWebPackage(
       preview: WEB_PACKAGE_ARTIFACTS.preview,
     },
   });
+  const html = injectBeforeBodyEnd(
+    htmlDocument.html,
+    buildResourceScript(buildPlayerResourceMap(resources)),
+  );
   const manifest = buildPackageManifest(filename);
   const share = buildShareDocument(normalized, filename);
   const validation = buildValidationDocument(Boolean(share.teacher));
 
   const zip = new JSZip();
-  addZipFile(zip, WEB_PACKAGE_ARTIFACTS.entrypoint, htmlDocument.html);
+  addZipFile(zip, WEB_PACKAGE_ARTIFACTS.entrypoint, html);
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.manifest, JSON.stringify(manifest, null, 2));
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.share, JSON.stringify(share, null, 2));
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.preview, preview.bytes);
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.project, JSON.stringify(project, null, 2));
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.validation, JSON.stringify(validation, null, 2));
+  for (const resource of resources) {
+    if (isReservedWebPackagePath(resource.path)) {
+      throw new WebPackageInputError(`resource path conflicts with web package artifact: ${resource.path}`);
+    }
+    addZipFile(zip, resource.path, normalizeResourceBytes(resource.bytes));
+  }
 
   const archive = await zip.generateAsync({
     type: "uint8array",
@@ -444,9 +487,14 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
 
   let zip: JSZip;
   try {
+    assertNoDuplicateZipEntries(decoded.bytes);
     zip = await JSZip.loadAsync(decoded.bytes);
     evidence.push("zip-readable");
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && /duplicate entry|central directory/i.test(error.message)) {
+      errors.push({ code: "duplicate-zip-entry", message: error.message });
+      return buildValidationResult(evidence, errors);
+    }
     errors.push({ code: "invalid-zip", message: "packageBase64 must decode to a readable ZIP package" });
     return buildValidationResult(evidence, errors);
   }
@@ -459,7 +507,12 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
   }
 
   const duplicateRequiredFiles = findDuplicateRequiredFiles(decoded.bytes);
-  if (duplicateRequiredFiles.length === 0) {
+  if (duplicateRequiredFiles === null) {
+    errors.push({
+      code: "duplicate-check-inconclusive",
+      message: "package central directory could not be parsed for duplicate required-file checks",
+    });
+  } else if (duplicateRequiredFiles.length === 0) {
     evidence.push("no-duplicate-required-files");
   } else {
     for (const path of duplicateRequiredFiles) {
@@ -509,6 +562,16 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
   if (preview && Array.from(preview.slice(0, 4)).join(",") !== "137,80,78,71") {
     errors.push({ code: "invalid-preview", message: "preview.png must be a PNG image", path: WEB_PACKAGE_ARTIFACTS.preview });
   }
+  if (share && Object.prototype.hasOwnProperty.call(share, "canonicalUrl")) {
+    const canonicalUrl = (share as { canonicalUrl?: unknown }).canonicalUrl;
+    if (typeof canonicalUrl !== "string" || !isSafeHttpUrl(canonicalUrl)) {
+      errors.push({
+        code: "invalid-canonical-url",
+        message: "share canonicalUrl must be a valid http or https URL",
+        path: WEB_PACKAGE_ARTIFACTS.share,
+      });
+    }
+  }
 
   if (share && Object.prototype.hasOwnProperty.call(share, "teacher")) {
     const teacherErrors = validateTeacherShareMetadata(share.teacher);
@@ -525,15 +588,10 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
     }
   }
 
-  const manifestPackageFilename = manifest?.package?.filename;
-  const hasSafeManifestPackageFilename = typeof manifestPackageFilename === "string"
-    && isSafePackageFilename(manifestPackageFilename);
-  const filename = hasSafeManifestPackageFilename
-    ? manifestPackageFilename
-    : `${ALICE_WEB_PACKAGE}.zip`;
+  const filename = validatedPackageFilename(manifest, errors);
   if (
     !manifest?.package
-    || !hasSafeManifestPackageFilename
+    || !isSafePackageFilename(manifest.package.filename)
     || manifest.package.filename !== filename
     || manifest.package.mimeType !== ZIP_MIME_TYPE
     || manifest.entrypoint !== WEB_PACKAGE_ARTIFACTS.entrypoint
@@ -548,28 +606,71 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
       path: WEB_PACKAGE_ARTIFACTS.manifest,
     });
   }
-  if (
-    share
-    && (
-      share.package?.filename !== filename
-      || share.package?.mimeType !== ZIP_MIME_TYPE
-      || share.links?.package !== filename
-      || share.links?.html !== WEB_PACKAGE_ARTIFACTS.entrypoint
-      || share.links?.preview !== WEB_PACKAGE_ARTIFACTS.preview
-      || share.preview !== WEB_PACKAGE_ARTIFACTS.preview
-    )
-  ) {
-    errors.push({
-      code: "invalid-share-package-reference",
-      message: "share package links must match the manifest package filename and fixed artifact paths",
-      path: WEB_PACKAGE_ARTIFACTS.share,
-    });
+  if (share) {
+    const deliveryErrors = validateShareDelivery(share);
+    errors.push(...deliveryErrors);
+    if (deliveryErrors.length === 0 && share.delivery !== undefined) {
+      evidence.push("browser-download-fallback");
+    }
+    const shareLinkErrors = validateSharePackageLinks(share, filename);
+    errors.push(...shareLinkErrors);
+    if (shareLinkErrors.length === 0) {
+      evidence.push("share-package-links-match");
+    }
   }
   return buildValidationResult(evidence, errors, {
     runtime: manifest?.packageName === ALICE_WEB_PACKAGE ? ALICE_WEB_PACKAGE : undefined,
     package: buildPackageReference(filename, decoded.bytes),
     ...(manifest ? { manifest } : {}),
   });
+}
+
+function validatedPackageFilename(
+  manifest: AliceWebPackageManifest | null,
+  errors: WebPackageValidationError[],
+): string {
+  const fallback = `${ALICE_WEB_PACKAGE}.zip`;
+  const candidate = manifest?.package?.filename;
+  if (candidate === undefined) {
+    if (manifest) {
+      errors.push({
+        code: "invalid-package-filename",
+        message: "manifest package filename must be a safe ZIP filename",
+        path: WEB_PACKAGE_ARTIFACTS.manifest,
+      });
+    }
+    return fallback;
+  }
+  if (typeof candidate !== "string") {
+    errors.push({
+      code: "invalid-package-filename",
+      message: "manifest package filename must be a safe ZIP filename",
+      path: WEB_PACKAGE_ARTIFACTS.manifest,
+    });
+    return fallback;
+  }
+  try {
+    if (ENCODED_PATH_CONTROL_RE.test(candidate)) {
+      throw new Error("package filename must not contain encoded path controls");
+    }
+    const safe = assertSafeWritablePath(candidate);
+    if (
+      safe.includes("/")
+      || RESERVED_WEB_PACKAGE_PATHS.has(safe)
+      || !safe.toLowerCase().endsWith(".zip")
+      || !SAFE_PACKAGE_FILENAME_RE.test(safe)
+    ) {
+      throw new Error("package filename must be a non-reserved ZIP basename");
+    }
+    return safe;
+  } catch {
+    errors.push({
+      code: "invalid-package-filename",
+      message: "manifest package filename must be a safe ZIP filename",
+      path: WEB_PACKAGE_ARTIFACTS.manifest,
+    });
+    return fallback;
+  }
 }
 
 export async function generateShareArtifacts(input: ShareArtifactsInput): Promise<ShareArtifacts> {
@@ -632,11 +733,30 @@ export class TypeScriptExporter {
   }
 }
 
-function buildResourceScript(resources: Record<string, string>): string {
+type PlayerResourceValue = string | true;
+
+function buildResourceScript(resources: Record<string, PlayerResourceValue>): string {
   if (Object.keys(resources).length === 0) {
     return "";
   }
   return `<script id="alice-export-resources" type="application/json">${escapeScriptText(JSON.stringify(resources))}</script>`;
+}
+
+function buildPlayerResourceMap(resources: readonly ProjectExportResource[]): Record<string, PlayerResourceValue> {
+  return Object.fromEntries(
+    resources
+      .map((resource): [string, PlayerResourceValue] | null => {
+        const mimeType = resource.mimeType ?? inferMimeType(resource.path);
+        if (mimeType.startsWith("image/")) {
+          return [resource.path, resourceToDataUrl(resource)];
+        }
+        if (mimeType.startsWith("model/")) {
+          return [resource.path, true];
+        }
+        return null;
+      })
+      .filter((entry): entry is [string, PlayerResourceValue] => entry !== null),
+  );
 }
 
 function addZipFile(zip: JSZip, path: string, bytes: Uint8Array | string): string {
@@ -759,6 +879,9 @@ function createTypeScriptReadme(manifest: TypeScriptSourceManifest): string {
 }
 
 function validateResourcePath(resource: ProjectExportResource): ProjectExportResource {
+  if (ENCODED_PATH_CONTROL_RE.test(resource.path)) {
+    throw new WebPackageInputError(`resource path must not contain encoded path controls: ${resource.path}`);
+  }
   return {
     ...resource,
     path: assertSafeWritablePath(resource.path),
@@ -786,6 +909,9 @@ function normalizeResourceBytes(bytes: Uint8Array | string): Uint8Array {
 function inferMimeType(path: string): string {
   if (path.endsWith(".png")) return "image/png";
   if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+  if (path.endsWith(".webp")) return "image/webp";
+  if (path.endsWith(".gltf")) return "model/gltf+json";
+  if (path.endsWith(".glb")) return "model/gltf-binary";
   if (path.endsWith(".json")) return "application/json";
   if (path.endsWith(".txt")) return "text/plain;charset=utf-8";
   return "application/octet-stream";
@@ -986,6 +1112,56 @@ function isSafePackageFilename(value: string): boolean {
   }
 }
 
+function validateShareDelivery(share: AliceWebShareDocument): WebPackageValidationError[] {
+  if (share.delivery === undefined) {
+    return [];
+  }
+  if (share.delivery === null || typeof share.delivery !== "object") {
+    return [{
+      code: "invalid-share-delivery",
+      message: "share delivery must be browser-download-fallback with nativeWebShare false and requiresUserDownload true",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    }];
+  }
+  if (
+    share.delivery.mode === "browser-download-fallback"
+    && share.delivery.nativeWebShare === false
+    && share.delivery.requiresUserDownload === true
+  ) {
+    return [];
+  }
+  return [{
+    code: "invalid-share-delivery",
+    message: "share delivery must be browser-download-fallback with nativeWebShare false and requiresUserDownload true",
+    path: WEB_PACKAGE_ARTIFACTS.share,
+  }];
+}
+
+function validateSharePackageLinks(share: AliceWebShareDocument, filename: string): WebPackageValidationError[] {
+  const errors: WebPackageValidationError[] = [];
+  if (!share.package || share.package.filename !== filename || share.package.mimeType !== ZIP_MIME_TYPE) {
+    errors.push({
+      code: "invalid-share-package-reference",
+      message: "share package metadata must match the validated ZIP filename and application/zip MIME type",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    });
+  }
+  if (
+    share.preview !== WEB_PACKAGE_ARTIFACTS.preview
+    || !share.links
+    || share.links.package !== filename
+    || share.links.html !== WEB_PACKAGE_ARTIFACTS.entrypoint
+    || share.links.preview !== WEB_PACKAGE_ARTIFACTS.preview
+  ) {
+    errors.push({
+      code: "invalid-share-package-reference",
+      message: "share links must point to the package, HTML entrypoint, and preview artifacts",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    });
+  }
+  return errors;
+}
+
 function buildPackageManifest(filename: string): AliceWebPackageManifest {
   return {
     schemaVersion: "alice-web.package/v1",
@@ -1019,6 +1195,11 @@ function buildShareDocument(
     package: {
       filename,
       mimeType: ZIP_MIME_TYPE,
+    },
+    delivery: {
+      mode: "browser-download-fallback",
+      nativeWebShare: false,
+      requiresUserDownload: true,
     },
     links: {
       html: WEB_PACKAGE_ARTIFACTS.entrypoint,
@@ -1138,6 +1319,14 @@ function containsForbiddenRepositoryIdentity(values: unknown[]): boolean {
 function zipPathsAreSafe(zip: JSZip): boolean {
   for (const [path, file] of Object.entries(zip.files)) {
     const originalName = readUnsafeOriginalName(file) ?? path;
+    if (
+      ENCODED_PATH_CONTROL_RE.test(originalName)
+      || ENCODED_PATH_CONTROL_RE.test(path)
+      || conflictsWithReservedWebPackageArtifact(path)
+      || conflictsWithReservedWebPackageArtifact(originalName)
+    ) {
+      return false;
+    }
     try {
       const validate = file.dir ? validateArchivePath : assertSafeWritablePath;
       if (validate(originalName) !== originalName || (path && validate(path) !== path)) {
@@ -1155,24 +1344,48 @@ function readUnsafeOriginalName(file: JSZip.JSZipObject): string | null {
   return typeof value === "string" ? value : null;
 }
 
-function findDuplicateRequiredFiles(bytes: Uint8Array): string[] {
+function findDuplicateRequiredFiles(bytes: Uint8Array): string[] | null {
   const buffer = Buffer.from(bytes);
+  const centralDirectory = findCentralDirectoryRange(buffer);
+  if (!centralDirectory) return null;
+
   const counts = new Map<string, number>();
-  for (let offset = 0; offset <= buffer.length - 46; offset += 1) {
-    if (buffer.readUInt32LE(offset) !== 0x02014b50) continue;
+  let offset = centralDirectory.start;
+  for (; offset <= centralDirectory.end - 46;) {
+    if (buffer.readUInt32LE(offset) !== 0x02014b50) return null;
     const nameLength = buffer.readUInt16LE(offset + 28);
     const extraLength = buffer.readUInt16LE(offset + 30);
     const commentLength = buffer.readUInt16LE(offset + 32);
     const nameStart = offset + 46;
     const nameEnd = nameStart + nameLength;
-    if (nameEnd > buffer.length) break;
+    const recordEnd = nameEnd + extraLength + commentLength;
+    if (nameEnd > centralDirectory.end || recordEnd > centralDirectory.end) return null;
     const name = buffer.subarray(nameStart, nameEnd).toString("utf8");
-    if (REQUIRED_WEB_PACKAGE_FILES.includes(name as (typeof REQUIRED_WEB_PACKAGE_FILES)[number])) {
-      counts.set(name, (counts.get(name) ?? 0) + 1);
+    const canonicalRequiredName = RESERVED_WEB_PACKAGE_PATHS_BY_LOWERCASE.get(name.toLowerCase());
+    if (canonicalRequiredName) {
+      counts.set(canonicalRequiredName, (counts.get(canonicalRequiredName) ?? 0) + 1);
     }
-    offset = nameEnd + extraLength + commentLength - 1;
+    offset = recordEnd;
   }
+  if (offset !== centralDirectory.end) return null;
   return [...counts.entries()]
     .filter(([, count]) => count > 1)
     .map(([name]) => name);
+}
+
+function findCentralDirectoryRange(buffer: Buffer): { start: number; end: number } | null {
+  const minEocdLength = 22;
+  const maxCommentLength = 0xffff;
+  const searchStart = Math.max(0, buffer.length - minEocdLength - maxCommentLength);
+  for (let offset = buffer.length - minEocdLength; offset >= searchStart; offset -= 1) {
+    if (buffer.readUInt32LE(offset) !== 0x06054b50) continue;
+    const commentLength = buffer.readUInt16LE(offset + 20);
+    if (offset + minEocdLength + commentLength !== buffer.length) continue;
+    const size = buffer.readUInt32LE(offset + 12);
+    const start = buffer.readUInt32LE(offset + 16);
+    const end = start + size;
+    if (start > buffer.length || end > offset || end < start) return null;
+    return { start, end };
+  }
+  return null;
 }
