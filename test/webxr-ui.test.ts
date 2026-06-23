@@ -143,4 +143,42 @@ describe("renderWebXRStatus", () => {
     expect(root.querySelector("#true-vr-unsupported")?.textContent)
       .toContain("true headset/native VR remains unsupported");
   });
+
+  it("renders unknown reduced-motion evidence without claiming a measured pass", () => {
+    const dom = new JSDOM("<!doctype html><main id=\"root\"></main>");
+    const root = dom.window.document.getElementById("root");
+    if (!root) {
+      throw new Error("missing root");
+    }
+
+    renderWebXRStatus(root, {
+      status: "unsupported",
+      buttonState: "disabled",
+      message: "Browser camera workflow available.",
+      evidence: [],
+      cameraComfort: {
+        schema_version: "alice.camera-vr-comfort-evidence/v1",
+        status: "partial",
+        browserWebXrStatus: "unknown",
+        desktopCameraAvailable: true,
+        keyboardMovementAvailable: "unknown",
+        reducedMotionRespected: "unknown",
+        trueHeadsetVrSupported: false,
+        nativeVrSupported: false,
+        cameraMode: "orbit",
+        evidenceCodes: ["desktop-camera-fallback"],
+        comfortChecks: {
+          discreteMovementStep: true,
+          stableHorizon: true,
+          noForcedHeadset: true,
+        },
+        unsupportedReason: "Alice web records browser WebXR and desktop camera comfort evidence only; true headset/native VR remains unsupported.",
+      },
+    });
+
+    expect(root.querySelector("[data-testid=\"alice-camera-keyboard-movement\"]")?.textContent)
+      .toContain("Keyboard camera movement was not measured");
+    expect(root.querySelector("[data-testid=\"alice-camera-reduced-motion\"]")?.textContent)
+      .toContain("Reduced-motion preference was not measured");
+  });
 });
