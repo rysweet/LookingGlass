@@ -88,21 +88,28 @@ import {
 ### Import project and attach resources
 
 ```typescript
-import { ProjectIo } from "alice-web";
+import { ModelTextureCameraJointExportWorkflow, ProjectIo } from "alice-web";
 
 const archive = await ProjectIo.readProject(await projectFile.arrayBuffer());
+let workflow = ModelTextureCameraJointExportWorkflow.createWorkflowState({
+  project: archive.project,
+});
 
 const modelBytes = new Uint8Array(await modelFile.arrayBuffer());
 const textureBytes = new Uint8Array(await textureFile.arrayBuffer());
 
-archive.resources.set("resources/models/robot.glb", modelBytes);
-archive.resources.set("resources/textures/robot.png", textureBytes);
-archive.project.textureRefs = [
-  ...(archive.project.textureRefs ?? []),
-  "resources/textures/robot.png",
-];
+workflow = await ModelTextureCameraJointExportWorkflow.importModelAsset(workflow, {
+  fileName: modelFile.name,
+  bytes: modelBytes,
+  objectName: "robot",
+});
+workflow = await ModelTextureCameraJointExportWorkflow.importTextureAsset(workflow, {
+  fileName: textureFile.name,
+  bytes: textureBytes,
+});
 
-const savedProjectBytes = await ProjectIo.writeProject(archive);
+const savedProjectBytes =
+  await ModelTextureCameraJointExportWorkflow.exportA3pArchive(workflow);
 console.log(savedProjectBytes.byteLength);
 ```
 
