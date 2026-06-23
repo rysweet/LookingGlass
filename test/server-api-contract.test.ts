@@ -156,6 +156,7 @@ describe("server API response contracts", () => {
       expect.arrayContaining([
         expect.objectContaining({ id: "server-health", status: "pass" }),
         expect.objectContaining({ id: "create-project", status: "pass" }),
+        expect.objectContaining({ id: "evidence-directory", status: "pass" }),
         expect.objectContaining({ id: "desktop-java-opengl", status: "unsupported" }),
       ]),
     );
@@ -206,6 +207,33 @@ describe("server API response contracts", () => {
       .expect((res) => {
         expect(res.body.error).toContain("setup-readiness");
       });
+  });
+
+  it("reports setup not ready when evidence storage is not writable", async () => {
+    const evidenceDir = trackTempDir(makeTempDir("alice-api-contract-readonly-"));
+    const app = createTestServer({ port: 0, evidenceDir });
+
+    fs.chmodSync(evidenceDir, 0o555);
+    try {
+      const readiness = await request(app).get("/api/setup/readiness").expect(200);
+
+      expect(readiness.body.status).toBe("not-ready");
+      expect(readiness.body.classroomReadiness).toMatchObject({
+        readyToCreateProject: false,
+        readyForLabHandoff: false,
+        readyForEvidenceHandoff: false,
+      });
+      expect(readiness.body.checks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "evidence-directory", status: "fail" }),
+          expect.objectContaining({ id: "create-project", status: "fail" }),
+          expect.objectContaining({ id: "evidence-handoff", status: "fail" }),
+        ]),
+      );
+      expect(JSON.stringify(readiness.body)).not.toContain(evidenceDir);
+    } finally {
+      fs.chmodSync(evidenceDir, 0o755);
+    }
   });
 
   it("rejects a requested missing .a3p file without launching", async () => {

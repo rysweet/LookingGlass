@@ -23,7 +23,7 @@ const DOES_NOT_CLAIM = [
 
 type SetupScenario = (typeof SETUP_SCENARIOS)[number];
 
-type CheckStatus = "pass" | "unsupported";
+type CheckStatus = "pass" | "fail" | "unsupported";
 
 interface ReadinessCheck {
   readonly id: string;
@@ -34,16 +34,16 @@ interface ReadinessCheck {
 
 interface SetupPreflightResponse {
   readonly schema_version: "lookingglass.setup-preflight/v1";
-  readonly status: "ready";
+  readonly status: "ready" | "not-ready";
   readonly runtime: "alice-web";
   readonly platform: "lookingglass";
   readonly scenario: SetupScenario | typeof GENERAL_SETUP_SCENARIO;
   readonly checks: readonly ReadinessCheck[];
   readonly unsupportedCapabilities: readonly string[];
   readonly classroomReadiness: {
-    readonly readyToCreateProject: true;
-    readonly readyForLabHandoff: true;
-    readonly readyForEvidenceHandoff: true;
+    readonly readyToCreateProject: boolean;
+    readonly readyForLabHandoff: boolean;
+    readonly readyForEvidenceHandoff: boolean;
     readonly studentFallbackRoles: readonly string[];
   };
   readonly doesNotClaim: readonly string[];
@@ -77,11 +77,11 @@ export function registerSetupReadinessRoutes(app: Express, context: ServerContex
       return;
     }
 
-    res.json(buildSetupPreflight(scenario.value));
+    res.json(buildSetupPreflight(context, scenario.value));
   });
 
   app.get("/api/setup/readiness", (_req, res) => {
-    res.json(buildSetupPreflight("setup-readiness"));
+    res.json(buildSetupPreflight(context, "setup-readiness"));
   });
 
   app.post("/api/setup/evidence-handoff", (req, res) => {
@@ -114,11 +114,14 @@ export function registerSetupReadinessRoutes(app: Express, context: ServerContex
 }
 
 function buildSetupPreflight(
+  context: ServerContext,
   scenario: SetupScenario | typeof GENERAL_SETUP_SCENARIO | undefined,
 ): SetupPreflightResponse {
+  const evidenceDirCheck = checkEvidenceDirectory(context.evidenceDir);
+  const ready = evidenceDirCheck.status === "pass";
   return {
     schema_version: "lookingglass.setup-preflight/v1",
-    status: "ready",
+    status: ready ? "ready" : "not-ready",
     runtime: "alice-web",
     platform: "lookingglass",
     scenario: scenario ?? GENERAL_SETUP_SCENARIO,
@@ -138,15 +141,20 @@ function buildSetupPreflight(
       {
         id: "create-project",
         label: "Instructor can create a starter web project",
-        status: "pass",
-        evidence: "project template and create-project routes are registered",
+        status: ready ? "pass" : "fail",
+        evidence: ready
+          ? "project template and create-project routes are registered, with writable evidence storage"
+          : "project creation needs writable evidence storage",
       },
       {
         id: "evidence-handoff",
         label: "Instructor can create a student-facing readiness evidence handoff",
-        status: "pass",
-        evidence: "handoff route writes an artifact when called",
+        status: ready ? "pass" : "fail",
+        evidence: ready
+          ? "handoff route can write artifacts to configured evidence storage"
+          : "handoff route needs writable evidence storage",
       },
+      evidenceDirCheck,
       {
         id: "desktop-java-opengl",
         label: "Desktop Java/OpenGL prerequisite diagnosis is outside the web runtime",
@@ -156,9 +164,9 @@ function buildSetupPreflight(
     ],
     unsupportedCapabilities: [...DOES_NOT_CLAIM],
     classroomReadiness: {
-      readyToCreateProject: true,
-      readyForLabHandoff: true,
-      readyForEvidenceHandoff: true,
+      readyToCreateProject: ready,
+      readyForLabHandoff: ready,
+      readyForEvidenceHandoff: ready,
       studentFallbackRoles: [
         "web project creator",
         "observer",
@@ -168,6 +176,34 @@ function buildSetupPreflight(
     },
     doesNotClaim: [...DOES_NOT_CLAIM],
   };
+}
+
+function checkEvidenceDirectory(evidenceDir: string): ReadinessCheck {
+  try {
+    const stats = fs.statSync(evidenceDir);
+    if (!stats.isDirectory()) {
+      return {
+        id: "evidence-directory",
+        label: "Evidence storage is a writable directory",
+        status: "fail",
+        evidence: "configured evidence storage is not a directory",
+      };
+    }
+    fs.accessSync(evidenceDir, fs.constants.W_OK);
+    return {
+      id: "evidence-directory",
+      label: "Evidence storage is a writable directory",
+      status: "pass",
+      evidence: "configured evidence storage can be written by this process",
+    };
+  } catch {
+    return {
+      id: "evidence-directory",
+      label: "Evidence storage is a writable directory",
+      status: "fail",
+      evidence: "configured evidence storage is not writable by this process",
+    };
+  }
 }
 
 function buildEvidenceHandoff(scenario: SetupScenario | typeof GENERAL_SETUP_SCENARIO) {
