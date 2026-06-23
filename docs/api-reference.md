@@ -676,6 +676,7 @@ Example response:
     "runtimeIdentity": "alice-web-player",
     "title": "Winter Story",
     "description": "A snow scene with a bunny.",
+    "preview": "preview.png",
     "package": {
       "filename": "winter-story.alice-web.zip",
       "mimeType": "application/zip",
@@ -774,7 +775,7 @@ Invalid packages return HTTP `400` with explicit validation errors:
   "errors": [
     {
       "code": "missing-required-file",
-      "message": "Package is missing index.html.",
+      "message": "index.html is required",
       "path": "index.html"
     }
   ],

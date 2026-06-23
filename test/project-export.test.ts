@@ -431,6 +431,26 @@ describe("project-export", () => {
       expect.objectContaining({ code: "forbidden-repository-identity" }),
     ]));
 
+    const caseVariantRepositoryIdentity = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'Alice-Standalone-Player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "LOOKINGGLASS",
+          packageName: "alice-web",
+          runtimeIdentity: "Alice-Standalone-Player",
+          entrypoint: "index.html",
+        }),
+        "share.json": JSON.stringify({ schemaVersion: "alice-web.share/v1", product: "Lookingglass" }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(caseVariantRepositoryIdentity.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "forbidden-repository-identity" }),
+    ]));
+
     const unsafeCanonicalUrl = await projectExportApi.validateWebPackage!({
       packageBase64: await makeZip({
         "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
@@ -507,6 +527,34 @@ describe("project-export", () => {
     expect(controlWhitespaceCanonicalUrl.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "invalid-canonical-url" }),
     ]));
+
+    for (const canonicalUrl of ["http:example.com", "http:///example.com", "https:\\\\example.edu\\alice"]) {
+      const nonCanonicalUrl = await projectExportApi.validateWebPackage!({
+        packageBase64: await makeZip({
+          "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+          "manifest.json": JSON.stringify({
+            schemaVersion: "alice-web.package/v1",
+            product: "Alice",
+            packageName: "alice-web",
+            runtimeIdentity: "alice-web-player",
+            entrypoint: "index.html",
+            package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+          }),
+          "share.json": JSON.stringify({
+            schemaVersion: "alice-web.share/v1",
+            product: "Alice",
+            runtimeIdentity: "alice-web-player",
+            canonicalUrl,
+          }),
+          "preview.png": new Uint8Array([137, 80, 78, 71]),
+          "project/project.json": "{}",
+          "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+        }),
+      });
+      expect(nonCanonicalUrl.errors, canonicalUrl).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "invalid-canonical-url" }),
+      ]));
+    }
 
     const validHostOnlyCanonicalUrl = await projectExportApi.validateWebPackage!({
       packageBase64: await makeZip({

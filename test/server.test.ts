@@ -580,6 +580,11 @@ describe("server API", () => {
       await localPost(app, "/api/project/export/web-package")
         .send({ canonicalUrl: "https://example.edu\n.evil/path" })
         .expect(400);
+      for (const canonicalUrl of ["http:example.com", "http:///example.com", "https:\\\\example.edu\\alice"]) {
+        await localPost(app, "/api/project/export/web-package")
+          .send({ canonicalUrl })
+          .expect(400);
+      }
       await localPost(app, "/api/project/export/web-package")
         .send({ canonicalUrl: "https://user:pass@example.edu/alice/project" })
         .expect(400);

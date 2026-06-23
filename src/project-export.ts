@@ -31,7 +31,7 @@ const WEB_PACKAGE_ARTIFACTS = {
 } as const;
 
 const REQUIRED_WEB_PACKAGE_FILES = Object.values(WEB_PACKAGE_ARTIFACTS);
-const FORBIDDEN_IDENTITY_RE = /LookingGlass|lookingglass|alice-standalone-player/;
+const FORBIDDEN_IDENTITY_RE = /LookingGlass|alice-standalone-player/i;
 const URL_CONTROL_OR_SPACE_RE = /[\u0000-\u0020\u007f]/u;
 const SAFE_PACKAGE_FILENAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.alice-web\.zip$/;
 
@@ -958,10 +958,19 @@ function isSafeHttpUrl(value: string): boolean {
     const parsed = new URL(value);
     return (parsed.protocol === "http:" || parsed.protocol === "https:")
       && parsed.username === ""
-      && parsed.password === "";
+      && parsed.password === ""
+      && (parsed.href === value || isHostOnlyHttpUrlWithoutSlash(parsed, value));
   } catch {
     return false;
   }
+}
+
+function isHostOnlyHttpUrlWithoutSlash(parsed: URL, value: string): boolean {
+  return parsed.href === `${value}/`
+    && parsed.pathname === "/"
+    && parsed.search === ""
+    && parsed.hash === ""
+    && !value.endsWith("/");
 }
 
 function isSafePackageFilename(value: string): boolean {
