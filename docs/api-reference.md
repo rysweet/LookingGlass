@@ -574,6 +574,7 @@ Request body:
 | `title` | `string` | no | Human-readable title for manifest, player metadata, and share metadata |
 | `description` | `string` | no | Human-readable project summary |
 | `canonicalUrl` | `string` | no | Public `http` or `https` URL for the shared project page |
+| `teacher` | `object` | no | Teacher sharing metadata. Optional fields: `audience`, `lessonFocus`, `attribution`, `remix` (`allowed`, `with-attribution`, `not-allowed`), `tags`, and `standards` |
 
 Example response:
 
@@ -597,7 +598,11 @@ Example response:
     "entrypoint": "index.html",
     "preview": "preview.png",
     "share": "share.json",
-    "validation": "validation.json"
+    "validation": "validation.json",
+    "package": {
+      "filename": "WinterStory.alice-web.zip",
+      "mimeType": "application/zip"
+    }
   },
   "artifacts": {
     "entrypoint": "index.html",
@@ -655,6 +660,7 @@ Request body:
 | `title` | `string` | no | Share title override |
 | `description` | `string` | no | Share description override |
 | `canonicalUrl` | `string` | no | Public `http` or `https` URL for the share page |
+| `teacher` | `object` | no | Teacher sharing metadata override. Optional fields: `audience`, `lessonFocus`, `attribution`, `remix` (`allowed`, `with-attribution`, `not-allowed`), `tags`, and `standards` |
 
 Example response:
 
@@ -732,7 +738,11 @@ Valid response:
   "manifest": {
     "schemaVersion": "alice-web.package/v1",
     "runtimeIdentity": "alice-web-player",
-    "entrypoint": "index.html"
+    "entrypoint": "index.html",
+    "package": {
+      "filename": "WinterStory.alice-web.zip",
+      "mimeType": "application/zip"
+    }
   },
   "evidence": [
     "base64-decodes",
