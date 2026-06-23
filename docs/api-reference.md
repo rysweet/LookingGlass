@@ -23,7 +23,11 @@ same value as `X-Alice-Local-Api-Token`.
 
 Read-only `GET /api/audio/formats` does not require launch or the local API
 token. `GET /api/audio/state` uses the same local API token as the camera state
-routes when the server is started with `--api-token`.
+routes when the server is started with `--api-token`. Runtime parity read routes
+(`/api/vr/camera-comfort`, `/api/accessibility/rescue-camera-captions`,
+`/api/review/gallery-walk-rubric`, and `/api/review/runtime-parity`) always
+require `X-Alice-Local-Api-Token` and fail closed with `401` if no token is
+configured.
 
 ## Endpoint summary
 
@@ -73,6 +77,10 @@ implemented export/share routes. `/api/audio/*` exposes the audio workflow; see
 | `/api/camera/markers` | `POST` | Save a camera marker |
 | `/api/camera/markers/:id/restore` | `POST` | Restore a camera marker |
 | `/api/camera/markers/:id` | `DELETE` | Delete a camera marker |
+| `/api/vr/camera-comfort` | `GET` | Read token-protected browser camera and bounded VR comfort evidence |
+| `/api/accessibility/rescue-camera-captions` | `GET` | Read token-protected accessibility caption evidence for the current scene |
+| `/api/review/gallery-walk-rubric` | `GET` | Read token-protected gallery review and rubric evidence |
+| `/api/review/runtime-parity` | `GET` | Read token-protected combined runtime parity evidence |
 | `/api/events/register` | `POST` | Register an event handler |
 | `/api/events/fire` | `POST` | Fire an event and report which handlers ran |
 
@@ -678,6 +686,7 @@ Example response:
     "runtimeIdentity": "alice-web-player",
     "title": "Winter Story",
     "description": "A snow scene with a bunny.",
+    "preview": "preview.png",
     "package": {
       "filename": "winter-story.alice-web.zip",
       "mimeType": "application/zip",
@@ -745,8 +754,13 @@ Valid response:
   },
   "manifest": {
     "schemaVersion": "alice-web.package/v1",
+    "product": "Alice",
+    "packageName": "alice-web",
     "runtimeIdentity": "alice-web-player",
     "entrypoint": "index.html",
+    "preview": "preview.png",
+    "share": "share.json",
+    "validation": "validation.json",
     "project": "project/project.json",
     "package": {
       "filename": "winter-story.alice-web.zip",
@@ -787,9 +801,9 @@ Invalid packages return HTTP `400` with explicit validation errors:
 Validation rejects malformed base64, empty packages, unreadable ZIP data,
 absolute paths, parent traversal, backslash traversal, duplicate required
 entries, encoded path controls, missing required files, unsafe package
-filenames, wrong schema identity, wrong runtime identity, unsafe
-`canonicalUrl` values, and generated metadata that uses repository nickname
-identity.
+filenames, wrong schema identity, wrong runtime identity, package/share link
+mismatches, unsupported share delivery modes, unsafe `canonicalUrl` values, and
+generated metadata that uses repository nickname identity.
 
 ## `GET /api/projects/current/export/typescript`
 

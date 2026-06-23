@@ -28,6 +28,12 @@ function localPost(app: Express, apiPath: string) {
     .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN);
 }
 
+function localGet(app: Express, apiPath: string) {
+  return request(app)
+    .get(apiPath)
+    .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN);
+}
+
 function decodeBase64Package(base64: string): Buffer {
   return Buffer.from(base64, "base64");
 }
@@ -205,6 +211,88 @@ describe("server API", () => {
 
       expect(res.body.status).toBe("launched");
       expect(res.body.projectName).toBe("sanitized-scene");
+    });
+  });
+
+  describe("runtime parity evidence APIs", () => {
+    it("requires the local API token for runtime parity reads", async () => {
+      const unconfiguredApp = createServer({
+        port: 0,
+        evidenceDir: path.join(evidenceDir, "no-runtime-token"),
+      });
+      for (const endpoint of [
+        "/api/vr/camera-comfort",
+        "/api/accessibility/rescue-camera-captions",
+        "/api/review/gallery-walk-rubric",
+        "/api/review/runtime-parity",
+      ]) {
+        await request(app).get(endpoint).expect(401);
+        await request(app)
+          .get(endpoint)
+          .set(LOCAL_API_TOKEN_HEADER, "wrong-token")
+          .expect(401);
+        await request(unconfiguredApp).get(endpoint).expect(401);
+        await localGet(app, endpoint).expect(200);
+      }
+    });
+
+    it("reports camera comfort evidence without claiming true headset VR", async () => {
+      const res = await localGet(app, "/api/vr/camera-comfort").expect(200);
+
+      expect(res.body.schema_version).toBe("alice.camera-vr-comfort-evidence/v1");
+      expect(res.body.status).toBe("partial");
+      expect(res.body.desktopCameraAvailable).toBe(true);
+      expect(res.body.keyboardMovementAvailable).toBe("unknown");
+      expect(res.body.reducedMotionRespected).toBe("unknown");
+      expect(res.body.trueHeadsetVrSupported).toBe(false);
+      expect(res.body.nativeVrSupported).toBe(false);
+      expect(res.body.unsupportedReason).toContain("true headset/native VR remains unsupported");
+    });
+
+    it("reports accessibility rescue camera captions for current scene review", async () => {
+      await localPost(app, "/api/scene/add-object")
+        .send({ className: "org.lgna.story.SBiped", name: "guide" })
+        .expect(200);
+
+      const res = await request(app)
+        .get("/api/accessibility/rescue-camera-captions")
+        .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN)
+        .expect(200);
+
+      expect(res.body.schema_version).toBe("alice.accessibility-rescue-camera-captions/v1");
+      expect(res.body.status).toBe("partial");
+      expect(res.body.cameraCaption).toContain("Camera");
+      expect(res.body.objectCaption).toContain("guide");
+      expect(res.body.keyboardReviewAvailable).toBe("unknown");
+      expect(res.body.highContrastReviewAvailable).toBe("unknown");
+      expect(res.body.captionChecks.map((check: { id: string }) => check.id)).toEqual(
+        expect.arrayContaining(["aria-live-status", "camera-caption", "scene-object-caption"]),
+      );
+    });
+
+    it("reports gallery walk rubric evidence while live studio remains unsupported", async () => {
+      await localPost(app, "/api/scene/add-object")
+        .send({ className: "org.lgna.story.SProp", name: "checkpoint" })
+        .expect(200);
+
+      const res = await request(app)
+        .get("/api/review/gallery-walk-rubric")
+        .set(LOCAL_API_TOKEN_HEADER, TEST_LOCAL_API_TOKEN)
+        .expect(200);
+
+      expect(res.body.schema_version).toBe("alice.gallery-walk-rubric-evidence/v1");
+      expect(res.body.reviewWorkflowSupported).toBe(false);
+      expect(res.body.rubricRecordingSupported).toBe(false);
+      expect(res.body.liveStudioSupported).toBe(false);
+      expect(res.body.galleryItems.map((item: { title: string }) => item.title)).toContain("checkpoint");
+    });
+
+    it("bundles the runtime parity evidence sections", async () => {
+      const res = await localGet(app, "/api/review/runtime-parity").expect(200);
+
+      expect(res.body.cameraVrComfort.schema_version).toBe("alice.camera-vr-comfort-evidence/v1");
+      expect(res.body.accessibilityRescueCaptions.schema_version).toBe("alice.accessibility-rescue-camera-captions/v1");
+      expect(res.body.galleryWalkRubric.schema_version).toBe("alice.gallery-walk-rubric-evidence/v1");
     });
   });
 
@@ -563,7 +651,7 @@ describe("server API", () => {
         .send({
           title: "Winter Story",
           description: "A snow scene with a bunny.",
-          canonicalUrl: "https://example.edu/alice/winter-story",
+          canonicalUrl: "https://example.edu",
           teacher: {
             audience: "Middle school",
             lessonFocus: "Winter story sharing",
@@ -657,7 +745,7 @@ describe("server API", () => {
           packageBase64: exportRes.body.package.base64,
           title: "Shared Winter Story",
           description: "Shared package description.",
-          canonicalUrl: "https://example.edu/alice/shared-winter-story",
+          canonicalUrl: "https://example.edu",
           teacher: {
             audience: "After-school club",
             lessonFocus: "Community remix",
@@ -677,7 +765,7 @@ describe("server API", () => {
           runtimeIdentity: "alice-web-player",
           title: "Shared Winter Story",
           description: "Shared package description.",
-          canonicalUrl: "https://example.edu/alice/shared-winter-story",
+          canonicalUrl: "https://example.edu",
           package: {
             filename: exportRes.body.package.filename,
             mimeType: "application/zip",
@@ -717,6 +805,20 @@ describe("server API", () => {
         .expect(400);
       await localPost(app, "/api/project/export/web-package")
         .send({ canonicalUrl: "https://example.edu\n.evil/path" })
+        .expect(400);
+      for (const canonicalUrl of ["http:example.com", "http:///example.com", "https:\\\\example.edu\\alice"]) {
+        await localPost(app, "/api/project/export/web-package")
+          .send({ canonicalUrl })
+          .expect(400);
+      }
+      await localPost(app, "/api/project/export/web-package")
+        .send({ canonicalUrl: "https://user:pass@example.edu/alice/project" })
+        .expect(400);
+      await localPost(app, "/api/project/share")
+        .send({
+          packageBase64: "UEsDBAo=",
+          canonicalUrl: "https://user:pass@example.edu/alice/project",
+        })
         .expect(400);
 
       const malformedTeacher = await localPost(app, "/api/project/export/web-package")

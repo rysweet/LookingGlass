@@ -35,10 +35,10 @@ const RESERVED_WEB_PACKAGE_PATHS = new Set<string>(REQUIRED_WEB_PACKAGE_FILES);
 const RESERVED_WEB_PACKAGE_PATHS_BY_LOWERCASE = new Map(
   REQUIRED_WEB_PACKAGE_FILES.map((path) => [path.toLowerCase(), path] as const),
 );
-const FORBIDDEN_IDENTITY_RE = /LookingGlass|lookingglass|alice-standalone-player/;
+const FORBIDDEN_IDENTITY_RE = /LookingGlass|alice-standalone-player/i;
 const ENCODED_PATH_CONTROL_RE = /%(?:2e|2f|5c)/i;
 const URL_CONTROL_OR_SPACE_RE = /[\u0000-\u0020\u007f]/u;
-const SAFE_PACKAGE_FILENAME_RE = /^[a-z0-9][a-z0-9._-]*\.zip$/i;
+const SAFE_PACKAGE_FILENAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.alice-web\.zip$/;
 
 export function isReservedWebPackagePath(path: string): boolean {
   const lowerPath = path.toLowerCase();
@@ -578,7 +578,17 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
   }
 
   const filename = validatedPackageFilename(manifest, errors);
-  if (!manifest?.package || manifest.package.filename !== filename || manifest.package.mimeType !== ZIP_MIME_TYPE) {
+  if (
+    !manifest?.package
+    || !isSafePackageFilename(manifest.package.filename)
+    || manifest.package.filename !== filename
+    || manifest.package.mimeType !== ZIP_MIME_TYPE
+    || manifest.entrypoint !== WEB_PACKAGE_ARTIFACTS.entrypoint
+    || manifest.preview !== WEB_PACKAGE_ARTIFACTS.preview
+    || manifest.share !== WEB_PACKAGE_ARTIFACTS.share
+    || manifest.validation !== WEB_PACKAGE_ARTIFACTS.validation
+    || manifest.project !== WEB_PACKAGE_ARTIFACTS.project
+  ) {
     errors.push({
       code: "invalid-package-reference",
       message: "manifest package must include the validated ZIP filename and application/zip MIME type",
@@ -1061,7 +1071,31 @@ function isSafeHttpUrl(value: string): boolean {
   if (URL_CONTROL_OR_SPACE_RE.test(value)) return false;
   try {
     const parsed = new URL(value);
-    return parsed.href === value && (parsed.protocol === "http:" || parsed.protocol === "https:");
+    return (parsed.protocol === "http:" || parsed.protocol === "https:")
+      && parsed.username === ""
+      && parsed.password === ""
+      && (parsed.href === value || isHostOnlyHttpUrlWithoutSlash(parsed, value));
+  } catch {
+    return false;
+  }
+}
+
+function isHostOnlyHttpUrlWithoutSlash(parsed: URL, value: string): boolean {
+  return parsed.href === `${value}/`
+    && parsed.pathname === "/"
+    && parsed.search === ""
+    && parsed.hash === ""
+    && !value.endsWith("/");
+}
+
+function isSafePackageFilename(value: string): boolean {
+  try {
+    const safe = assertSafeWritablePath(value);
+    return safe === value
+      && SAFE_PACKAGE_FILENAME_RE.test(value)
+      && !value.includes("/")
+      && !value.includes("\\")
+      && !URL_CONTROL_OR_SPACE_RE.test(value);
   } catch {
     return false;
   }
@@ -1086,14 +1120,14 @@ function validateSharePackageLinks(share: AliceWebShareDocument, filename: strin
   const errors: WebPackageValidationError[] = [];
   if (!share.package || share.package.filename !== filename || share.package.mimeType !== ZIP_MIME_TYPE) {
     errors.push({
-      code: "invalid-share-package-link",
+      code: "invalid-share-package-reference",
       message: "share package metadata must match the validated ZIP filename and application/zip MIME type",
       path: WEB_PACKAGE_ARTIFACTS.share,
     });
   }
   if (!share.links || share.links.package !== filename || share.links.html !== WEB_PACKAGE_ARTIFACTS.entrypoint || share.links.preview !== WEB_PACKAGE_ARTIFACTS.preview) {
     errors.push({
-      code: "invalid-share-package-link",
+      code: "invalid-share-package-reference",
       message: "share links must point to the package, HTML entrypoint, and preview artifacts",
       path: WEB_PACKAGE_ARTIFACTS.share,
     });
