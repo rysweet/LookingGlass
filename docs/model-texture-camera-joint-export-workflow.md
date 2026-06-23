@@ -211,7 +211,6 @@ const webPackage = await ProjectExport.exportWebPackage(archive.project, {
   resources: Array.from(archive.resources, ([path, bytes]) => ({
     path,
     bytes,
-    mimeType: "application/octet-stream",
   })),
   teacher: {
     audience: "Middle school creative coding",

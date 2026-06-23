@@ -522,6 +522,23 @@ describe("server API", () => {
       expect(invalidArchive.body).toEqual(expect.objectContaining({
         code: "corrupted-archive",
       }));
+
+      const invalidArchiveBase64 = await localPost(app, "/api/project/export/web-package")
+        .send({ title: "Invalid Base64", archiveBase64: "not base64!!" })
+        .expect(400);
+      expect(invalidArchiveBase64.body.error).toMatch(/archiveBase64 must be valid base64/);
+
+      const tooManyEntries = new JSZip();
+      for (let index = 0; index < 4097; index += 1) {
+        tooManyEntries.file(`entry-${index}.txt`, "");
+      }
+      const limitedArchive = await tooManyEntries.generateAsync({ type: "uint8array" });
+      const archiveLimit = await localPost(app, "/api/project/export/web-package")
+        .send({ title: "Too Many Entries", archiveBase64: Buffer.from(limitedArchive).toString("base64") })
+        .expect(400);
+      expect(archiveLimit.body).toEqual(expect.objectContaining({
+        code: "archive-limit",
+      }));
     });
 
     it("clears stale audio metadata and resources when creating a replacement project", async () => {

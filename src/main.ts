@@ -234,6 +234,10 @@ function markWebPackageStale(): void {
   lastWebPackageBase64 = null;
 }
 
+function markProjectChanged(): void {
+  markWebPackageStale();
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
@@ -576,6 +580,7 @@ function updateAliceWorkflow(
     workflowElapsedSeconds = 0;
     if (lastArchive) {
       lastArchive.aliceWorkflow = aliceWorkflow;
+      markProjectChanged();
     }
     renderScoreTimeWorkflow();
     setScoreTimeStatusMessage(successMessage);
@@ -903,6 +908,7 @@ async function handleClassBehaviorImport(): Promise<void> {
       const packageData = parseClassBehaviorPackage(await file.text());
       const result = importClassBehaviorPackage(archive.project, packageData);
       selectedClassBehaviorName = result.importedName;
+      markProjectChanged();
       renderProject(archive.project);
       renderClassBehaviorControls(archive.project);
       setStatusMessage(`Imported ${result.importedName}`);
@@ -1500,6 +1506,7 @@ function handleRunWorld(): void {
     const archive = ensureArchive();
     archive.aliceWorkflow = aliceWorkflow;
     ensureScoreTimeRunMethod(archive.project);
+    markProjectChanged();
     const execution = executeProject(archive.project, { aliceWorkflow });
     workflowScoreValues = execution.scoreValues;
     workflowElapsedSeconds = readElapsedSeconds(execution.visibleWorkflowBindings);
