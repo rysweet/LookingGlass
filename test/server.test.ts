@@ -426,6 +426,14 @@ describe("server API", () => {
           title: "Winter Story",
           description: "A snow scene with a bunny.",
           canonicalUrl: "https://example.edu/alice/winter-story",
+          teacher: {
+            audience: "Middle school",
+            lessonFocus: "Winter story sharing",
+            remix: "with-attribution",
+            attribution: "Alice Teacher",
+            tags: ["winter", "story"],
+            standards: ["CSTA 2-AP-10"],
+          },
         })
         .expect(200);
 
@@ -503,6 +511,7 @@ describe("server API", () => {
         "safe-zip-paths",
         "alice-web-identity",
         "entrypoint-playable",
+        "teacher-share-metadata",
       ]));
 
       const shareRes = await localPost(app, "/api/project/share")
@@ -511,6 +520,13 @@ describe("server API", () => {
           title: "Shared Winter Story",
           description: "Shared package description.",
           canonicalUrl: "https://example.edu/alice/shared-winter-story",
+          teacher: {
+            audience: "After-school club",
+            lessonFocus: "Community remix",
+            remix: "allowed",
+            tags: ["gallery"],
+            standards: ["CSTA 2-CS-01"],
+          },
         })
         .expect(200);
       expect(shareRes.body).toMatchObject({
@@ -535,6 +551,14 @@ describe("server API", () => {
             package: exportRes.body.package.filename,
             preview: "preview.png",
           },
+          teacher: {
+            schemaVersion: "alice-web.teacher-share/v1",
+            audience: "After-school club",
+            lessonFocus: "Community remix",
+            remix: "allowed",
+            tags: ["gallery"],
+            standards: ["CSTA 2-CS-01"],
+          },
         },
         artifacts: {
           share: "share.json",
@@ -553,6 +577,14 @@ describe("server API", () => {
       await localPost(app, "/api/project/export/web-package")
         .send({ canonicalUrl: "javascript:alert(1)" })
         .expect(400);
+      await localPost(app, "/api/project/export/web-package")
+        .send({ canonicalUrl: "https://example.edu\n.evil/path" })
+        .expect(400);
+
+      const malformedTeacher = await localPost(app, "/api/project/export/web-package")
+        .send({ teacher: { audience: 42 } })
+        .expect(400);
+      expect(malformedTeacher.body.error).toMatch(/teacher\.audience/i);
 
       const invalidValidation = await localPost(app, "/api/project/validate-web-package")
         .send({ packageBase64: "not base64!!" })

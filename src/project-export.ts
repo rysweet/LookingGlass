@@ -34,6 +34,7 @@ const REQUIRED_WEB_PACKAGE_FILES = Object.values(WEB_PACKAGE_ARTIFACTS);
 const RESERVED_WEB_PACKAGE_PATHS = new Set<string>(REQUIRED_WEB_PACKAGE_FILES);
 const FORBIDDEN_IDENTITY_RE = /LookingGlass|lookingglass|alice-standalone-player/;
 const ENCODED_PATH_CONTROL_RE = /%(?:2e|2f|5c)/i;
+const URL_CONTROL_OR_SPACE_RE = /[\u0000-\u0020\u007f]/u;
 
 export function isReservedWebPackagePath(path: string): boolean {
   return RESERVED_WEB_PACKAGE_PATHS.has(path);
@@ -107,6 +108,18 @@ export interface WebPackageOptions {
   description?: string;
   canonicalUrl?: string;
   resources?: ProjectExportResource[];
+  teacher?: TeacherShareMetadata;
+}
+
+export type TeacherShareRemixPolicy = "allowed" | "with-attribution" | "not-allowed";
+
+export interface TeacherShareMetadata {
+  audience?: string;
+  lessonFocus?: string;
+  remix?: TeacherShareRemixPolicy;
+  attribution?: string;
+  tags?: string[];
+  standards?: string[];
 }
 
 export interface WebPackageReference {
@@ -202,6 +215,7 @@ interface AliceWebShareDocument {
   title: string;
   description?: string;
   canonicalUrl?: string;
+  teacher?: AliceWebTeacherShareMetadata;
   preview: typeof WEB_PACKAGE_ARTIFACTS.preview;
   package: {
     filename: string;
@@ -217,6 +231,16 @@ interface AliceWebShareDocument {
     package: string;
     preview: typeof WEB_PACKAGE_ARTIFACTS.preview;
   };
+}
+
+interface AliceWebTeacherShareMetadata {
+  schemaVersion: "alice-web.teacher-share/v1";
+  audience?: string;
+  lessonFocus?: string;
+  remix: TeacherShareRemixPolicy;
+  attribution?: string;
+  tags: string[];
+  standards: string[];
 }
 
 interface AliceWebValidationDocument {
@@ -395,7 +419,7 @@ export async function exportWebPackage(
   );
   const manifest = buildPackageManifest(filename);
   const share = buildShareDocument(normalized, filename);
-  const validation = buildValidationDocument();
+  const validation = buildValidationDocument(Boolean(share.teacher));
 
   const zip = new JSZip();
   addZipFile(zip, WEB_PACKAGE_ARTIFACTS.entrypoint, html);
@@ -510,7 +534,29 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
     errors.push({ code: "invalid-preview", message: "preview.png must be a PNG image", path: WEB_PACKAGE_ARTIFACTS.preview });
   }
 
+  if (share && Object.prototype.hasOwnProperty.call(share, "teacher")) {
+    const teacherErrors = validateTeacherShareMetadata(share.teacher);
+    if (teacherErrors.length === 0) {
+      evidence.push("teacher-share-metadata");
+    } else {
+      errors.push(...teacherErrors);
+    }
+  }
+  if (share && Object.prototype.hasOwnProperty.call(share, "canonicalUrl")) {
+    const urlError = validatePackageCanonicalUrl(share.canonicalUrl);
+    if (urlError) {
+      errors.push(urlError);
+    }
+  }
+
   const filename = validatedPackageFilename(manifest, errors);
+  if (!manifest?.package || manifest.package.filename !== filename || manifest.package.mimeType !== ZIP_MIME_TYPE) {
+    errors.push({
+      code: "invalid-package-reference",
+      message: "manifest package must include the validated ZIP filename and application/zip MIME type",
+      path: WEB_PACKAGE_ARTIFACTS.manifest,
+    });
+  }
   return buildValidationResult(evidence, errors, {
     runtime: manifest?.packageName === ALICE_WEB_PACKAGE ? ALICE_WEB_PACKAGE : undefined,
     package: buildPackageReference(filename, decoded.bytes),
@@ -802,18 +848,12 @@ function escapeScriptText(value: string): string {
 function normalizeWebPackageOptions(
   project: Pick<AliceProject, "projectName">,
   options: WebPackageOptions,
-): { title: string; metadata: Omit<HtmlExportMetadata, "preview"> } {
+): { title: string; metadata: Omit<HtmlExportMetadata, "preview">; teacher?: AliceWebTeacherShareMetadata } {
   const title = options.title?.trim() || project.projectName?.trim() || "Alice Project";
   const description = options.description?.trim();
   const canonicalUrl = options.canonicalUrl?.trim();
   if (canonicalUrl) {
-    let parsed: URL;
-    try {
-      parsed = new URL(canonicalUrl);
-    } catch {
-      throw new WebPackageInputError("canonicalUrl must be a valid http or https URL");
-    }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (!isSafeHttpUrl(canonicalUrl)) {
       throw new WebPackageInputError("canonicalUrl must be a valid http or https URL");
     }
   }
@@ -823,7 +863,141 @@ function normalizeWebPackageOptions(
       ...(description ? { description } : {}),
       ...(canonicalUrl ? { canonicalUrl } : {}),
     },
+    ...(options.teacher !== undefined ? { teacher: normalizeTeacherShareMetadata(options.teacher) } : {}),
   };
+}
+
+function normalizeTeacherShareMetadata(input: unknown): AliceWebTeacherShareMetadata {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    throw new WebPackageInputError("teacher must be a JSON object");
+  }
+  const metadata = input as TeacherShareMetadata;
+  const audience = normalizeOptionalText(metadata.audience, "teacher.audience");
+  const lessonFocus = normalizeOptionalText(metadata.lessonFocus, "teacher.lessonFocus");
+  const attribution = normalizeOptionalText(metadata.attribution, "teacher.attribution");
+  const remix = metadata.remix ?? "allowed";
+  if (typeof remix !== "string" || !["allowed", "with-attribution", "not-allowed"].includes(remix)) {
+    throw new WebPackageInputError("teacher.remix must be allowed, with-attribution, or not-allowed");
+  }
+  return {
+    schemaVersion: "alice-web.teacher-share/v1",
+    ...(audience ? { audience } : {}),
+    ...(lessonFocus ? { lessonFocus } : {}),
+    remix,
+    ...(attribution ? { attribution } : {}),
+    tags: normalizeTextList(metadata.tags, "teacher.tags"),
+    standards: normalizeTextList(metadata.standards, "teacher.standards"),
+  };
+}
+
+function normalizeOptionalText(value: unknown, fieldName: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") {
+    throw new WebPackageInputError(`${fieldName} must be a string`);
+  }
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeTextList(values: unknown, fieldName: string): string[] {
+  if (values === undefined) return [];
+  if (!Array.isArray(values)) {
+    throw new WebPackageInputError(`${fieldName} must be an array of strings`);
+  }
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string") {
+      throw new WebPackageInputError(`${fieldName} must be an array of strings`);
+    }
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    normalized.push(trimmed);
+  }
+  return normalized;
+}
+
+function validateTeacherShareMetadata(value: unknown): WebPackageValidationError[] {
+  const errors: WebPackageValidationError[] = [];
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return [{
+      code: "invalid-teacher-share-metadata",
+      message: "teacher metadata must be an object",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    }];
+  }
+  const metadata = value as Partial<AliceWebTeacherShareMetadata>;
+  for (const [fieldName, fieldValue] of Object.entries({
+    audience: metadata.audience,
+    lessonFocus: metadata.lessonFocus,
+    attribution: metadata.attribution,
+  })) {
+    if (fieldValue !== undefined && typeof fieldValue !== "string") {
+      errors.push({
+        code: "invalid-teacher-share-metadata",
+        message: `teacher ${fieldName} must be a string`,
+        path: WEB_PACKAGE_ARTIFACTS.share,
+      });
+    }
+  }
+  if (metadata.schemaVersion !== "alice-web.teacher-share/v1") {
+    errors.push({
+      code: "invalid-teacher-share-metadata",
+      message: "teacher metadata must use alice-web.teacher-share/v1",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    });
+  }
+  if (!["allowed", "with-attribution", "not-allowed"].includes(metadata.remix ?? "")) {
+    errors.push({
+      code: "invalid-teacher-share-metadata",
+      message: "teacher remix policy must be allowed, with-attribution, or not-allowed",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    });
+  }
+  if (!Array.isArray(metadata.tags) || !metadata.tags.every((tag) => typeof tag === "string")) {
+    errors.push({
+      code: "invalid-teacher-share-metadata",
+      message: "teacher tags must be strings",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    });
+  }
+  if (!Array.isArray(metadata.standards) || !metadata.standards.every((standard) => typeof standard === "string")) {
+    errors.push({
+      code: "invalid-teacher-share-metadata",
+      message: "teacher standards must be strings",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    });
+  }
+  return errors;
+}
+
+function validatePackageCanonicalUrl(value: unknown): WebPackageValidationError | null {
+  if (typeof value !== "string") {
+    return {
+      code: "invalid-canonical-url",
+      message: "share canonicalUrl must be a valid http or https URL",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    };
+  }
+  if (isSafeHttpUrl(value)) {
+    return null;
+  }
+  return {
+    code: "invalid-canonical-url",
+    message: "share canonicalUrl must be a valid http or https URL",
+    path: WEB_PACKAGE_ARTIFACTS.share,
+  };
+}
+
+function isSafeHttpUrl(value: string): boolean {
+  if (URL_CONTROL_OR_SPACE_RE.test(value)) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.href === value && (parsed.protocol === "http:" || parsed.protocol === "https:");
+  } catch {
+    return false;
+  }
 }
 
 function buildPackageManifest(filename: string): AliceWebPackageManifest {
@@ -845,7 +1019,7 @@ function buildPackageManifest(filename: string): AliceWebPackageManifest {
 }
 
 function buildShareDocument(
-  normalized: { title: string; metadata: Omit<HtmlExportMetadata, "preview"> },
+  normalized: { title: string; metadata: Omit<HtmlExportMetadata, "preview">; teacher?: AliceWebTeacherShareMetadata },
   filename: string,
 ): AliceWebShareDocument {
   return {
@@ -854,6 +1028,7 @@ function buildShareDocument(
     runtimeIdentity: ALICE_WEB_PLAYER,
     title: normalized.title,
     ...normalized.metadata,
+    ...(normalized.teacher ? { teacher: normalized.teacher } : {}),
     preview: WEB_PACKAGE_ARTIFACTS.preview,
     package: {
       filename,
@@ -872,7 +1047,7 @@ function buildShareDocument(
   };
 }
 
-function buildValidationDocument(): AliceWebValidationDocument {
+function buildValidationDocument(hasTeacherMetadata = false): AliceWebValidationDocument {
   return {
     schemaVersion: "alice-web.validation/v1",
     valid: true,
@@ -881,6 +1056,7 @@ function buildValidationDocument(): AliceWebValidationDocument {
       "required-files-present",
       "entrypoint-playable",
       "alice-web-identity",
+      ...(hasTeacherMetadata ? ["teacher-share-metadata"] : []),
     ],
   };
 }

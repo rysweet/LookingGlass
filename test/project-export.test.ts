@@ -17,6 +17,14 @@ type WebPackageRequest = {
   title?: string;
   description?: string;
   canonicalUrl?: string;
+  teacher?: {
+    audience?: string;
+    lessonFocus?: string;
+    remix?: "allowed" | "with-attribution" | "not-allowed";
+    attribution?: string;
+    tags?: string[];
+    standards?: string[];
+  };
 };
 
 type PackageReference = {
@@ -65,6 +73,7 @@ type ShareArtifacts = {
     canonicalUrl?: string;
     package: PackageReference;
     links: Record<string, string>;
+    teacher?: Record<string, unknown>;
   };
   artifacts: Record<string, string>;
   validation: { valid: boolean; errors: unknown[] };
@@ -285,6 +294,7 @@ describe("project-export", () => {
     });
     expect(share.package).not.toHaveProperty("sha256");
     expect(share.package).not.toHaveProperty("sizeBytes");
+    expect(share).not.toHaveProperty("teacher");
 
     const validation = await readZipJson(zip, "validation.json");
     expect(validation).toMatchObject({
@@ -522,6 +532,58 @@ describe("project-export", () => {
     expect(missingManifestFilename.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "invalid-package-filename" }),
     ]));
+
+    const unsafeCanonicalUrl = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({
+          schemaVersion: "alice-web.share/v1",
+          product: "Alice",
+          runtimeIdentity: "alice-web-player",
+          canonicalUrl: "javascript:alert(1)",
+        }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(unsafeCanonicalUrl.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-canonical-url" }),
+    ]));
+
+    const controlWhitespaceCanonicalUrl = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({
+          schemaVersion: "alice-web.share/v1",
+          product: "Alice",
+          runtimeIdentity: "alice-web-player",
+          canonicalUrl: "https://example.edu\n.evil/path",
+        }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(controlWhitespaceCanonicalUrl.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-canonical-url" }),
+    ]));
   });
 
   it("generateShareArtifacts validates packageBase64 and links share metadata to the decoded package", async () => {
@@ -573,6 +635,173 @@ describe("project-export", () => {
         errors: [],
       },
     });
+  });
+
+  it("rejects packages missing manifest package metadata before share generation", async () => {
+    expect(projectExportApi.validateWebPackage).toBeTypeOf("function");
+    expect(projectExportApi.generateShareArtifacts).toBeTypeOf("function");
+
+    const packageBase64 = await makeZip({
+      "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+      "manifest.json": JSON.stringify({
+        schemaVersion: "alice-web.package/v1",
+        product: "Alice",
+        packageName: "alice-web",
+        runtimeIdentity: "alice-web-player",
+        entrypoint: "index.html",
+        preview: "preview.png",
+        share: "share.json",
+        validation: "validation.json",
+        project: "project/project.json",
+      }),
+      "share.json": JSON.stringify({
+        schemaVersion: "alice-web.share/v1",
+        product: "Alice",
+        runtimeIdentity: "alice-web-player",
+      }),
+      "preview.png": new Uint8Array([137, 80, 78, 71]),
+      "project/project.json": "{}",
+      "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+    });
+    const validation = await projectExportApi.validateWebPackage!({ packageBase64 });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-package-reference" }),
+    ]));
+    await expect(projectExportApi.generateShareArtifacts!({ packageBase64 }))
+      .rejects.toMatchObject({
+        name: "InvalidWebPackageError",
+        validation: expect.objectContaining({ valid: false }),
+      });
+  });
+
+  it("carries teacher community-sharing metadata through package export, validation, and share artifacts", async () => {
+    expect(projectExportApi.exportWebPackage).toBeTypeOf("function");
+    expect(projectExportApi.validateWebPackage).toBeTypeOf("function");
+    expect(projectExportApi.generateShareArtifacts).toBeTypeOf("function");
+
+    const teacher = {
+      audience: "Middle school creative coding",
+      lessonFocus: "Remix a reusable character behavior",
+      remix: "with-attribution" as const,
+      attribution: "Alice Example Teacher",
+      tags: ["classroom", "remix", "classroom"],
+      standards: ["CSTA 2-AP-10"],
+    };
+    const exported = await projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Teacher Share Pack",
+      description: "Reusable classroom handoff.",
+      teacher,
+    });
+    const zip = await JSZip.loadAsync(decodePackage(exported.package.base64));
+    const shareJson = await readZipJson(zip, "share.json");
+    const validationJson = await readZipJson(zip, "validation.json");
+    const validation = await projectExportApi.validateWebPackage!({
+      packageBase64: exported.package.base64,
+    });
+    const share = await projectExportApi.generateShareArtifacts!({
+      packageBase64: exported.package.base64,
+      title: "Community Remix Pack",
+      teacher: {
+        ...teacher,
+        tags: ["gallery", "remix"],
+      },
+    });
+
+    expect(shareJson.teacher).toEqual({
+      schemaVersion: "alice-web.teacher-share/v1",
+      audience: "Middle school creative coding",
+      lessonFocus: "Remix a reusable character behavior",
+      remix: "with-attribution",
+      attribution: "Alice Example Teacher",
+      tags: ["classroom", "remix"],
+      standards: ["CSTA 2-AP-10"],
+    });
+    expect(validationJson.evidence).toEqual(expect.arrayContaining(["teacher-share-metadata"]));
+    expect(validation.evidence).toEqual(expect.arrayContaining(["teacher-share-metadata"]));
+    expect(share.share.teacher).toMatchObject({
+      schemaVersion: "alice-web.teacher-share/v1",
+      tags: ["gallery", "remix"],
+      remix: "with-attribution",
+    });
+    expect(share.share.teacher).not.toHaveProperty("title");
+  });
+
+  it("rejects malformed teacher metadata instead of awarding teacher-share evidence", async () => {
+    const exported = await projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Malformed Teacher Share Pack",
+      teacher: {
+        remix: "allowed",
+        tags: ["classroom"],
+        standards: ["CSTA"],
+      },
+    });
+    const zip = await JSZip.loadAsync(decodePackage(exported.package.base64));
+    const share = JSON.parse(await zip.file("share.json")!.async("string"));
+    share.teacher.audience = 42;
+    share.teacher.lessonFocus = { text: "not a string" };
+    zip.file("share.json", JSON.stringify(share));
+    const packageBytes = await zip.generateAsync({ type: "uint8array" });
+
+    const validation = await projectExportApi.validateWebPackage!({
+      packageBase64: Buffer.from(packageBytes).toString("base64"),
+    });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.evidence).not.toContain("teacher-share-metadata");
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "invalid-teacher-share-metadata",
+        message: "teacher audience must be a string",
+      }),
+      expect.objectContaining({
+        code: "invalid-teacher-share-metadata",
+        message: "teacher lessonFocus must be a string",
+      }),
+    ]));
+  });
+
+  it("rejects teacher metadata with null values or non-array list fields", async () => {
+    await expect(projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Bad Teacher Pack",
+      teacher: "not-an-object" as unknown as Record<string, never>,
+    })).rejects.toThrow(/teacher must be a JSON object/);
+
+    await expect(projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Bad Teacher Pack",
+      teacher: {
+        remix: "allowed",
+        tags: "" as unknown as string[],
+        standards: ["CSTA"],
+      },
+    })).rejects.toThrow(/teacher\.tags must be an array of strings/);
+
+    const exported = await projectExportApi.exportWebPackage!(createProjectFixture(), {
+      title: "Teacher Share Pack",
+      teacher: {
+        remix: "allowed",
+        tags: ["classroom"],
+        standards: ["CSTA"],
+      },
+    });
+    const zip = await JSZip.loadAsync(decodePackage(exported.package.base64));
+    const share = JSON.parse(await zip.file("share.json")!.async("string"));
+    share.teacher = null;
+    zip.file("share.json", JSON.stringify(share));
+
+    const validation = await projectExportApi.validateWebPackage!({
+      packageBase64: Buffer.from(await zip.generateAsync({ type: "uint8array" })).toString("base64"),
+    });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.evidence).not.toContain("teacher-share-metadata");
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "invalid-teacher-share-metadata",
+        message: "teacher metadata must be an object",
+      }),
+    ]));
   });
 
   it("TypeScriptExporter creates a deterministic Alice web source handoff archive", async () => {
