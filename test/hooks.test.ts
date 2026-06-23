@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
-import { execFileSync, execSync } from "child_process";
+import { execFileSync, execSync, spawnSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -18,6 +18,13 @@ function runTool(toolName: string, args: string[]): string {
     encoding: "utf-8",
     timeout: 10000,
   }).trim();
+}
+
+function runToolRaw(toolName: string, args: string[]) {
+  return spawnSync(path.resolve("tools", toolName), args, {
+    encoding: "utf-8",
+    timeout: 10000,
+  });
 }
 
 beforeEach(async () => {
@@ -394,6 +401,172 @@ describe("eatme CLI hooks", () => {
       "--evidence-dir",
       reopenEvidenceDir,
       "--json",
-    ])).toThrow(/movement procedure/);
+    ])).toThrow(/procedure edit proof/);
+  });
+
+  it("reopen-project rejects transform state drift", () => {
+    runHook("place-object", ["--name", "heroBunny"]);
+    const placedProject = path.join(evidenceDir, "place-object", "placed-project.a3p");
+    runHook("transform-object", ["--object-identifier", "heroBunny"], placedProject);
+    runHook("edit-procedure", [
+      "--procedure-selector",
+      "scene.myFirstMethod",
+      "--edit-spec",
+      "append-comment:movement-proof",
+    ], placedProject);
+    const editedProject = path.join(evidenceDir, "edit-procedure", "edited-project.a3p");
+    const saveEvidenceDir = path.join(evidenceDir, "project-save");
+    fs.mkdirSync(saveEvidenceDir, { recursive: true });
+    runTool("eatme-save-project", [
+      "--project",
+      editedProject,
+      "--evidence-dir",
+      saveEvidenceDir,
+      "--json",
+      "--save-selector",
+      "objects-first-full-path",
+    ]);
+
+    const reopenEvidenceDir = path.join(evidenceDir, "project-reopen");
+    fs.mkdirSync(reopenEvidenceDir, { recursive: true });
+    expect(() => runTool("eatme-reopen-project", [
+      "--saved-project",
+      path.join(saveEvidenceDir, "saved-project.a3p"),
+      "--reopen-selector",
+      "objects-first-full-path",
+      "--evidence-dir",
+      reopenEvidenceDir,
+      "--json",
+    ])).toThrow(/transform does not match/);
+  });
+
+  it("reopen-project rejects saved projects missing same-run transform evidence", () => {
+    runHook("place-object", ["--name", "heroBunny"]);
+    const placedProject = path.join(evidenceDir, "place-object", "placed-project.a3p");
+    runHook("edit-procedure", [
+      "--procedure-selector",
+      "scene.myFirstMethod",
+      "--edit-spec",
+      "append-comment:movement-proof",
+    ], placedProject);
+    const editedProject = path.join(evidenceDir, "edit-procedure", "edited-project.a3p");
+    const saveEvidenceDir = path.join(evidenceDir, "project-save");
+    fs.mkdirSync(saveEvidenceDir, { recursive: true });
+    runTool("eatme-save-project", [
+      "--project",
+      editedProject,
+      "--evidence-dir",
+      saveEvidenceDir,
+      "--json",
+      "--save-selector",
+      "objects-first-full-path",
+    ]);
+
+    const reopenEvidenceDir = path.join(evidenceDir, "project-reopen");
+    fs.mkdirSync(reopenEvidenceDir, { recursive: true });
+    expect(() => runTool("eatme-reopen-project", [
+      "--saved-project",
+      path.join(saveEvidenceDir, "saved-project.a3p"),
+      "--reopen-selector",
+      "objects-first-full-path",
+      "--evidence-dir",
+      reopenEvidenceDir,
+      "--json",
+    ])).toThrow(/transform-object\/object-transform\.json/);
+  });
+
+  it("reopen-project rejects saved projects missing the transformed object", () => {
+    runHook("place-object", ["--name", "heroBunny"]);
+    const placedProject = path.join(evidenceDir, "place-object", "placed-project.a3p");
+    runHook("transform-object", ["--object-identifier", "heroBunny"], placedProject);
+    runHook("place-object", ["--name", "otherBunny"]);
+    const otherProject = path.join(evidenceDir, "place-object", "placed-project.a3p");
+    runHook("edit-procedure", [
+      "--procedure-selector",
+      "scene.myFirstMethod",
+      "--edit-spec",
+      "append-comment:movement-proof",
+    ], otherProject);
+    const editedProject = path.join(evidenceDir, "edit-procedure", "edited-project.a3p");
+    const saveEvidenceDir = path.join(evidenceDir, "project-save");
+    fs.mkdirSync(saveEvidenceDir, { recursive: true });
+    runTool("eatme-save-project", [
+      "--project",
+      editedProject,
+      "--evidence-dir",
+      saveEvidenceDir,
+      "--json",
+      "--save-selector",
+      "objects-first-full-path",
+    ]);
+
+    const reopenEvidenceDir = path.join(evidenceDir, "project-reopen");
+    fs.mkdirSync(reopenEvidenceDir, { recursive: true });
+    expect(() => runTool("eatme-reopen-project", [
+      "--saved-project",
+      path.join(saveEvidenceDir, "saved-project.a3p"),
+      "--reopen-selector",
+      "objects-first-full-path",
+      "--evidence-dir",
+      reopenEvidenceDir,
+      "--json",
+    ])).toThrow(/transformed object: heroBunny/);
+  });
+
+  it("transform-object fails closed for invalid inputs", () => {
+    const help = runToolRaw("eatme-transform-object", ["--help"]);
+    expect(help.status).toBe(0);
+    expect(help.stdout).toContain("Usage: transform-object");
+
+    const missingJson = runToolRaw("eatme-transform-object", [
+      "--project",
+      testProjectPath,
+      "--evidence-dir",
+      path.join(evidenceDir, "bad-transform"),
+    ]);
+    expect(missingJson.status).not.toBe(0);
+    expect(missingJson.stderr).toContain("--json is required");
+
+    const missingObject = runToolRaw("eatme-transform-object", [
+      "--project",
+      testProjectPath,
+      "--evidence-dir",
+      path.join(evidenceDir, "bad-transform"),
+      "--object-identifier",
+      "missingObject",
+      "--json",
+    ]);
+    expect(missingObject.status).not.toBe(0);
+    expect(missingObject.stderr).toContain("project has no scene object to transform");
+  });
+
+  it("reopen-project fails closed for invalid inputs", () => {
+    const help = runToolRaw("eatme-reopen-project", ["--help"]);
+    expect(help.status).toBe(0);
+    expect(help.stdout).toContain("Usage: reopen-project");
+
+    const missingSavedProject = runToolRaw("eatme-reopen-project", [
+      "--reopen-selector",
+      "objects-first-full-path",
+      "--evidence-dir",
+      path.join(evidenceDir, "bad-reopen"),
+      "--json",
+    ]);
+    expect(missingSavedProject.status).not.toBe(0);
+    expect(missingSavedProject.stderr).toContain("--saved-project is required");
+
+    const outsideRunSavedProject = path.join(evidenceDir, "saved-project.a3p");
+    fs.copyFileSync(testProjectPath, outsideRunSavedProject);
+    const outsideRun = runToolRaw("eatme-reopen-project", [
+      "--saved-project",
+      outsideRunSavedProject,
+      "--reopen-selector",
+      "objects-first-full-path",
+      "--evidence-dir",
+      path.join(evidenceDir, "project-reopen"),
+      "--json",
+    ]);
+    expect(outsideRun.status).not.toBe(0);
+    expect(outsideRun.stderr).toContain("project-save evidence directory");
   });
 });

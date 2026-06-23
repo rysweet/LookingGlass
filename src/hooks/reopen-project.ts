@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* v8 ignore file -- exercised through tools/eatme-reopen-project subprocess contract tests. */
 import * as fs from "fs";
 import * as path from "path";
 import { parseA3P } from "../a3p-parser.js";
@@ -111,6 +112,11 @@ function methodNameFromSelector(selector: unknown): string | null {
   return selector.trim().replace(/^(scene|world)\./, "");
 }
 
+interface TransformProof {
+  readonly objectId: string;
+  readonly positionAfter: { x: number; y: number; z: number };
+}
+
 function readMovementProof(evidenceDir: string, names: readonly string[]): {
   procedureSelector: string;
   methodName: string;
@@ -144,18 +150,41 @@ function readMovementProof(evidenceDir: string, names: readonly string[]): {
     }
   }
 
-  if (names.includes("myFirstMethod")) {
-    return {
-      procedureSelector: "scene.myFirstMethod",
-      methodName: "myFirstMethod",
-      movement: {
-        method_name: "myFirstMethod",
-        source: "reopened-project-method",
-      },
-    };
-  }
+  throw new Error("same-run procedure edit proof with a reopened movement procedure is required before reopen proof");
+}
 
-  throw new Error("reopened project does not contain the expected movement procedure");
+function readTransformProof(evidenceDir: string): TransformProof {
+  const runDir = path.dirname(path.resolve(evidenceDir));
+  const artifact = readJsonIfExists(path.join(runDir, "transform-object", "object-transform.json"));
+  if (typeof artifact?.object_id !== "string" || artifact.object_id.trim() === "") {
+    throw new Error("same-run transform-object/object-transform.json with object_id is required before reopen proof");
+  }
+  const transform = artifact.transform;
+  const positionAfter = transform && typeof transform === "object" && !Array.isArray(transform)
+    ? (transform as Record<string, unknown>).position_after
+    : null;
+  if (!isPosition(positionAfter)) {
+    throw new Error("same-run transform-object/object-transform.json with position_after is required before reopen proof");
+  }
+  return { objectId: artifact.object_id, positionAfter };
+}
+
+function isPosition(value: unknown): value is { x: number; y: number; z: number } {
+  return Boolean(
+    value
+      && typeof value === "object"
+      && !Array.isArray(value)
+      && typeof (value as { x?: unknown }).x === "number"
+      && typeof (value as { y?: unknown }).y === "number"
+      && typeof (value as { z?: unknown }).z === "number",
+  );
+}
+
+function positionsMatch(
+  actual: { x: number; y: number; z: number } | null | undefined,
+  expected: { x: number; y: number; z: number },
+): boolean {
+  return actual?.x === expected.x && actual.y === expected.y && actual.z === expected.z;
 }
 
 async function main(): Promise<void> {
@@ -180,10 +209,13 @@ async function main(): Promise<void> {
 
   const names = methodNames(reopened);
   const movementProof = readMovementProof(args.evidenceDir, names);
-  const primaryObject = reopened.sceneObjects.find((object) => !/ground|camera/i.test(object.name))
-    ?? reopened.sceneObjects[0];
+  const transformProof = readTransformProof(args.evidenceDir);
+  const primaryObject = reopened.sceneObjects.find((object) => object.name === transformProof.objectId);
   if (!primaryObject) {
-    throw new Error("reopened project has no object identity to verify");
+    throw new Error(`reopened project does not contain transformed object: ${transformProof.objectId}`);
+  }
+  if (!positionsMatch(primaryObject.position, transformProof.positionAfter)) {
+    throw new Error(`reopened project transform does not match transform proof for object: ${transformProof.objectId}`);
   }
   const state = {
     schema_version: "eatme.alice-reopened-state/v1",

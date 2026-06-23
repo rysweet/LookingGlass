@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* v8 ignore file -- exercised through tools/eatme-transform-object subprocess contract tests. */
 import * as fs from "fs";
 import * as path from "path";
 import { readProject, writeProject } from "../project-io.js";
