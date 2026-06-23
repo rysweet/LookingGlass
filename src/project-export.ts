@@ -526,11 +526,14 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
   }
 
   const manifestPackageFilename = manifest?.package?.filename;
-  const filename = typeof manifestPackageFilename === "string" && isSafePackageFilename(manifestPackageFilename)
+  const hasSafeManifestPackageFilename = typeof manifestPackageFilename === "string"
+    && isSafePackageFilename(manifestPackageFilename);
+  const filename = hasSafeManifestPackageFilename
     ? manifestPackageFilename
     : `${ALICE_WEB_PACKAGE}.zip`;
   if (
     !manifest?.package
+    || !hasSafeManifestPackageFilename
     || manifest.package.filename !== filename
     || manifest.package.mimeType !== ZIP_MIME_TYPE
     || manifest.entrypoint !== WEB_PACKAGE_ARTIFACTS.entrypoint

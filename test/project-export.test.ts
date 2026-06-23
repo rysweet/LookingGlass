@@ -652,7 +652,8 @@ describe("project-export", () => {
     "<img.alice-web.zip",
     "\"quote.alice-web.zip",
     "bad%2fname.alice-web.zip",
-  ])("rejects unsafe package filename metacharacters even when share links match: %s", async (filename) => {
+    "alice-web.zip",
+  ])("rejects unsafe package filenames even when share links match: %s", async (filename) => {
     expect(projectExportApi.validateWebPackage).toBeTypeOf("function");
 
     const validation = await projectExportApi.validateWebPackage!({
@@ -688,8 +689,12 @@ describe("project-export", () => {
     expect(validation.package?.filename).toBe("alice-web.zip");
     expect(validation.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "invalid-package-reference" }),
-      expect.objectContaining({ code: "invalid-share-package-reference" }),
     ]));
+    if (filename !== "alice-web.zip") {
+      expect(validation.errors).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "invalid-share-package-reference" }),
+      ]));
+    }
   });
 
   it("carries teacher community-sharing metadata through package export, validation, and share artifacts", async () => {
