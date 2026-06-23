@@ -139,6 +139,7 @@ export function snapshotAliceProject(project: AliceProject): string {
     importedAssets: project.importedAssets ?? [],
     textureAssignments: project.textureAssignments ?? [],
     cameraWorkflow: project.cameraWorkflow ?? null,
+    jointState: project.jointState ?? null,
   });
 }
 
