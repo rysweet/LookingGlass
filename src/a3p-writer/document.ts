@@ -103,6 +103,9 @@ function buildDesiredSceneFields(project: AliceProject, sceneType: AliceTypeDefi
 
 function buildDesiredSceneMethods(project: AliceProject, sceneType: AliceTypeDefinition | null): AliceMethod[] {
   const methods = [...(sceneType?.methods ?? [])];
+  if (sceneType) {
+    return methods;
+  }
   const seen = new Set(methods.map((method) => method.name));
   for (const method of project.methods) {
     if (!seen.has(method.name)) {

@@ -57,19 +57,28 @@ describe("a3p-writer/document class behavior XML", () => {
     await ensureXmlTools();
 
     const project = createProject();
-    project.methods = [
-      {
-        name: "hop",
-        isFunction: false,
-        returnType: "void",
-        parameters: [],
-        statements: [{ kind: "MethodCall", object: "this", method: "scene edit survives", arguments: [] }],
-      },
-    ];
+    const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
+    sceneType!.methods = [{
+      name: "hop",
+      isFunction: false,
+      returnType: "void",
+      parameters: [],
+      statements: [{ kind: "MethodCall", object: "this", method: "scene edit survives", arguments: [] }],
+    }];
 
     const xml = buildProjectXml(project, MINIMAL_PROJECT_XML_TEMPLATE);
 
     expect(xml).toContain("scene edit survives");
+    expect(xml).toContain("custom type method survives");
+  });
+
+  it("does not append unique imported class methods to Scene methods", async () => {
+    await ensureXmlTools();
+
+    const xml = buildProjectXml(createProject(), MINIMAL_PROJECT_XML_TEMPLATE);
+    const sceneSection = xml.slice(xml.indexOf("Scene"), xml.indexOf("SanitizedBunny"));
+
+    expect(sceneSection).not.toContain("hop");
     expect(xml).toContain("custom type method survives");
   });
 });
