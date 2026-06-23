@@ -456,6 +456,32 @@ describe("project-export", () => {
       expect.objectContaining({ code: "invalid-canonical-url" }),
     ]));
 
+    const credentialCanonicalUrl = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({
+          schemaVersion: "alice-web.share/v1",
+          product: "Alice",
+          runtimeIdentity: "alice-web-player",
+          canonicalUrl: "https://user:pass@example.edu/alice/project",
+        }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(credentialCanonicalUrl.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-canonical-url" }),
+    ]));
+
     const controlWhitespaceCanonicalUrl = await projectExportApi.validateWebPackage!({
       packageBase64: await makeZip({
         "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",

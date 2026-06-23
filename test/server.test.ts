@@ -425,7 +425,7 @@ describe("server API", () => {
         .send({
           title: "Winter Story",
           description: "A snow scene with a bunny.",
-          canonicalUrl: "https://example.edu/alice/winter-story",
+          canonicalUrl: "https://example.edu",
           teacher: {
             audience: "Middle school",
             lessonFocus: "Winter story sharing",
@@ -519,7 +519,7 @@ describe("server API", () => {
           packageBase64: exportRes.body.package.base64,
           title: "Shared Winter Story",
           description: "Shared package description.",
-          canonicalUrl: "https://example.edu/alice/shared-winter-story",
+          canonicalUrl: "https://example.edu",
           teacher: {
             audience: "After-school club",
             lessonFocus: "Community remix",
@@ -539,7 +539,7 @@ describe("server API", () => {
           runtimeIdentity: "alice-web-player",
           title: "Shared Winter Story",
           description: "Shared package description.",
-          canonicalUrl: "https://example.edu/alice/shared-winter-story",
+          canonicalUrl: "https://example.edu",
           package: {
             filename: exportRes.body.package.filename,
             mimeType: "application/zip",
@@ -579,6 +579,15 @@ describe("server API", () => {
         .expect(400);
       await localPost(app, "/api/project/export/web-package")
         .send({ canonicalUrl: "https://example.edu\n.evil/path" })
+        .expect(400);
+      await localPost(app, "/api/project/export/web-package")
+        .send({ canonicalUrl: "https://user:pass@example.edu/alice/project" })
+        .expect(400);
+      await localPost(app, "/api/project/share")
+        .send({
+          packageBase64: "UEsDBAo=",
+          canonicalUrl: "https://user:pass@example.edu/alice/project",
+        })
         .expect(400);
 
       const malformedTeacher = await localPost(app, "/api/project/export/web-package")

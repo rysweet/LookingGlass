@@ -341,7 +341,11 @@ function validateShareUrl(value: string): { ok: true } | { ok: false; error: str
   } catch {
     return { ok: false, error: "canonicalUrl must be a valid http or https URL" };
   }
-  if (parsed.href !== value || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) {
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+    || parsed.username !== ""
+    || parsed.password !== ""
+  ) {
     return { ok: false, error: "canonicalUrl must be a valid http or https URL" };
   }
   return { ok: true };

@@ -956,7 +956,9 @@ function isSafeHttpUrl(value: string): boolean {
   if (URL_CONTROL_OR_SPACE_RE.test(value)) return false;
   try {
     const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    return (parsed.protocol === "http:" || parsed.protocol === "https:")
+      && parsed.username === ""
+      && parsed.password === "";
   } catch {
     return false;
   }
