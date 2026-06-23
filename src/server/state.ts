@@ -141,19 +141,14 @@ export function buildCurrentProject(state: ServerState): AliceProject {
 }
 
 function mergeProcedureStatements(existing: AliceStatement[], methods: string[]): AliceStatement[] {
-  const existingMethodCalls = new Set(existing
-    .filter((statement) => statement.kind === "MethodCall")
-    .map((statement) => statement.method));
   return [
     ...existing,
-    ...methods
-      .filter((method) => !existingMethodCalls.has(method))
-      .map((method) => ({
-        kind: "MethodCall" as const,
-        object: "this",
-        method,
-        arguments: [],
-      })),
+    ...methods.map((method) => ({
+      kind: "MethodCall" as const,
+      object: "this",
+      method,
+      arguments: [],
+    })),
   ];
 }
 
@@ -190,7 +185,11 @@ export function addSceneObjectToCurrentProject(
   state: ServerState,
   input: { name: string; className: string; modelResourceId?: string },
 ): void {
+  const wasUnmaterialized = state.parsedProject === null;
   const project = ensureCurrentProject(state);
+  if (wasUnmaterialized) {
+    syncServerProceduresFromProject(state, project);
+  }
   if (project.sceneObjects.some((object) => object.name === input.name)) {
     return;
   }

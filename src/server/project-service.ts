@@ -34,7 +34,7 @@ import {
   type ProjectAudioWorkflowState,
 } from "../project-audio.js";
 import { executeProject, type LogEntry } from "../tweedle-vm.js";
-import { jointStateSidecarPath, writeJointStateSidecar } from "./joint-state-sidecar.js";
+import { jointStateSidecarPath, removeJointStateSidecar, writeJointStateSidecar } from "./joint-state-sidecar.js";
 import {
   buildCurrentProject,
   resetJointState,
@@ -462,6 +462,8 @@ export const projectService: ProjectService = {
     );
     if (state.jointState.listObjectNames().length > 0) {
       await writeJointStateSidecar(saveDir, state.jointState);
+    } else {
+      await removeJointStateSidecar(saveDir);
     }
 
     return {
