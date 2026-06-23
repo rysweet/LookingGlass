@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import type { Express } from "express";
 import type { ServerContext } from "../context.js";
 import { readJsonObjectBody, readOptionalStringField } from "../validation.js";
