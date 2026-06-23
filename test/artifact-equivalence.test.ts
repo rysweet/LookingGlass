@@ -169,6 +169,12 @@ async function readZipText(zip: JSZip, path: string): Promise<string> {
   return file!.async("string");
 }
 
+function readEmbeddedProject(html: string): AliceProject {
+  const match = html.match(/<script id="alice-project-data" type="application\/json">([\s\S]*?)<\/script>/);
+  expect(match, "index.html should contain alice-project-data JSON").toBeTruthy();
+  return JSON.parse(match![1]) as AliceProject;
+}
+
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -212,10 +218,17 @@ describe("artifact equivalence checks", () => {
     expect(manifest.procedureCount).toBe(project.methods.length);
     expect(manifest.files).toEqual(exported.manifest.files);
     expect(projectSource).toContain(`projectName = "${project.projectName}"`);
-    expect(sceneSource).toContain("bunny");
-    expect(sceneSource).toContain("org.lgna.story.SBiped");
-    expect(procedureSource).toContain("await scene.objects.bunny.move");
-    expect(procedureSource).toContain("await scene.objects.bunny.turn");
+    expect(sceneSource).toContain('aliceName: "bunny"');
+    expect(sceneSource).toContain('className: "org.lgna.story.SBiped"');
+    expect(sceneSource).toContain('resourceType: "BUNNY"');
+    expect(sceneSource).toContain("position: { x: 1, y: 0, z: 2 }");
+    expect(sceneSource).toContain("size: { width: 1, height: 2, depth: 1 }");
+    expect(sceneSource).toContain('aliceName: "camera"');
+    expect(sceneSource).toContain('className: "org.lgna.story.SCamera"');
+    expect(sceneSource).toContain("position: { x: 0, y: 1.5, z: 6 }");
+    expect(procedureSource).toContain("export async function myFirstMethod(scene: AliceScene, height: unknown): Promise<void>");
+    expect(procedureSource).toContain("await scene.objects.bunny.move(\"UP\", height);");
+    expect(procedureSource).toContain("await scene.objects.bunny.turn(\"LEFT\", 0.25);");
   });
 
   it("compares web package project, manifest, share, and validation artifacts", async () => {
@@ -231,8 +244,10 @@ describe("artifact equivalence checks", () => {
     const validation = await readZipJson<{ valid: boolean; errors: unknown[]; evidence: string[] }>(zip, "validation.json");
     const projectPayload = await readZipJson<AliceProject>(zip, "project/project.json");
     const indexHtml = await readZipText(zip, "index.html");
+    const embeddedProject = readEmbeddedProject(indexHtml);
 
     expect(projectSnapshot(projectPayload)).toEqual(projectSnapshot(project));
+    expect(projectSnapshot(embeddedProject)).toEqual(projectSnapshot(project));
     expect(manifest).toMatchObject({
       product: "Alice",
       packageName: "alice-web",
