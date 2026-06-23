@@ -1,7 +1,7 @@
 import { EventSystem } from "../events.js";
 import { JointStateStore } from "../joint-system.js";
 import { TemplateLibrary } from "../project-templates.js";
-import type { AliceMethod, AliceProject, AliceStatement, AliceTypeDefinition } from "../a3p-parser.js";
+import { snapshotAliceStatements, type AliceMethod, type AliceProject, type AliceStatement, type AliceTypeDefinition } from "../a3p-parser.js";
 import {
   createDefaultCameraWorkflowState,
   type CameraWorkflowState,
@@ -282,12 +282,14 @@ function getServerOwnedProjectMethods(project: AliceProject): AliceMethod[] {
 
 function rootSceneOwnedMethods(project: AliceProject, sceneType: AliceTypeDefinition | undefined): AliceMethod[] {
   if (!sceneType) return project.methods;
-  const nonSceneMethodNames = new Set(
-    (project.types ?? [])
-      .filter((type) => type !== sceneType)
-      .flatMap((type) => (type.methods ?? []).map((method) => method.name)),
+  const sceneMethods = sceneType.methods ?? [];
+  const nonSceneMethods = (project.types ?? [])
+    .filter((type) => type !== sceneType)
+    .flatMap((type) => type.methods ?? []);
+  return project.methods.filter((method) =>
+    sceneMethods.some((sceneMethod) => sameOwnerMethod(method, sceneMethod))
+    || !nonSceneMethods.some((nonSceneMethod) => sameOwnerMethod(method, nonSceneMethod)),
   );
-  return project.methods.filter((method) => !nonSceneMethodNames.has(method.name));
 }
 
 function mergeMethodsByName(primary: AliceMethod[], secondary: AliceMethod[]): AliceMethod[] {
@@ -300,6 +302,11 @@ function mergeMethodsByName(primary: AliceMethod[], secondary: AliceMethod[]): A
     }
   }
   return merged;
+}
+
+function sameOwnerMethod(left: AliceMethod, right: AliceMethod): boolean {
+  return left.name === right.name
+    && snapshotAliceStatements(left.statements) === snapshotAliceStatements(right.statements);
 }
 
 export function parseMethodParams(

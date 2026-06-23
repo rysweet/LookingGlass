@@ -58,13 +58,24 @@ describe("a3p-writer/document class behavior XML", () => {
 
     const project = createProject();
     const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
-    sceneType!.methods = [{
+    const sceneMethod = {
       name: "hop",
       isFunction: false,
       returnType: "void",
       parameters: [],
       statements: [{ kind: "MethodCall", object: "this", method: "scene edit survives", arguments: [] }],
-    }];
+    };
+    sceneType!.methods = [sceneMethod];
+    project.methods = [
+      sceneMethod,
+      {
+        name: "hop",
+        isFunction: true,
+        returnType: "DecimalNumber",
+        parameters: [{ name: "amount", type: "DecimalNumber" }],
+        statements: [{ kind: "MethodCall", object: "this", method: "custom type method survives", arguments: [] }],
+      },
+    ];
 
     const xml = buildProjectXml(project, MINIMAL_PROJECT_XML_TEMPLATE);
 
@@ -75,7 +86,10 @@ describe("a3p-writer/document class behavior XML", () => {
   it("does not append unique imported class methods to Scene methods", async () => {
     await ensureXmlTools();
 
-    const xml = buildProjectXml(createProject(), MINIMAL_PROJECT_XML_TEMPLATE);
+    const project = createProject();
+    const importedType = project.types?.find((type) => type.name === "SanitizedBunny");
+    project.methods = [...(importedType?.methods ?? [])];
+    const xml = buildProjectXml(project, MINIMAL_PROJECT_XML_TEMPLATE);
     const sceneSection = xml.slice(xml.indexOf("Scene"), xml.indexOf("SanitizedBunny"));
 
     expect(sceneSection).not.toContain("hop");
