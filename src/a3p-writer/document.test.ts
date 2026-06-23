@@ -52,4 +52,47 @@ describe("a3p-writer/document class behavior XML", () => {
     expect(xml).toContain("hop");
     expect(xml).toContain("custom type method survives");
   });
+
+  it("keeps scene and imported class methods separate when names collide", async () => {
+    await ensureXmlTools();
+
+    const project = createProject();
+    const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
+    const sceneMethod = {
+      name: "hop",
+      isFunction: false,
+      returnType: "void",
+      parameters: [],
+      statements: [{ kind: "MethodCall", object: "this", method: "scene edit survives", arguments: [] }],
+    };
+    sceneType!.methods = [sceneMethod];
+    project.methods = [
+      sceneMethod,
+      {
+        name: "hop",
+        isFunction: true,
+        returnType: "DecimalNumber",
+        parameters: [{ name: "amount", type: "DecimalNumber" }],
+        statements: [{ kind: "MethodCall", object: "this", method: "custom type method survives", arguments: [] }],
+      },
+    ];
+
+    const xml = buildProjectXml(project, MINIMAL_PROJECT_XML_TEMPLATE);
+
+    expect(xml).toContain("scene edit survives");
+    expect(xml).toContain("custom type method survives");
+  });
+
+  it("does not append unique imported class methods to Scene methods", async () => {
+    await ensureXmlTools();
+
+    const project = createProject();
+    const importedType = project.types?.find((type) => type.name === "SanitizedBunny");
+    project.methods = [...(importedType?.methods ?? [])];
+    const xml = buildProjectXml(project, MINIMAL_PROJECT_XML_TEMPLATE);
+    const sceneSection = xml.slice(xml.indexOf("Scene"), xml.indexOf("SanitizedBunny"));
+
+    expect(sceneSection).not.toContain("hop");
+    expect(xml).toContain("custom type method survives");
+  });
 });

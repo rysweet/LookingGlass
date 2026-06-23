@@ -882,6 +882,117 @@ describe("server API", () => {
         .toHaveLength(1);
     });
 
+    it("does not duplicate procedure edits when class behavior import materializes the current project", async () => {
+      await localPost(app, "/api/launch").send({}).expect(200);
+      const marker = "editBeforeClassImportMaterializationProof";
+      const classMarker = "classBehaviorMethodBodyProof";
+      await localPost(app, "/api/code/edit-procedure")
+        .send({
+          procedureSelector: "scene.myFirstMethod",
+          editSpec: `append-comment:${marker}`,
+        })
+        .expect(200);
+
+      await localPost(app, "/api/projects/current/classes/behavior")
+        .send({
+          package: {
+            kind: "alice-web.reusable-class-behavior",
+            version: 1,
+            exportedBy: "alice-web",
+            type: {
+              name: "ReusableBehavior",
+              superTypeName: "org.lgna.story.SBiped",
+              fields: [],
+              methods: [
+                {
+                  name: "myFirstMethod",
+                  isFunction: true,
+                  returnType: "DecimalNumber",
+                  parameters: [{ name: "amount", type: "DecimalNumber" }],
+                  statements: [
+                    {
+                      kind: "MethodCall",
+                      object: "this",
+                      method: classMarker,
+                      arguments: [],
+                    },
+                  ],
+                },
+              ],
+              constructors: [],
+            },
+            evidence: ["test-class-behavior-package"],
+          },
+        })
+        .expect(200);
+
+      await localPost(app, "/api/code/create-procedure")
+        .send({ name: "myFirstMethod" })
+        .expect(400);
+      await localPost(app, "/api/project/save").send({}).expect(200);
+      const savedProjectPath = path.join(evidenceDir, "project-save", "saved-project.a3p");
+      const savedProject = await parseA3P(fs.readFileSync(savedProjectPath));
+      const sceneType = savedProject.types?.find((type) => type.superTypeName?.includes("SScene"));
+      const sceneMethod = sceneType?.methods?.find((candidate) => candidate.name === "myFirstMethod");
+      expect(sceneMethod?.statements.map((statement) => statement.method).filter((methodName) => methodName === marker))
+        .toHaveLength(1);
+      expect(sceneMethod).toMatchObject({
+        isFunction: false,
+        returnType: "void",
+        parameters: [],
+      });
+      const importedType = savedProject.types?.find((type) => type.name === "ReusableBehavior");
+      const importedMethod = importedType?.methods?.find((candidate) => candidate.name === "myFirstMethod");
+      expect(importedMethod).toMatchObject({
+        isFunction: true,
+        returnType: "DecimalNumber",
+        parameters: [{ name: "amount", type: "DecimalNumber" }],
+      });
+      expect(importedMethod?.statements.map((statement) => statement.method)).toContain(classMarker);
+      expect(importedMethod?.statements.map((statement) => statement.method)).not.toContain(marker);
+      const exportRes = await request(app)
+        .get("/api/projects/current/export/typescript")
+        .buffer(true)
+        .parse(parseBinaryResponse)
+        .expect(200);
+      const zip = await JSZip.loadAsync(exportRes.body);
+      const exportedText = (await Promise.all(
+        Object.values(zip.files)
+          .filter((entry) => !entry.dir)
+          .map((entry) => entry.async("string")),
+      )).join("\n");
+      expect(exportedText).toContain(marker);
+
+      const persistenceApp = createTestServer({
+        port: 0,
+        evidenceDir,
+        allowedProjectDirs: [evidenceDir],
+      });
+      await localPost(persistenceApp, "/api/project/reopen")
+        .send({ project: savedProjectPath })
+        .expect(200);
+      await localPost(persistenceApp, "/api/project/save").send({}).expect(200);
+      const resavedProject = await parseA3P(fs.readFileSync(savedProjectPath));
+      const resavedSceneType = resavedProject.types?.find((type) => type.superTypeName?.includes("SScene"));
+      const resavedSceneMethod = resavedSceneType?.methods?.find((candidate) => candidate.name === "myFirstMethod");
+      expect(resavedSceneMethod?.statements.map((statement) => statement.method).filter((methodName) => methodName === marker))
+        .toHaveLength(1);
+      expect(resavedSceneMethod).toMatchObject({
+        isFunction: false,
+        returnType: "void",
+        parameters: [],
+      });
+      const resavedImportedType = resavedProject.types?.find((type) => type.name === "ReusableBehavior");
+      const resavedImportedMethod = resavedImportedType?.methods?.find((candidate) => candidate.name === "myFirstMethod");
+      expect(resavedImportedMethod).toMatchObject({
+        isFunction: true,
+        returnType: "DecimalNumber",
+        parameters: [{ name: "amount", type: "DecimalNumber" }],
+      });
+      expect(resavedImportedMethod?.statements.map((statement) => statement.method)).toContain(classMarker);
+      expect(resavedImportedMethod?.statements.map((statement) => statement.method)).not.toContain(marker);
+    });
+
     it("preserves intentional repeated edits after materialization", async () => {
       await localPost(app, "/api/launch").send({}).expect(200);
       const marker = "intentionalRepeatedEditProof";

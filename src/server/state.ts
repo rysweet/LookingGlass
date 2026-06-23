@@ -1,7 +1,7 @@
 import { EventSystem } from "../events.js";
 import { JointStateStore } from "../joint-system.js";
 import { TemplateLibrary } from "../project-templates.js";
-import type { AliceMethod, AliceProject, AliceStatement } from "../a3p-parser.js";
+import { getA3PMethodSource, type AliceMethod, type AliceProject, type AliceStatement, type AliceTypeDefinition } from "../a3p-parser.js";
 import {
   createDefaultCameraWorkflowState,
   type CameraWorkflowState,
@@ -116,28 +116,52 @@ export function buildCurrentProject(state: ServerState): AliceProject {
   baseProject.sceneObjects = Array.from(sceneObjectsByName.values());
 
   const sceneType = baseProject.types?.find((type) => type.superTypeName?.includes("SScene"));
-  const sourceMethods = baseProject.methods.length > 0
-    ? baseProject.methods
-    : sceneType ? (sceneType.methods ?? []) : baseProject.methods;
-  const methodsByName = new Map(sourceMethods.map((method) => [method.name, method]));
+  const rootSceneMethods = rootLegacySceneMethods(baseProject, sceneType);
+  const sourceMethods = mergeMethodsByName(sceneType ? (sceneType.methods ?? []) : [], rootSceneMethods);
+  const rootMethodsByName = new Map(rootSceneMethods.map((method) => [method.name, method]));
+  const methodsByName = new Map(sourceMethods.map((method) => [
+    method.name,
+    methodWithMetadata(
+      method,
+      rootMethodsByName.get(method.name) === method ? method : undefined,
+      state.methodDefinitions.get(method.name),
+    ),
+  ]));
   for (const [name, statements] of state.procedures.entries()) {
     if (state.parsedProject && statements.length === 0 && methodsByName.has(name)) {
       continue;
     }
     const existing = methodsByName.get(name);
+    const candidateRootMethod = rootMethodsByName.get(name);
+    const rootMethod = existing === undefined || candidateRootMethod === existing
+      ? candidateRootMethod
+      : undefined;
     const definition = state.methodDefinitions.get(name);
     const nextStatements = mergeProcedureStatements(existing?.statements ?? [], statements);
     methodsByName.set(name, {
       name,
-      isFunction: existing?.isFunction ?? definition?.isFunction ?? false,
-      returnType: existing?.returnType ?? definition?.returnType ?? "void",
-      parameters: existing?.parameters ?? definition?.parameters ?? [],
+      isFunction: rootMethod?.isFunction ?? definition?.isFunction ?? existing?.isFunction ?? false,
+      returnType: rootMethod?.returnType ?? definition?.returnType ?? existing?.returnType ?? "void",
+      parameters: rootMethod?.parameters ?? definition?.parameters ?? existing?.parameters ?? [],
       statements: nextStatements,
     });
   }
   baseProject.methods = Array.from(methodsByName.values());
   syncSceneTypeMethods(baseProject, baseProject.methods, new Set(state.procedures.keys()));
   return baseProject;
+}
+
+function methodWithMetadata(
+  method: AliceMethod,
+  rootMethod: AliceMethod | undefined,
+  definition: { isFunction: boolean; returnType: string; parameters: MethodParam[] } | undefined,
+): AliceMethod {
+  return {
+    ...method,
+    isFunction: rootMethod?.isFunction ?? definition?.isFunction ?? method.isFunction,
+    returnType: rootMethod?.returnType ?? definition?.returnType ?? method.returnType,
+    parameters: rootMethod?.parameters ?? definition?.parameters ?? method.parameters,
+  };
 }
 
 function mergeProcedureStatements(existing: AliceStatement[], methods: string[]): AliceStatement[] {
@@ -242,9 +266,7 @@ export function syncServerProceduresFromProject(state: ServerState, project: Ali
     return;
   }
 
-  const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
-  const sceneMethods = sceneType?.methods ?? (project.types?.length ? [] : project.methods);
-  state.procedures = new Map(sceneMethods.map((method) => [method.name, []]));
+  state.procedures = new Map(getServerOwnedProjectMethods(project).map((method) => [method.name, []]));
 }
 
 export function syncServerMethodDefinitionsFromProject(state: ServerState, project: AliceProject | null): void {
@@ -262,7 +284,34 @@ export function syncServerMethodDefinitionsFromProject(state: ServerState, proje
 
 function getServerOwnedProjectMethods(project: AliceProject): AliceMethod[] {
   const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
-  return sceneType?.methods ?? (project.types?.length ? [] : project.methods);
+  return mergeMethodsByName(sceneType ? (sceneType.methods ?? []) : [], rootLegacySceneMethods(project, sceneType));
+}
+
+function rootLegacySceneMethods(project: AliceProject, sceneType: AliceTypeDefinition | undefined): AliceMethod[] {
+  if (!sceneType) return project.methods;
+  const sceneMethods = new Set(sceneType.methods ?? []);
+  const nonSceneMethods = new Set((project.types ?? [])
+    .filter((type) => type !== sceneType)
+    .flatMap((type) => type.methods ?? []));
+  return project.methods.filter((method) => {
+    const ownerTypeName = getA3PMethodSource(method)?.ownerTypeName;
+    if (ownerTypeName !== undefined) {
+      return ownerTypeName === sceneType.name;
+    }
+    return sceneMethods.has(method) || !nonSceneMethods.has(method);
+  });
+}
+
+function mergeMethodsByName(primary: AliceMethod[], secondary: AliceMethod[]): AliceMethod[] {
+  const merged = [...primary];
+  const seen = new Set(merged.map((method) => method.name));
+  for (const method of secondary) {
+    if (!seen.has(method.name)) {
+      merged.push(method);
+      seen.add(method.name);
+    }
+  }
+  return merged;
 }
 
 export function parseMethodParams(

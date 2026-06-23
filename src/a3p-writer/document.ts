@@ -103,15 +103,22 @@ function buildDesiredSceneFields(project: AliceProject, sceneType: AliceTypeDefi
 
 function buildDesiredSceneMethods(project: AliceProject, sceneType: AliceTypeDefinition | null): AliceMethod[] {
   const methods = [...(sceneType?.methods ?? [])];
+  const sceneMethods = new Set(sceneType?.methods ?? []);
+  const nonSceneMethods = new Set(sceneType
+    ? (project.types ?? [])
+      .filter((type) => type !== sceneType)
+      .flatMap((type) => type.methods ?? [])
+    : []);
+  const sceneTypeName = sceneType?.name;
   const seen = new Set(methods.map((method) => method.name));
-  const knownTypeMethodNames = new Set<string>();
-  for (const type of project.types ?? []) {
-    for (const method of type.methods ?? []) {
-      knownTypeMethodNames.add(method.name);
+  for (const method of project.methods.filter((candidate) => {
+    const ownerTypeName = getA3PMethodSource(candidate)?.ownerTypeName;
+    if (ownerTypeName !== undefined) {
+      return ownerTypeName === sceneTypeName;
     }
-  }
-  for (const method of project.methods) {
-    if (!knownTypeMethodNames.has(method.name) && !seen.has(method.name)) {
+    return sceneMethods.has(candidate) || !nonSceneMethods.has(candidate);
+  })) {
+    if (!seen.has(method.name)) {
       methods.push(method);
       seen.add(method.name);
     }
