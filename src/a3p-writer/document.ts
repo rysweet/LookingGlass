@@ -125,7 +125,14 @@ function buildDesiredSceneMethods(project: AliceProject, sceneType: AliceTypeDef
 
 function sameOwnerMethod(left: AliceMethod, right: AliceMethod): boolean {
   return left.name === right.name
+    && left.isFunction === right.isFunction
+    && left.returnType === right.returnType
+    && snapshotMethodParameters(left.parameters) === snapshotMethodParameters(right.parameters)
     && snapshotAliceStatements(left.statements) === snapshotAliceStatements(right.statements);
+}
+
+function snapshotMethodParameters(parameters: AliceMethod["parameters"] | undefined): string {
+  return JSON.stringify(parameters ?? []);
 }
 
 function fieldFromSceneObject(object: AliceObject): AliceFieldDefinition {

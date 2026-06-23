@@ -306,7 +306,14 @@ function mergeMethodsByName(primary: AliceMethod[], secondary: AliceMethod[]): A
 
 function sameOwnerMethod(left: AliceMethod, right: AliceMethod): boolean {
   return left.name === right.name
+    && left.isFunction === right.isFunction
+    && left.returnType === right.returnType
+    && snapshotMethodParameters(left.parameters) === snapshotMethodParameters(right.parameters)
     && snapshotAliceStatements(left.statements) === snapshotAliceStatements(right.statements);
+}
+
+function snapshotMethodParameters(parameters: MethodParam[] | undefined): string {
+  return JSON.stringify(parameters ?? []);
 }
 
 export function parseMethodParams(
