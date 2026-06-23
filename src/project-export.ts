@@ -587,6 +587,13 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
       path: WEB_PACKAGE_ARTIFACTS.manifest,
     });
   }
+  if (share) {
+    const shareLinkErrors = validateSharePackageLinks(share, filename);
+    errors.push(...shareLinkErrors);
+    if (shareLinkErrors.length === 0) {
+      evidence.push("share-package-links-match");
+    }
+  }
   return buildValidationResult(evidence, errors, {
     runtime: manifest?.packageName === ALICE_WEB_PACKAGE ? ALICE_WEB_PACKAGE : undefined,
     package: buildPackageReference(filename, decoded.bytes),
@@ -1036,6 +1043,25 @@ function isSafeHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function validateSharePackageLinks(share: AliceWebShareDocument, filename: string): WebPackageValidationError[] {
+  const errors: WebPackageValidationError[] = [];
+  if (!share.package || share.package.filename !== filename || share.package.mimeType !== ZIP_MIME_TYPE) {
+    errors.push({
+      code: "invalid-share-package-link",
+      message: "share package metadata must match the validated ZIP filename and application/zip MIME type",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    });
+  }
+  if (!share.links || share.links.package !== filename || share.links.html !== WEB_PACKAGE_ARTIFACTS.entrypoint || share.links.preview !== WEB_PACKAGE_ARTIFACTS.preview) {
+    errors.push({
+      code: "invalid-share-package-link",
+      message: "share links must point to the package, HTML entrypoint, and preview artifacts",
+      path: WEB_PACKAGE_ARTIFACTS.share,
+    });
+  }
+  return errors;
 }
 
 function buildPackageManifest(filename: string): AliceWebPackageManifest {

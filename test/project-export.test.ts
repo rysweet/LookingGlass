@@ -388,6 +388,7 @@ describe("project-export", () => {
       "no-duplicate-required-files",
       "alice-web-identity",
       "entrypoint-playable",
+      "share-package-links-match",
     ]));
   });
 
@@ -700,6 +701,33 @@ describe("project-export", () => {
     });
     expect(controlWhitespaceCanonicalUrl.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "invalid-canonical-url" }),
+    ]));
+
+    const mismatchedSharePackage = await projectExportApi.validateWebPackage!({
+      packageBase64: await makeZip({
+        "index.html": "<!doctype html><script>window.AlicePlayer={runtimeIdentity:'alice-web-player'}</script>",
+        "manifest.json": JSON.stringify({
+          schemaVersion: "alice-web.package/v1",
+          product: "Alice",
+          packageName: "alice-web",
+          runtimeIdentity: "alice-web-player",
+          entrypoint: "index.html",
+          package: { filename: "safe.alice-web.zip", mimeType: "application/zip" },
+        }),
+        "share.json": JSON.stringify({
+          schemaVersion: "alice-web.share/v1",
+          product: "Alice",
+          runtimeIdentity: "alice-web-player",
+          package: { filename: "other.alice-web.zip", mimeType: "application/zip" },
+          links: { html: "index.html", package: "other.alice-web.zip", preview: "preview.png" },
+        }),
+        "preview.png": new Uint8Array([137, 80, 78, 71]),
+        "project/project.json": "{}",
+        "validation.json": JSON.stringify({ schemaVersion: "alice-web.validation/v1" }),
+      }),
+    });
+    expect(mismatchedSharePackage.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-share-package-link" }),
     ]));
   });
 

@@ -348,6 +348,16 @@ describe("server API", () => {
       expect(projectJson.textureAssignments).toEqual([
         { objectName: "bunny", texturePath: importedTexture.body.asset.resourcePath },
       ]);
+
+      await localPost(app, "/api/project/new")
+        .send({ templateId: "blank", projectName: "Fresh Project" })
+        .expect(200);
+      const freshExport = await localPost(app, "/api/project/export/web-package")
+        .send({ title: "Fresh Project" })
+        .expect(200);
+      const freshZip = await JSZip.loadAsync(decodeBase64Package(freshExport.body.package.base64));
+      expect(freshZip.file(importedTexture.body.asset.resourcePath)).toBeNull();
+      expect(await freshZip.file("index.html")!.async("string")).not.toContain(importedTexture.body.asset.resourcePath);
     });
   });
 
