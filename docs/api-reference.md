@@ -738,6 +738,8 @@ Valid response:
   },
   "manifest": {
     "schemaVersion": "alice-web.package/v1",
+    "product": "Alice",
+    "packageName": "alice-web",
     "runtimeIdentity": "alice-web-player",
     "entrypoint": "index.html",
     "preview": "preview.png",
