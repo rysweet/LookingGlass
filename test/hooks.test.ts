@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import JSZip from "jszip";
+import { readProject } from "../src/project-io.js";
 
 let evidenceDir: string;
 let testProjectPath: string;
@@ -11,6 +12,13 @@ let testProjectPath: string;
 beforeAll(() => {
   execSync("npm run build:server", { stdio: "inherit" });
 });
+
+function runTool(toolName: string, args: string[]): string {
+  return execFileSync(path.resolve("tools", toolName), args, {
+    encoding: "utf-8",
+    timeout: 10000,
+  }).trim();
+}
 
 beforeEach(async () => {
   evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-hooks-test-"));
@@ -60,13 +68,13 @@ afterEach(() => {
   fs.rmSync(evidenceDir, { recursive: true, force: true });
 });
 
-function runHook(hookName: string, extraArgs: string[] = []): string {
+function runHook(hookName: string, extraArgs: string[] = [], projectPath = testProjectPath): string {
   const hookPath = path.resolve("dist-server/hooks", `${hookName}.js`);
   const evidenceSubdir = path.join(evidenceDir, hookName);
   fs.mkdirSync(evidenceSubdir, { recursive: true });
   const args = [
     "--project",
-    testProjectPath,
+    projectPath,
     "--evidence-dir",
     evidenceSubdir,
     "--json",
@@ -228,5 +236,164 @@ describe("eatme CLI hooks", () => {
     expect(
       fs.existsSync(path.join(hookEvidenceDir, "saved-project.a3p")),
     ).toBe(true);
+  });
+
+  it("transform-object produces valid JSON and transformed project artifacts", async () => {
+    const placeResult = JSON.parse(runHook("place-object", ["--name", "heroBunny"]));
+    const placedProject = path.join(evidenceDir, "place-object", "placed-project.a3p");
+
+    const stdout = runHook("transform-object", ["--object-identifier", placeResult.object_identifier], placedProject);
+    const result = JSON.parse(stdout);
+    expect(result).toMatchObject({
+      schema_version: "eatme.alice-object-transform-result/v1",
+      status: "transformed",
+      object_id: "heroBunny",
+      transform_artifact: "object-transform.json",
+      transformed_project_artifact: "transformed-object-project.a3p",
+    });
+
+    const hookEvidenceDir = path.join(evidenceDir, "transform-object");
+    const transformedProject = path.join(hookEvidenceDir, "transformed-object-project.a3p");
+    expect(fs.existsSync(transformedProject)).toBe(true);
+    expect(fs.existsSync(path.join(hookEvidenceDir, "object-transform.json"))).toBe(true);
+
+    const archive = await readProject(fs.readFileSync(transformedProject));
+    expect(archive.project.sceneObjects.find((object) => object.name === "heroBunny")?.position?.x).toBe(1);
+  });
+
+  it("reopen-project proves same-run saved project state", () => {
+    runHook("place-object", ["--name", "heroBunny"]);
+    const placedProject = path.join(evidenceDir, "place-object", "placed-project.a3p");
+    runHook("transform-object", ["--object-identifier", "heroBunny"], placedProject);
+    const transformedProject = path.join(evidenceDir, "transform-object", "transformed-object-project.a3p");
+    runHook("edit-procedure", [
+      "--procedure-selector",
+      "scene.myFirstMethod",
+      "--edit-spec",
+      "append-comment:movement-proof",
+    ], transformedProject);
+    const editedProject = path.join(evidenceDir, "edit-procedure", "edited-project.a3p");
+    runHook("run-world", [], editedProject);
+    const saveEvidenceDir = path.join(evidenceDir, "project-save");
+    fs.mkdirSync(saveEvidenceDir, { recursive: true });
+    runTool("eatme-save-project", [
+      "--project",
+      editedProject,
+      "--evidence-dir",
+      saveEvidenceDir,
+      "--json",
+      "--save-selector",
+      "scene.myFirstMethod",
+    ]);
+
+    const reopenEvidenceDir = path.join(evidenceDir, "project-reopen");
+    fs.mkdirSync(reopenEvidenceDir, { recursive: true });
+    const stdout = runTool("eatme-reopen-project", [
+      "--saved-project",
+      path.join(evidenceDir, "project-save", "saved-project.a3p"),
+      "--reopen-selector",
+      "objects-first-full-path",
+      "--evidence-dir",
+      reopenEvidenceDir,
+      "--json",
+    ]);
+    const result = JSON.parse(stdout);
+    expect(result).toMatchObject({
+      schema_version: "eatme.alice-project-reopen-result/v1",
+      status: "reopened",
+      source_saved_project_artifact: "project-save/saved-project.a3p",
+      reopen_selector: "objects-first-full-path",
+      reopened_project_artifact: "reopened-project.a3p",
+      reopen_artifact: "project-reopen.json",
+      reopened_state_artifact: "reopened-state.json",
+      state_verification: "passed",
+    });
+
+    for (const artifact of [
+      result.reopened_project_artifact,
+      result.reopen_artifact,
+      result.reopened_state_artifact,
+    ]) {
+      const artifactPath = path.join(reopenEvidenceDir, artifact);
+      expect(fs.existsSync(artifactPath)).toBe(true);
+      expect(fs.statSync(artifactPath).size).toBeGreaterThan(0);
+    }
+
+    const state = JSON.parse(fs.readFileSync(path.join(reopenEvidenceDir, "reopened-state.json"), "utf8"));
+    expect(state.object_id).toBe("heroBunny");
+    expect(state.transform.position.x).toBe(1);
+    expect(state.procedure_selector).toBe("objects-first-full-path");
+    expect(state.movement.present).toBe(true);
+    expect(state.object_identities).toEqual(
+      expect.arrayContaining([expect.objectContaining({ object_id: "heroBunny" })]),
+    );
+    expect(state.method_names).toContain("myFirstMethod");
+    expect(state.prior_run_evidence_artifact).toBe("run-world/run-world-result.json");
+  });
+
+  it("reopen-project rejects non-canonical saved artifacts", () => {
+    runHook("place-object", ["--name", "heroBunny"]);
+    const placedProject = path.join(evidenceDir, "place-object", "placed-project.a3p");
+    runHook("edit-procedure", [
+      "--procedure-selector",
+      "scene.myFirstMethod",
+      "--edit-spec",
+      "append-comment:movement-proof",
+    ], placedProject);
+    const editedProject = path.join(evidenceDir, "edit-procedure", "edited-project.a3p");
+    const saveEvidenceDir = path.join(evidenceDir, "project-save");
+    fs.mkdirSync(saveEvidenceDir, { recursive: true });
+    runTool("eatme-save-project", [
+      "--project",
+      editedProject,
+      "--evidence-dir",
+      saveEvidenceDir,
+      "--json",
+      "--save-selector",
+      "scene.myFirstMethod",
+    ]);
+
+    const alternateSavedProject = path.join(saveEvidenceDir, "alternate.a3p");
+    fs.copyFileSync(path.join(saveEvidenceDir, "saved-project.a3p"), alternateSavedProject);
+    const reopenEvidenceDir = path.join(evidenceDir, "project-reopen");
+    fs.mkdirSync(reopenEvidenceDir, { recursive: true });
+
+    expect(() => runTool("eatme-reopen-project", [
+      "--saved-project",
+      alternateSavedProject,
+      "--reopen-selector",
+      "scene.myFirstMethod",
+      "--evidence-dir",
+      reopenEvidenceDir,
+      "--json",
+    ])).toThrow(/project-save\/saved-project\.a3p/);
+  });
+
+  it("reopen-project rejects saved projects without movement procedure evidence", () => {
+    runHook("place-object", ["--name", "heroBunny"]);
+    const placedProject = path.join(evidenceDir, "place-object", "placed-project.a3p");
+    const saveEvidenceDir = path.join(evidenceDir, "project-save");
+    fs.mkdirSync(saveEvidenceDir, { recursive: true });
+    runTool("eatme-save-project", [
+      "--project",
+      placedProject,
+      "--evidence-dir",
+      saveEvidenceDir,
+      "--json",
+      "--save-selector",
+      "objects-first-full-path",
+    ]);
+
+    const reopenEvidenceDir = path.join(evidenceDir, "project-reopen");
+    fs.mkdirSync(reopenEvidenceDir, { recursive: true });
+    expect(() => runTool("eatme-reopen-project", [
+      "--saved-project",
+      path.join(saveEvidenceDir, "saved-project.a3p"),
+      "--reopen-selector",
+      "objects-first-full-path",
+      "--evidence-dir",
+      reopenEvidenceDir,
+      "--json",
+    ])).toThrow(/movement procedure/);
   });
 });
