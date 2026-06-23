@@ -11,6 +11,7 @@ import { registerAudioRoutes } from "./server/routes/audio-routes.js";
 import { registerProjectRoutes } from "./server/routes/project-routes.js";
 import { registerRuntimeParityRoutes } from "./server/routes/runtime-parity-routes.js";
 import { registerSceneRoutes } from "./server/routes/scene-routes.js";
+import { registerSetupReadinessRoutes } from "./server/routes/setup-readiness-routes.js";
 import { registerScreenshotRoutes } from "./server/routes/screenshot-routes.js";
 import { registerWorldRoutes } from "./server/routes/world-routes.js";
 import { createLocalApiProtectionMiddleware } from "./server/security.js";
@@ -78,6 +79,7 @@ export function createServer(options: ServerOptions): express.Express {
 
   registerLaunchRoutes(app, context);
   registerHealthRoutes(app, context);
+  registerSetupReadinessRoutes(app, context);
   registerCameraRoutes(app, context);
   registerSceneRoutes(app, context);
   registerJointRoutes(app, context);

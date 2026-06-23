@@ -96,6 +96,181 @@ describe("server API response contracts", () => {
     expect(afterLaunch.body.launched).toBe(true);
   });
 
+  it("exposes setup preflight config and evidence handoff without desktop-only claims", async () => {
+    const evidenceDir = trackTempDir(makeTempDir("alice-api-contract-"));
+    const app = createTestServer({ port: 4123, evidenceDir });
+
+    const config = await request(app).get("/api/config").expect(200);
+    expectOnlyKeys(config.body, [
+      "schema_version",
+      "runtime",
+      "platform",
+      "port",
+      "evidenceDirConfigured",
+      "projectConfigured",
+      "endpoints",
+      "doesNotClaim",
+    ]);
+    expect(config.body).toMatchObject({
+      schema_version: "lookingglass.server-config/v1",
+      runtime: "alice-web",
+      platform: "lookingglass",
+      port: 4123,
+      evidenceDirConfigured: true,
+      projectConfigured: false,
+    });
+    expect(config.body.endpoints).toMatchObject({
+      health: "/api/health",
+      setupPreflight: "/api/setup/preflight",
+      setupReadiness: "/api/setup/readiness",
+      evidenceHandoff: "/api/setup/evidence-handoff",
+      projectTemplates: "/api/project/templates",
+      createProject: "/api/project/new",
+    });
+    expect(config.body.doesNotClaim).toContain("Java desktop Alice launch");
+
+    const preflight = await request(app)
+      .get("/api/setup/preflight")
+      .query({ scenario: "setup-preflight-ready-to-create" })
+      .expect(200);
+    expectOnlyKeys(preflight.body, [
+      "schema_version",
+      "status",
+      "runtime",
+      "platform",
+      "scenario",
+      "checks",
+      "unsupportedCapabilities",
+      "classroomReadiness",
+      "doesNotClaim",
+    ]);
+    expect(preflight.body).toMatchObject({
+      schema_version: "lookingglass.setup-preflight/v1",
+      status: "ready",
+      runtime: "alice-web",
+      platform: "lookingglass",
+      scenario: "setup-preflight-ready-to-create",
+    });
+    expect(preflight.body.classroomReadiness.readyToCreateProject).toBe(true);
+    expect(preflight.body.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "server-health", status: "pass" }),
+        expect.objectContaining({ id: "create-project", status: "pass" }),
+        expect.objectContaining({ id: "evidence-directory", status: "pass" }),
+        expect.objectContaining({ id: "desktop-java-opengl", status: "unsupported" }),
+      ]),
+    );
+    expect(preflight.body.doesNotClaim).toContain("native OpenGL driver diagnosis");
+
+    const defaultPreflight = await request(app)
+      .get("/api/setup/preflight")
+      .expect(200);
+    expect(defaultPreflight.body).toMatchObject({
+      schema_version: "lookingglass.setup-preflight/v1",
+      scenario: "setup-readiness",
+    });
+
+    const readiness = await request(app)
+      .get("/api/setup/readiness")
+      .expect(200);
+    expectOnlyKeys(readiness.body, [
+      "schema_version",
+      "status",
+      "runtime",
+      "platform",
+      "scenario",
+      "checks",
+      "unsupportedCapabilities",
+      "classroomReadiness",
+      "doesNotClaim",
+    ]);
+    expect(readiness.body).toMatchObject({
+      schema_version: "lookingglass.setup-preflight/v1",
+      scenario: "setup-readiness",
+    });
+
+    const handoff = await localPost(app, "/api/setup/evidence-handoff")
+      .send({ scenario: "instructor-student-launch-evidence-handoff" })
+      .expect(200);
+    expectOnlyKeys(handoff.body, [
+      "schema_version",
+      "status",
+      "runtime",
+      "platform",
+      "scenario",
+      "evidenceArtifact",
+      "handoff",
+    ]);
+    expect(handoff.body).toMatchObject({
+      schema_version: "lookingglass.setup-evidence-handoff/v1",
+      status: "handoff-created",
+      runtime: "alice-web",
+      platform: "lookingglass",
+      scenario: "instructor-student-launch-evidence-handoff",
+    });
+    expect(handoff.body.handoff.studentNextActions).toContain(
+      "record one visible result after running",
+    );
+    expect(handoff.body.handoff.supportHandoffFields).toContain("retest signal");
+    expect(handoff.body.evidenceArtifact).toBe(
+      "setup-readiness-handoff-instructor-student-launch-evidence-handoff.json",
+    );
+    expect(handoff.body.evidenceArtifact).not.toContain(evidenceDir);
+    expect(path.isAbsolute(handoff.body.evidenceArtifact)).toBe(false);
+    const handoffPath = path.join(evidenceDir, handoff.body.evidenceArtifact);
+    expect(fs.existsSync(handoffPath)).toBe(true);
+    const persistedHandoff = readJson(handoffPath);
+    expect(persistedHandoff.status).toBe("handoff-created");
+    expect(JSON.stringify(persistedHandoff)).not.toContain(evidenceDir);
+
+    const generalHandoff = await localPost(app, "/api/setup/evidence-handoff")
+      .send({ scenario: "setup-readiness" })
+      .expect(200);
+    expect(generalHandoff.body.scenario).toBe("setup-readiness");
+
+    const defaultHandoff = await localPost(app, "/api/setup/evidence-handoff")
+      .send({})
+      .expect(200);
+    expect(defaultHandoff.body.scenario).toBe("setup-readiness");
+    expect(defaultHandoff.body.evidenceArtifact).toBe(
+      "setup-readiness-handoff-setup-readiness.json",
+    );
+
+    await localPost(app, "/api/setup/evidence-handoff")
+      .send({ scenario: "missing-setup-scenario" })
+      .expect(400)
+      .expect((res) => {
+        expect(res.body.error).toContain("setup-readiness");
+      });
+  });
+
+  it("reports setup not ready when evidence storage is not writable", async () => {
+    const evidenceDir = trackTempDir(makeTempDir("alice-api-contract-readonly-"));
+    const app = createTestServer({ port: 0, evidenceDir });
+
+    fs.chmodSync(evidenceDir, 0o555);
+    try {
+      const readiness = await request(app).get("/api/setup/readiness").expect(200);
+
+      expect(readiness.body.status).toBe("not-ready");
+      expect(readiness.body.classroomReadiness).toMatchObject({
+        readyToCreateProject: false,
+        readyForLabHandoff: false,
+        readyForEvidenceHandoff: false,
+      });
+      expect(readiness.body.checks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "evidence-directory", status: "fail" }),
+          expect.objectContaining({ id: "create-project", status: "fail" }),
+          expect.objectContaining({ id: "evidence-handoff", status: "fail" }),
+        ]),
+      );
+      expect(JSON.stringify(readiness.body)).not.toContain(evidenceDir);
+    } finally {
+      fs.chmodSync(evidenceDir, 0o755);
+    }
+  });
+
   it("rejects a requested missing .a3p file without launching", async () => {
     const evidenceDir = trackTempDir(makeTempDir("alice-api-contract-"));
     const projectRoot = trackTempDir(makeTempDir("alice-project-root-"));
