@@ -15,3 +15,14 @@ export async function writeJointStateSidecar(rootDir: string, jointState: JointS
   await fs.promises.writeFile(sidecarPath, JSON.stringify(jointState.toJSON(), null, 2) + "\n");
   return sidecarPath;
 }
+
+export async function removeJointStateSidecar(rootDir: string): Promise<void> {
+  const sidecarPath = jointStateSidecarPath(rootDir);
+  try {
+    await fs.promises.unlink(sidecarPath);
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}

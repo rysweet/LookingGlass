@@ -116,7 +116,9 @@ export function buildCurrentProject(state: ServerState): AliceProject {
   baseProject.sceneObjects = Array.from(sceneObjectsByName.values());
 
   const sceneType = baseProject.types?.find((type) => type.superTypeName?.includes("SScene"));
-  const sourceMethods = sceneType ? (sceneType.methods ?? []) : baseProject.methods;
+  const sourceMethods = baseProject.methods.length > 0
+    ? baseProject.methods
+    : sceneType ? (sceneType.methods ?? []) : baseProject.methods;
   const methodsByName = new Map(sourceMethods.map((method) => [method.name, method]));
   for (const [name, statements] of state.procedures.entries()) {
     if (state.parsedProject && statements.length === 0 && methodsByName.has(name)) {
@@ -183,7 +185,11 @@ export function addSceneObjectToCurrentProject(
   state: ServerState,
   input: { name: string; className: string; modelResourceId?: string },
 ): void {
+  const wasUnmaterialized = state.parsedProject === null;
   const project = ensureCurrentProject(state);
+  if (wasUnmaterialized) {
+    syncServerProceduresFromProject(state, project);
+  }
   if (project.sceneObjects.some((object) => object.name === input.name)) {
     return;
   }
@@ -196,6 +202,10 @@ export function addSceneObjectToCurrentProject(
     size: null,
     ...(input.modelResourceId !== undefined ? { modelResourceId: input.modelResourceId } : {}),
   });
+}
+
+export function resetJointState(state: ServerState): void {
+  state.jointState = new JointStateStore();
 }
 
 export function seedDefaultSceneObjects(state: ServerState): void {

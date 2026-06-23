@@ -34,9 +34,10 @@ import {
   type ProjectAudioWorkflowState,
 } from "../project-audio.js";
 import { executeProject, type LogEntry } from "../tweedle-vm.js";
-import { jointStateSidecarPath, writeJointStateSidecar } from "./joint-state-sidecar.js";
+import { jointStateSidecarPath, removeJointStateSidecar, writeJointStateSidecar } from "./joint-state-sidecar.js";
 import {
   buildCurrentProject,
+  resetJointState,
   seedDefaultSceneObjects,
   syncServerMethodDefinitionsFromProject,
   syncServerSceneObjectsFromProject,
@@ -349,6 +350,7 @@ export const projectService: ProjectService = {
     if (!resolvedProjectFile) {
       state.cameraWorkflow = createDefaultCameraWorkflowState();
     }
+    resetJointState(state);
 
     seedDefaultSceneObjects(state);
     state.eventSystem.reset();
@@ -460,6 +462,8 @@ export const projectService: ProjectService = {
     );
     if (state.jointState.listObjectNames().length > 0) {
       await writeJointStateSidecar(saveDir, state.jointState);
+    } else {
+      await removeJointStateSidecar(saveDir);
     }
 
     return {
@@ -494,11 +498,10 @@ export const projectService: ProjectService = {
     let executionLog: LogEntry[] = [];
     let statementsExecuted = 0;
 
-    if (state.parsedProject) {
-      const vmResult = executeProject(state.parsedProject);
-      executionLog = vmResult.execution_log;
-      statementsExecuted = executionLog.length;
-    }
+    const currentProject = buildCurrentProject(state);
+    const vmResult = executeProject(currentProject);
+    executionLog = vmResult.execution_log;
+    statementsExecuted = executionLog.length;
 
     const jointSidecarArtifact = jointStateSidecarPath(evidenceDir);
     const jointRuntime = state.jointState.executePendingAnimations(jointSidecarArtifact);
