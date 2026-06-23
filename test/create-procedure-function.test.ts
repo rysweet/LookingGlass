@@ -1,9 +1,27 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import JSZip from "jszip";
 import { createServer } from "../src/server";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import type { Express } from "express";
 import request from "supertest";
+import type { Response as SupertestResponse } from "superagent";
+import { writeA3P } from "../src/a3p-writer.js";
+import { readProject } from "../src/project-io.js";
+import { createMinimalProject } from "./test-utils.js";
+
+function parseBinaryResponse(
+  res: SupertestResponse,
+  callback: (error: Error | null, body: Buffer) => void,
+): void {
+  const chunks: Buffer[] = [];
+  res.on("data", (chunk: Buffer | string) => {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  });
+  res.on("end", () => callback(null, Buffer.concat(chunks)));
+  res.on("error", callback);
+}
 
 describe("POST /api/code/create-procedure", () => {
   let app: Express;
@@ -136,5 +154,77 @@ describe("POST /api/code/create-function", () => {
       .post("/api/code/create-function")
       .send({ name: "sharedName", returnType: "Boolean" })
       .expect(400);
+  });
+
+  it("uses reopened same-name procedure metadata instead of stale created function metadata", async () => {
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-reopen-method-metadata-"));
+    try {
+      const metadataApp = createServer({
+        port: 0,
+        evidenceDir: projectDir,
+        allowedProjectDirs: [projectDir],
+      });
+      await request(metadataApp).post("/api/launch").send({}).expect(200);
+      await request(metadataApp)
+        .post("/api/code/create-function")
+        .send({
+          name: "foo",
+          returnType: "DecimalNumber",
+          parameters: [{ name: "oldDistance", type: "DecimalNumber" }],
+        })
+        .expect(200);
+
+      const reopenedProject = createMinimalProject();
+      reopenedProject.projectName = "Reopened Procedure Metadata";
+      const sceneType = reopenedProject.types?.find((type) => type.superTypeName?.includes("SScene"));
+      expect(sceneType).toBeDefined();
+      if (!sceneType) throw new Error("expected minimal project to include Scene type");
+      sceneType.methods = [{
+        name: "foo",
+        isFunction: false,
+        returnType: "void",
+        parameters: [{ name: "count", type: "WholeNumber" }],
+        statements: [],
+      }];
+      const reopenedPath = path.join(projectDir, "reopened-procedure-foo.a3p");
+      fs.writeFileSync(reopenedPath, await writeA3P(reopenedProject));
+
+      await request(metadataApp)
+        .post("/api/project/reopen")
+        .send({ project: reopenedPath })
+        .expect(200);
+
+      const savedPath = path.join(projectDir, "saved-procedure-foo.a3p");
+      await request(metadataApp)
+        .post("/api/project/save")
+        .send({ targetPath: savedPath })
+        .expect(200);
+
+      const savedProject = (await readProject(fs.readFileSync(savedPath))).project;
+      const savedSceneType = savedProject.types?.find((type) => type.superTypeName?.includes("SScene"));
+      const savedFoo = savedSceneType?.methods?.find((method) => method.name === "foo");
+      expect(savedFoo).toMatchObject({
+        isFunction: false,
+        returnType: "void",
+        parameters: [{ name: "count", type: "WholeNumber" }],
+      });
+
+      const exportRes = await request(metadataApp)
+        .get("/api/projects/current/export/typescript")
+        .buffer(true)
+        .parse(parseBinaryResponse)
+        .expect(200);
+      const zip = await JSZip.loadAsync(exportRes.body);
+      const exportedText = (await Promise.all(
+        Object.values(zip.files)
+          .filter((entry) => !entry.dir)
+          .map((entry) => entry.async("string")),
+      )).join("\n");
+      expect(exportedText).toContain("foo");
+      expect(exportedText).toContain("count");
+      expect(exportedText).not.toContain("oldDistance");
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
   });
 });

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { randomUUID } from "node:crypto";
 import type { AliceProject } from "../a3p-parser.js";
 import { TypeScriptExporter } from "../project-export.js";
 import type { TypeScriptSourceManifest } from "../code-generation.js";
@@ -35,12 +36,13 @@ import { jointStateSidecarPath, writeJointStateSidecar } from "./joint-state-sid
 import {
   buildCurrentProject,
   seedDefaultSceneObjects,
+  syncServerMethodDefinitionsFromProject,
   syncServerSceneObjectsFromProject,
   syncServerProceduresFromProject,
   type ServerState,
 } from "./state.js";
 import type { EvidenceService } from "./evidence-service.js";
-import { validateExistingProjectRealPath, validateProjectPath } from "./validation.js";
+import { validateProjectPath } from "./validation.js";
 
 export type LaunchProjectResult =
   | { ok: true }
@@ -174,32 +176,37 @@ export class ProjectSaveError extends Error {
   }
 }
 
-async function writeAllowedProjectFile(
+export interface AtomicProjectWriteHooks {
+  beforeRename?: () => Promise<void> | void;
+}
+
+export async function writeAllowedProjectFile(
   targetPath: string,
   a3pBytes: Uint8Array,
   allowedProjectDirs: readonly string[],
+  hooks: AtomicProjectWriteHooks = {},
 ): Promise<void> {
   const pathValidation = validateProjectPath(targetPath, allowedProjectDirs);
   if (!pathValidation.valid || pathValidation.resolvedPath !== targetPath) {
     throw new ProjectSaveError("project path is outside allowed directories");
   }
 
-  await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+  const targetDir = path.dirname(targetPath);
+  await fs.promises.mkdir(targetDir, { recursive: true });
 
-  let handle: fs.promises.FileHandle | null = null;
+  let directoryHandle: fs.promises.FileHandle | null = null;
+  let tempPath: string | null = null;
   try {
-    handle = await fs.promises.open(
-      targetPath,
-      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW,
-      0o600,
-    );
-    const openedPath = await fs.promises.realpath(`/proc/self/fd/${handle.fd}`);
-    const validation = await validateExistingProjectRealPath(openedPath, allowedProjectDirs);
-    if (!validation.valid || validation.resolvedPath !== targetPath) {
-      throw new ProjectSaveError("project path is outside allowed directories");
-    }
-    await handle.truncate(0);
-    await handle.writeFile(a3pBytes);
+    directoryHandle = await openValidatedDirectory(targetDir);
+    const directoryFdPath = `/proc/self/fd/${directoryHandle.fd}`;
+    const targetName = path.basename(targetPath);
+    const temp = await createSiblingTempFile(directoryFdPath, targetName);
+    tempPath = temp.path;
+    await writeAndSyncFile(temp.handle, a3pBytes);
+    await hooks.beforeRename?.();
+    await fs.promises.rename(tempPath, path.join(directoryFdPath, targetName));
+    tempPath = null;
+    await syncHandleIfSupported(directoryHandle);
   } catch (error) {
     if (error instanceof ProjectSaveError) {
       throw error;
@@ -208,7 +215,94 @@ async function writeAllowedProjectFile(
       cause: error instanceof Error ? error : undefined,
     });
   } finally {
+    try {
+      if (tempPath) {
+        await removeFileIfExists(tempPath);
+      }
+    } finally {
+      await directoryHandle?.close();
+    }
+  }
+}
+
+async function createSiblingTempFile(
+  directoryPath: string,
+  targetName: string,
+): Promise<{ path: string; handle: fs.promises.FileHandle }> {
+  const flags = fs.constants.O_WRONLY |
+    fs.constants.O_CREAT |
+    fs.constants.O_EXCL |
+    fs.constants.O_NOFOLLOW;
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const tempPath = path.join(directoryPath, `.${targetName}.${process.pid}.${randomUUID()}.tmp`);
+    try {
+      const handle = await fs.promises.open(tempPath, flags, 0o600);
+      return { path: tempPath, handle };
+    } catch (error) {
+      if (getErrorCode(error) === "EEXIST") continue;
+      throw error;
+    }
+  }
+
+  throw new ProjectSaveError(`project file could not be written: ${path.join(directoryPath, targetName)}`);
+}
+
+async function openValidatedDirectory(directoryPath: string): Promise<fs.promises.FileHandle> {
+  const flags = fs.constants.O_RDONLY |
+    fs.constants.O_NOFOLLOW |
+    (fs.constants.O_DIRECTORY ?? 0);
+  let handle: fs.promises.FileHandle | null = null;
+  try {
+    handle = await fs.promises.open(directoryPath, flags);
+    const openedPath = await fs.promises.realpath(`/proc/self/fd/${handle.fd}`);
+    if (openedPath !== directoryPath) {
+      throw new ProjectSaveError("project path is outside allowed directories");
+    }
+    return handle;
+  } catch (error) {
     await handle?.close();
+    throw error;
+  }
+}
+
+async function writeAndSyncFile(
+  handle: fs.promises.FileHandle,
+  bytes: Uint8Array,
+): Promise<void> {
+  try {
+    await handle.writeFile(bytes);
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function syncHandleIfSupported(handle: fs.promises.FileHandle): Promise<void> {
+  try {
+    await handle.sync();
+  } catch (error) {
+    if (isUnsupportedDirectorySyncError(error)) return;
+    throw error;
+  }
+}
+
+function isUnsupportedDirectorySyncError(error: unknown): boolean {
+  const code = getErrorCode(error);
+  return code === "EINVAL" ||
+    code === "ENOTSUP" ||
+    code === "EOPNOTSUPP" ||
+    code === "EPERM" ||
+    code === "EBADF";
+}
+
+async function removeFileIfExists(filePath: string): Promise<void> {
+  try {
+    await fs.promises.unlink(filePath);
+  } catch (error) {
+    if (getErrorCode(error) !== "ENOENT") {
+      throw error;
+    }
   }
 }
 
@@ -230,6 +324,7 @@ export const projectService: ProjectService = {
       state.resources = new Map(loadResult.archive.resources);
       syncServerSceneObjectsFromProject(state, loadResult.project);
       syncServerProceduresFromProject(state, loadResult.project);
+      syncServerMethodDefinitionsFromProject(state, loadResult.project);
       state.projectAudio = applyAudioManifest(loadResult.archive.manifest);
       state.aliceAudio = loadResult.archive.aliceAudio ?? createDefaultProjectAudioState();
     } else {
@@ -237,6 +332,7 @@ export const projectService: ProjectService = {
       state.resources = new Map();
       state.sceneObjects.clear();
       syncServerProceduresFromProject(state, null);
+      syncServerMethodDefinitionsFromProject(state, null);
       state.projectAudio = createEmptyProjectAudioState();
       state.aliceAudio = createDefaultProjectAudioState();
     }

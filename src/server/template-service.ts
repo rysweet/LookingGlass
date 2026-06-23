@@ -3,7 +3,7 @@ import * as path from "path";
 import { writeA3P } from "../a3p-writer/archive.js";
 import { createDefaultCameraWorkflowState } from "../camera-workflow.js";
 import type { TemplateDescriptor } from "../project-templates.js";
-import { DEFAULT_POSITION, type ServerState } from "./state.js";
+import { DEFAULT_POSITION, syncServerMethodDefinitionsFromProject, type ServerState } from "./state.js";
 import { sanitizeFilename } from "./validation.js";
 
 export interface TemplateService {
@@ -61,6 +61,7 @@ export const templateService: TemplateService = {
     for (const method of project.methods) {
       state.procedures.set(method.name, method.statements?.map((s) => s.kind) ?? []);
     }
+    syncServerMethodDefinitionsFromProject(state, project);
     state.launched = true;
     state.eventSystem.reset();
 

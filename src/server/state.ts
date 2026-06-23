@@ -1,7 +1,7 @@
 import { EventSystem } from "../events.js";
 import { JointStateStore } from "../joint-system.js";
 import { TemplateLibrary } from "../project-templates.js";
-import type { AliceProject, AliceStatement } from "../a3p-parser.js";
+import type { AliceMethod, AliceProject, AliceStatement } from "../a3p-parser.js";
 import {
   createDefaultCameraWorkflowState,
   type CameraWorkflowState,
@@ -124,9 +124,9 @@ export function buildCurrentProject(state: ServerState): AliceProject {
     const nextStatements = mergeProcedureStatements(existing?.statements ?? [], statements);
     methodsByName.set(name, {
       name,
-      isFunction: definition?.isFunction ?? existing?.isFunction ?? false,
-      returnType: definition?.returnType ?? existing?.returnType ?? "void",
-      parameters: definition?.parameters ?? existing?.parameters ?? [],
+      isFunction: existing?.isFunction ?? definition?.isFunction ?? false,
+      returnType: existing?.returnType ?? definition?.returnType ?? "void",
+      parameters: existing?.parameters ?? definition?.parameters ?? [],
       statements: nextStatements,
     });
   }
@@ -231,6 +231,24 @@ export function syncServerProceduresFromProject(state: ServerState, project: Ali
   const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
   const sceneMethods = sceneType?.methods ?? (project.types?.length ? [] : project.methods);
   state.procedures = new Map(sceneMethods.map((method) => [method.name, []]));
+}
+
+export function syncServerMethodDefinitionsFromProject(state: ServerState, project: AliceProject | null): void {
+  state.methodDefinitions.clear();
+  if (!project) return;
+
+  for (const method of getServerOwnedProjectMethods(project)) {
+    state.methodDefinitions.set(method.name, {
+      isFunction: method.isFunction,
+      returnType: method.returnType,
+      parameters: method.parameters,
+    });
+  }
+}
+
+function getServerOwnedProjectMethods(project: AliceProject): AliceMethod[] {
+  const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
+  return sceneType?.methods ?? (project.types?.length ? [] : project.methods);
 }
 
 export function parseMethodParams(

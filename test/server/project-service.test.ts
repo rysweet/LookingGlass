@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { createMinimalProject } from "../test-utils.js";
-import { projectService } from "../../src/server/project-service.js";
+import { projectService, writeAllowedProjectFile } from "../../src/server/project-service.js";
 import { evidenceService } from "../../src/server/evidence-service.js";
 import { readProject } from "../../src/project-io.js";
 import {
@@ -235,6 +235,31 @@ describe("ProjectService.exportTypeScript", () => {
       expect(Array.from(archive.resources.get(resourcePath) ?? [])).toEqual(Array.from(resourceBytes));
     } finally {
       fs.rmSync(evidenceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves an existing target when an allowed project file write fails before rename", async () => {
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-atomic-save-test-"));
+    try {
+      const targetPath = path.join(projectDir, "existing-project.a3p");
+      const originalBytes = Buffer.from("existing project bytes");
+      fs.writeFileSync(targetPath, originalBytes);
+
+      await expect(writeAllowedProjectFile(
+        targetPath,
+        Buffer.from("replacement project bytes"),
+        [projectDir],
+        {
+          beforeRename: () => {
+            throw new Error("injected write failure");
+          },
+        },
+      )).rejects.toThrow(/could not be written/);
+
+      expect(fs.readFileSync(targetPath)).toEqual(originalBytes);
+      expect(fs.readdirSync(projectDir).filter((entry) => entry.endsWith(".tmp"))).toEqual([]);
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 
