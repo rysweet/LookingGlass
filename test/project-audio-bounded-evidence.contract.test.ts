@@ -35,7 +35,7 @@ describe("project audio bounded evidence", () => {
       expect(written).toMatchObject({
         schema_version: "alice.audio-workflow/v1",
         source: "alice-web",
-        status: "bounded",
+        status: "proved",
         support_level: "metadata-and-playback-bridge",
         playback: {
           mode: "simulated-output-bridge",
