@@ -6,6 +6,33 @@ const MAX_VISIBLE_OBJECTS = 200;
 const MAX_FILENAME_LENGTH = 120;
 const MAX_RUNTIME_REVIEW_ITEMS = 50;
 
+const CAMERA_MODES = new Set(["orbit", "first-person"]);
+const WEBXR_CAPABILITY_STATUSES = new Set(["supported", "degraded", "unsupported", "unknown"]);
+const WEBXR_EVIDENCE_CODES = new Set([
+  "secure-context-required",
+  "webxr-unavailable",
+  "immersive-vr-unsupported",
+  "session-request-failed",
+  "reference-space-unavailable",
+  "reference-space-local-fallback",
+  "input-sources-unavailable",
+  "controller-missing-target-ray",
+  "controller-missing-grip",
+  "controller-missing-gamepad",
+  "hand-tracking-unsupported",
+  "hand-pose-unavailable",
+  "invalid-movement-target",
+  "non-finite-pose",
+  "locomotion-disabled",
+  "desktop-camera-fallback",
+  "true-vr-unsupported",
+  "keyboard-camera-movement",
+  "reduced-motion-respected",
+]);
+const CAPTION_CHECK_IDS = new Set(["aria-live-status", "camera-caption", "scene-object-caption"]);
+const CAPTION_CHANNELS: ReadonlySet<"aria-live" | "visible-text"> = new Set(["aria-live", "visible-text"]);
+const RUBRIC_IDS = new Set(["visible-world", "camera-framing", "accessibility-captions"]);
+
 const RUNTIME_REVIEW_KEYS = new Set(["cameraVrComfort", "accessibilityRescueCaptions", "galleryWalkRubric"]);
 const CAMERA_VR_COMFORT_KEYS = new Set([
   "schema_version",
@@ -293,8 +320,9 @@ export function createAliceEvidenceArtifact(input: AliceEvidenceArtifactInput): 
 }
 
 export function serializeAliceEvidenceArtifact(artifact: AliceEvidenceArtifact): string {
-  assertValidAliceEvidenceArtifact(artifact);
-  return `${JSON.stringify(artifact, null, 2)}\n`;
+  const sanitized = sanitizeArtifactRuntimeReview(artifact);
+  assertValidAliceEvidenceArtifact(sanitized);
+  return `${JSON.stringify(sanitized, null, 2)}\n`;
 }
 
 export function parseAliceEvidenceArtifact(json: string): AliceEvidenceArtifact {
@@ -308,8 +336,11 @@ export function parseAliceEvidenceArtifact(json: string): AliceEvidenceArtifact 
     );
   }
 
-  assertValidAliceEvidenceArtifact(parsed);
-  return parsed as AliceEvidenceArtifact;
+  const sanitized = recordValue(parsed)
+    ? sanitizeArtifactRuntimeReview(parsed as AliceEvidenceArtifact)
+    : parsed;
+  assertValidAliceEvidenceArtifact(sanitized);
+  return sanitized as AliceEvidenceArtifact;
 }
 
 export function summarizeAliceEvidenceArtifact(artifact: AliceEvidenceArtifact): AliceEvidenceSummary {
@@ -402,15 +433,15 @@ export function validateAliceEvidenceArtifact(value: unknown): AliceEvidenceVali
           expectOnlyKeys(cameraVrComfort, CAMERA_VR_COMFORT_KEYS, "runtimeReview.cameraVrComfort", errors);
           expectEqual(cameraVrComfort.schema_version, "alice.camera-vr-comfort-evidence/v1", "runtimeReview.cameraVrComfort.schema_version", errors);
           expectEqual(cameraVrComfort.status, "partial", "runtimeReview.cameraVrComfort.status", errors);
-          expectOptionalString(cameraVrComfort.browserWebXrStatus, "runtimeReview.cameraVrComfort.browserWebXrStatus", errors);
+          expectOptionalAllowedString(cameraVrComfort.browserWebXrStatus, WEBXR_CAPABILITY_STATUSES, "runtimeReview.cameraVrComfort.browserWebXrStatus", errors);
           expectOptionalBoolean(cameraVrComfort.desktopCameraAvailable, "runtimeReview.cameraVrComfort.desktopCameraAvailable", errors);
           expectOptionalMeasuredBoolean(cameraVrComfort.keyboardMovementAvailable, "runtimeReview.cameraVrComfort.keyboardMovementAvailable", errors);
           expectOptionalMeasuredBoolean(cameraVrComfort.reducedMotionRespected, "runtimeReview.cameraVrComfort.reducedMotionRespected", errors);
           expectLiteralFalse(cameraVrComfort.trueHeadsetVrSupported, "runtimeReview.cameraVrComfort.trueHeadsetVrSupported", errors);
           expectLiteralFalse(cameraVrComfort.nativeVrSupported, "runtimeReview.cameraVrComfort.nativeVrSupported", errors);
-          expectOptionalString(cameraVrComfort.cameraMode, "runtimeReview.cameraVrComfort.cameraMode", errors);
+          expectOptionalAllowedString(cameraVrComfort.cameraMode, CAMERA_MODES, "runtimeReview.cameraVrComfort.cameraMode", errors);
           expectMaxArrayLength(cameraVrComfort.evidenceCodes, "runtimeReview.cameraVrComfort.evidenceCodes", errors);
-          expectOptionalStringArray(cameraVrComfort.evidenceCodes, "runtimeReview.cameraVrComfort.evidenceCodes", errors);
+          expectOptionalAllowedStringArray(cameraVrComfort.evidenceCodes, WEBXR_EVIDENCE_CODES, "runtimeReview.cameraVrComfort.evidenceCodes", errors);
           if (cameraVrComfort.comfortChecks !== undefined) {
             const comfortChecks = nestedRecord(cameraVrComfort.comfortChecks, "runtimeReview.cameraVrComfort.comfortChecks", errors);
             if (comfortChecks) {
@@ -437,11 +468,9 @@ export function validateAliceEvidenceArtifact(value: unknown): AliceEvidenceVali
           expectMaxArrayLength(captions.captionChecks, "runtimeReview.accessibilityRescueCaptions.captionChecks", errors);
           validateRecordArray(captions.captionChecks, "runtimeReview.accessibilityRescueCaptions.captionChecks", errors, (check, label) => {
             expectOnlyKeys(check, CAPTION_CHECK_KEYS, label, errors);
-            expectNonEmptyString(check.id, `${label}.id`, errors);
+            expectAllowedString(check.id, CAPTION_CHECK_IDS, `${label}.id`, errors);
             expectRequiredBoolean(check.present, `${label}.present`, errors);
-            if (check.channel !== undefined && check.channel !== "aria-live" && check.channel !== "visible-text") {
-              errors.push(`${label}.channel must be aria-live or visible-text.`);
-            }
+            expectOptionalAllowedString(check.channel, CAPTION_CHANNELS, `${label}.channel`, errors);
             expectOptionalString(check.text, `${label}.text`, errors);
           });
         }
@@ -461,7 +490,7 @@ export function validateAliceEvidenceArtifact(value: unknown): AliceEvidenceVali
           expectMaxArrayLength(galleryWalkRubric.rubric, "runtimeReview.galleryWalkRubric.rubric", errors);
           validateRecordArray(galleryWalkRubric.rubric, "runtimeReview.galleryWalkRubric.rubric", errors, (item, label) => {
             expectOnlyKeys(item, RUBRIC_ITEM_KEYS, label, errors);
-            expectNonEmptyString(item.id, `${label}.id`, errors);
+            expectAllowedString(item.id, RUBRIC_IDS, `${label}.id`, errors);
             expectNonEmptyString(item.label, `${label}.label`, errors);
             expectNonNegativeInteger(item.maxScore, `${label}.maxScore`, errors);
             expectNonEmptyString(item.evidenceRequired, `${label}.evidenceRequired`, errors);
@@ -581,42 +610,61 @@ function optionalBoolean(value: unknown): boolean | undefined {
   return value === true || value === false ? value : undefined;
 }
 
-function sanitizeComfortChecks(value: AliceEvidenceCameraVrComfort["comfortChecks"]): NonNullable<AliceEvidenceCameraVrComfort["comfortChecks"]> {
+function sanitizeComfortChecks(value: unknown): NonNullable<AliceEvidenceCameraVrComfort["comfortChecks"]> {
+  const checks = recordValue(value) ?? {};
   return {
-    discreteMovementStep: optionalBoolean(value?.discreteMovementStep) ?? false,
-    stableHorizon: optionalBoolean(value?.stableHorizon) ?? false,
-    noForcedHeadset: optionalBoolean(value?.noForcedHeadset) ?? false,
+    discreteMovementStep: optionalBoolean(checks.discreteMovementStep) ?? false,
+    stableHorizon: optionalBoolean(checks.stableHorizon) ?? false,
+    noForcedHeadset: optionalBoolean(checks.noForcedHeadset) ?? false,
   };
 }
 
-function sanitizeRuntimeReview(review: AliceEvidenceRuntimeReview): AliceEvidenceRuntimeReview {
+function sanitizeArtifactRuntimeReview(artifact: AliceEvidenceArtifact): AliceEvidenceArtifact {
+  if (artifact.runtimeReview === undefined) {
+    return artifact;
+  }
   return {
-    ...(review.cameraVrComfort !== undefined ? { cameraVrComfort: sanitizeCameraVrComfortReview(review.cameraVrComfort) } : {}),
-    ...(review.accessibilityRescueCaptions !== undefined ? { accessibilityRescueCaptions: sanitizeAccessibilityCaptionsReview(review.accessibilityRescueCaptions) } : {}),
-    ...(review.galleryWalkRubric !== undefined ? { galleryWalkRubric: sanitizeGalleryWalkRubricReview(review.galleryWalkRubric) } : {}),
+    ...artifact,
+    runtimeReview: sanitizeRuntimeReview(artifact.runtimeReview),
   };
 }
 
-function sanitizeCameraVrComfortReview(value: AliceEvidenceCameraVrComfort): AliceEvidenceCameraVrComfort {
+function sanitizeRuntimeReview(review: unknown): AliceEvidenceRuntimeReview {
+  const runtimeReview = recordValue(review);
+  if (!runtimeReview) {
+    return {};
+  }
+  return {
+    ...(runtimeReview.cameraVrComfort !== undefined ? { cameraVrComfort: sanitizeCameraVrComfortReview(runtimeReview.cameraVrComfort) } : {}),
+    ...(runtimeReview.accessibilityRescueCaptions !== undefined ? { accessibilityRescueCaptions: sanitizeAccessibilityCaptionsReview(runtimeReview.accessibilityRescueCaptions) } : {}),
+    ...(runtimeReview.galleryWalkRubric !== undefined ? { galleryWalkRubric: sanitizeGalleryWalkRubricReview(runtimeReview.galleryWalkRubric) } : {}),
+  };
+}
+
+function sanitizeCameraVrComfortReview(input: unknown): AliceEvidenceCameraVrComfort {
+  const value = recordValue(input) ?? {};
+  const browserWebXrStatus = allowedString(value.browserWebXrStatus, WEBXR_CAPABILITY_STATUSES);
+  const cameraMode = allowedString(value.cameraMode, CAMERA_MODES);
   return {
     schema_version: "alice.camera-vr-comfort-evidence/v1",
     status: "partial",
-    ...(value.browserWebXrStatus ? { browserWebXrStatus: stringValue(value.browserWebXrStatus) } : {}),
+    ...(browserWebXrStatus ? { browserWebXrStatus } : {}),
     ...(optionalBoolean(value.desktopCameraAvailable) !== undefined ? { desktopCameraAvailable: optionalBoolean(value.desktopCameraAvailable)! } : {}),
     ...(value.keyboardMovementAvailable !== undefined ? { keyboardMovementAvailable: measuredBoolean(value.keyboardMovementAvailable) } : {}),
     ...(value.reducedMotionRespected !== undefined ? { reducedMotionRespected: measuredBoolean(value.reducedMotionRespected) } : {}),
     trueHeadsetVrSupported: false,
     nativeVrSupported: false,
-    ...(value.cameraMode ? { cameraMode: stringValue(value.cameraMode) } : {}),
+    ...(cameraMode ? { cameraMode } : {}),
     ...(Array.isArray(value.evidenceCodes)
-      ? { evidenceCodes: value.evidenceCodes.slice(0, MAX_RUNTIME_REVIEW_ITEMS).map(stringValue) }
+      ? { evidenceCodes: boundedAllowedStrings(value.evidenceCodes, WEBXR_EVIDENCE_CODES) }
       : {}),
     ...(value.comfortChecks ? { comfortChecks: sanitizeComfortChecks(value.comfortChecks) } : {}),
     ...(value.unsupportedReason ? { unsupportedReason: stringValue(value.unsupportedReason) } : {}),
   };
 }
 
-function sanitizeAccessibilityCaptionsReview(value: AliceEvidenceAccessibilityCaptions): AliceEvidenceAccessibilityCaptions {
+function sanitizeAccessibilityCaptionsReview(input: unknown): AliceEvidenceAccessibilityCaptions {
+  const value = recordValue(input) ?? {};
   return {
     schema_version: "alice.accessibility-rescue-camera-captions/v1",
     status: "partial",
@@ -626,17 +674,16 @@ function sanitizeAccessibilityCaptionsReview(value: AliceEvidenceAccessibilityCa
     ...(value.keyboardReviewAvailable !== undefined ? { keyboardReviewAvailable: measuredBoolean(value.keyboardReviewAvailable) } : {}),
     ...(value.highContrastReviewAvailable !== undefined ? { highContrastReviewAvailable: measuredBoolean(value.highContrastReviewAvailable) } : {}),
     ...(Array.isArray(value.captionChecks) ? {
-      captionChecks: value.captionChecks.slice(0, MAX_RUNTIME_REVIEW_ITEMS).map((check) => ({
-        id: stringValue(check.id),
-        present: optionalBoolean(check.present) ?? false,
-        ...(check.channel ? { channel: check.channel } : {}),
-        ...(check.text ? { text: stringValue(check.text) } : {}),
-      })),
+      captionChecks: value.captionChecks
+        .slice(0, MAX_RUNTIME_REVIEW_ITEMS)
+        .map((check) => sanitizeCaptionCheck(check))
+        .filter((check): check is NonNullable<ReturnType<typeof sanitizeCaptionCheck>> => check !== null),
     } : {}),
   };
 }
 
-function sanitizeGalleryWalkRubricReview(value: AliceEvidenceGalleryReview): AliceEvidenceGalleryReview {
+function sanitizeGalleryWalkRubricReview(input: unknown): AliceEvidenceGalleryReview {
+  const value = recordValue(input) ?? {};
   return {
     schema_version: "alice.gallery-walk-rubric-evidence/v1",
     status: "partial",
@@ -647,21 +694,84 @@ function sanitizeGalleryWalkRubricReview(value: AliceEvidenceGalleryReview): Ali
     liveStudioSupported: false,
     ...(value.unsupportedLiveStudioReason ? { unsupportedLiveStudioReason: stringValue(value.unsupportedLiveStudioReason) } : {}),
     ...(Array.isArray(value.rubric) ? {
-      rubric: value.rubric.slice(0, MAX_RUNTIME_REVIEW_ITEMS).map((item) => ({
-        id: stringValue(item.id),
-        label: stringValue(item.label),
-        maxScore: finiteNonNegativeInteger(item.maxScore),
-        evidenceRequired: stringValue(item.evidenceRequired),
-      })),
+      rubric: value.rubric
+        .slice(0, MAX_RUNTIME_REVIEW_ITEMS)
+        .map((item) => sanitizeRubricItem(item))
+        .filter((item): item is NonNullable<ReturnType<typeof sanitizeRubricItem>> => item !== null),
     } : {}),
     ...(Array.isArray(value.galleryItems) ? {
-      galleryItems: value.galleryItems.slice(0, MAX_RUNTIME_REVIEW_ITEMS).map((item) => ({
-        id: stringValue(item.id),
-        title: stringValue(item.title),
-        reviewPrompt: stringValue(item.reviewPrompt),
-      })),
+      galleryItems: value.galleryItems
+        .slice(0, MAX_RUNTIME_REVIEW_ITEMS)
+        .map((item) => sanitizeGalleryItem(item))
+        .filter((item): item is NonNullable<ReturnType<typeof sanitizeGalleryItem>> => item !== null),
     } : {}),
   };
+}
+
+function sanitizeCaptionCheck(input: unknown): NonNullable<AliceEvidenceAccessibilityCaptions["captionChecks"]>[number] | null {
+  const check = recordValue(input);
+  if (!check) {
+    return null;
+  }
+  const id = allowedString(check.id, CAPTION_CHECK_IDS);
+  if (!id) {
+    return null;
+  }
+  const channel = allowedString(check.channel, CAPTION_CHANNELS);
+  return {
+    id,
+    present: optionalBoolean(check.present) ?? false,
+    ...(channel ? { channel } : {}),
+    ...(check.text ? { text: stringValue(check.text) } : {}),
+  };
+}
+
+function sanitizeRubricItem(input: unknown): NonNullable<AliceEvidenceGalleryReview["rubric"]>[number] | null {
+  const item = recordValue(input);
+  if (!item) {
+    return null;
+  }
+  const id = allowedString(item.id, RUBRIC_IDS);
+  const label = stringValue(item.label);
+  const evidenceRequired = stringValue(item.evidenceRequired);
+  if (!id || !label || !evidenceRequired) {
+    return null;
+  }
+  return {
+    id,
+    label,
+    maxScore: finiteNonNegativeInteger(item.maxScore),
+    evidenceRequired,
+  };
+}
+
+function sanitizeGalleryItem(input: unknown): NonNullable<AliceEvidenceGalleryReview["galleryItems"]>[number] | null {
+  const item = recordValue(input);
+  if (!item) {
+    return null;
+  }
+  const id = stringValue(item.id);
+  const title = stringValue(item.title);
+  const reviewPrompt = stringValue(item.reviewPrompt);
+  if (!id || !title || !reviewPrompt) {
+    return null;
+  }
+  return { id, title, reviewPrompt };
+}
+
+function allowedString<T extends string>(value: unknown, allowed: ReadonlySet<T>): T | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const candidate = stringValue(value);
+  return allowed.has(candidate as T) ? candidate as T : undefined;
+}
+
+function boundedAllowedStrings<T extends string>(values: readonly unknown[], allowed: ReadonlySet<T>): T[] {
+  return values
+    .slice(0, MAX_RUNTIME_REVIEW_ITEMS)
+    .map((value) => allowedString(value, allowed))
+    .filter((value): value is T => value !== undefined);
 }
 
 function cloneJsonRecord(value: unknown): unknown {
@@ -677,20 +787,20 @@ function sanitizeVector(vector: AliceEvidenceVector): AliceEvidenceVector {
   };
 }
 
-function stringValue(value: string): string {
-  return value.trim();
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : String(value ?? "").trim();
 }
 
-function finiteNumber(value: number): number {
-  return Number.isFinite(value) ? Number(value.toFixed(6)) : 0;
+function finiteNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? Number(value.toFixed(6)) : 0;
 }
 
-function finitePositiveInteger(value: number): number {
-  return Number.isFinite(value) && value > 0 ? Math.round(value) : 1;
+function finitePositiveInteger(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.round(value) : 1;
 }
 
-function finiteNonNegativeInteger(value: number): number {
-  return Number.isFinite(value) && value >= 0 ? Math.round(value) : 0;
+function finiteNonNegativeInteger(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : 0;
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {
@@ -755,6 +865,27 @@ function expectOptionalString(value: unknown, label: string, errors: string[]): 
   if (value !== undefined && typeof value !== "string") {
     errors.push(`${label} must be a string.`);
   }
+}
+
+function expectAllowedString(value: unknown, allowed: ReadonlySet<string>, label: string, errors: string[]): void {
+  if (typeof value !== "string" || !allowed.has(value)) {
+    errors.push(`${label} must be one of: ${[...allowed].join(", ")}.`);
+  }
+}
+
+function expectOptionalAllowedString(value: unknown, allowed: ReadonlySet<string>, label: string, errors: string[]): void {
+  if (value !== undefined) {
+    expectAllowedString(value, allowed, label, errors);
+  }
+}
+
+function expectOptionalAllowedStringArray(value: unknown, allowed: ReadonlySet<string>, label: string, errors: string[]): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) {
+    errors.push(`${label} must be an array.`);
+    return;
+  }
+  value.forEach((item, index) => expectAllowedString(item, allowed, `${label}[${index}]`, errors));
 }
 
 function expectOptionalStringArray(value: unknown, label: string, errors: string[]): void {
