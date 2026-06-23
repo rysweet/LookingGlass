@@ -89,6 +89,7 @@ describe("TypeScript source export handoff E2E", () => {
     expect(allText).toContain("bunny");
     expect(allText).toContain("danceTogether");
     expect(allText).toContain("wave");
+    expect(allText.match(/wave/g)).toHaveLength(1);
     expect(allText).toContain("UnsupportedAliceRuntimeBehavior");
     expect(allText).not.toMatch(/placeholder|lookingglass/i);
   });

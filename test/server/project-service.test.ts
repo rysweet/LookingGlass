@@ -1,9 +1,16 @@
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { createMinimalProject } from "../test-utils.js";
-import { projectService } from "../../src/server/project-service.js";
+import { projectService, writeAllowedProjectFile } from "../../src/server/project-service.js";
+import { evidenceService } from "../../src/server/evidence-service.js";
+import { readProject } from "../../src/project-io.js";
 import {
+  buildCurrentProject,
   createInitialServerState,
+  registerMethod,
   seedDefaultSceneObjects,
 } from "../../src/server/state.js";
 
@@ -81,6 +88,224 @@ describe("ProjectService.exportTypeScript", () => {
     expect(allText).toContain("parsedOnly");
     expect(allText).toContain("liveOnly");
     expect(allText).toContain("waveFromLiveEdit");
+  });
+
+  it("keeps class-owned methods out of Scene when rebuilding reopened projects", () => {
+    const state = createInitialServerState();
+    state.parsedProject = {
+      version: "3.10",
+      projectName: "Ownership",
+      sceneObjects: [],
+      methods: [],
+      types: [
+        {
+          name: "Scene",
+          superTypeName: "org.lgna.story.SScene",
+          methods: [{
+            name: "sceneOnly",
+            isFunction: false,
+            returnType: "void",
+            parameters: [],
+            statements: [],
+          }],
+        },
+        {
+          name: "ReusableDoor",
+          methods: [{
+            name: "doorOnly",
+            isFunction: false,
+            returnType: "void",
+            parameters: [],
+            statements: [],
+          }],
+        },
+      ],
+    };
+    state.procedures = new Map([["sceneOnly", ["wave"]]]);
+
+    const project = buildCurrentProject(state);
+    const sceneType = project.types?.find((type) => type.name === "Scene");
+    const doorType = project.types?.find((type) => type.name === "ReusableDoor");
+
+    expect(sceneType?.methods?.map((method) => method.name)).toEqual(["sceneOnly"]);
+    expect(doorType?.methods?.map((method) => method.name)).toEqual(["doorOnly"]);
+  });
+
+  it("does not promote class-owned methods when a typed project has an empty Scene method list", () => {
+    const state = createInitialServerState();
+    state.parsedProject = createMinimalProject();
+    state.parsedProject.types?.push({
+      name: "ReusableDoor",
+      superTypeName: "org.lgna.story.SModel",
+      fields: [],
+      constructors: [],
+      methods: [{
+        name: "doorOnly",
+        isFunction: false,
+        returnType: "void",
+        parameters: [],
+        statements: [],
+      }],
+    });
+
+    const project = buildCurrentProject(state);
+
+    expect(project.methods.map((method) => method.name)).not.toContain("doorOnly");
+    expect(project.types?.find((type) => type.name === "ReusableDoor")?.methods?.map((method) => method.name))
+      .toContain("doorOnly");
+  });
+
+  it("preserves newly registered Scene function metadata for reopened typed projects", () => {
+    const state = createInitialServerState();
+    state.parsedProject = createMinimalProject();
+
+    registerMethod(state, "distanceToTarget", true, "DecimalNumber", [
+      { name: "target", type: "SModel" },
+    ]);
+
+    const project = buildCurrentProject(state);
+    const method = project.methods.find((candidate) => candidate.name === "distanceToTarget");
+    const sceneMethod = project.types
+      ?.find((type) => type.superTypeName?.includes("SScene"))
+      ?.methods?.find((candidate) => candidate.name === "distanceToTarget");
+
+    expect(method).toMatchObject({
+      isFunction: true,
+      returnType: "DecimalNumber",
+      parameters: [{ name: "target", type: "SModel" }],
+    });
+    expect(sceneMethod).toMatchObject({
+      isFunction: true,
+      returnType: "DecimalNumber",
+      parameters: [{ name: "target", type: "SModel" }],
+    });
+  });
+
+  it("preserves newly registered function metadata for default in-memory projects", () => {
+    const state = createInitialServerState();
+
+    registerMethod(state, "distanceToTarget", true, "DecimalNumber", [
+      { name: "target", type: "SModel" },
+    ]);
+
+    const project = buildCurrentProject(state);
+    expect(project.methods.find((candidate) => candidate.name === "distanceToTarget"))
+      .toMatchObject({
+        isFunction: true,
+        returnType: "DecimalNumber",
+        parameters: [{ name: "target", type: "SModel" }],
+      });
+  });
+
+  it("preserves reopened archive resources in edited project artifacts", async () => {
+    const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-edit-resource-test-"));
+    try {
+      const resourcePath = "resources/textures/moon-rock.png";
+      const resourceBytes = new Uint8Array([137, 80, 78, 71]);
+      const state = createInitialServerState();
+      const project = createMinimalProject();
+      state.launched = true;
+      state.projectName = project.projectName;
+      state.parsedProject = project;
+      state.procedures = new Map([["myFirstMethod", []]]);
+      state.resources = new Map([[resourcePath, resourceBytes]]);
+      state.projectArchive = {
+        project,
+        manifest: null,
+        resources: state.resources,
+        resourceEntries: [],
+        thumbnail: null,
+        versionInfo: {
+          originalAliceVersion: project.version,
+          detectedAliceVersion: project.version,
+          manifestVersion: null,
+          xmlVersion: null,
+          versionSource: "default",
+          migrated: false,
+          migrationSteps: [],
+        },
+      };
+
+      await projectService.editProcedure(state, evidenceDir, evidenceService, {
+        procedureSelector: "scene.myFirstMethod",
+        editSpec: "append-comment:resource-preservation-proof",
+      });
+
+      const archive = await readProject(fs.readFileSync(path.join(evidenceDir, "edited-project.a3p")));
+      expect(Array.from(archive.resources.get(resourcePath) ?? [])).toEqual(Array.from(resourceBytes));
+    } finally {
+      fs.rmSync(evidenceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("counts existing reopened procedure statements in edit proof artifacts", async () => {
+    const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-edit-count-test-"));
+    try {
+      const state = createInitialServerState();
+      const project = createMinimalProject();
+      const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
+      const methods = sceneType?.methods ?? project.methods;
+      methods.push({
+        name: "myFirstMethod",
+        isFunction: false,
+        returnType: "void",
+        parameters: [],
+        statements: [
+          { kind: "Comment", expression: "existing one" },
+          { kind: "Comment", expression: "existing two" },
+        ],
+      });
+
+      state.launched = true;
+      state.projectName = project.projectName;
+      state.parsedProject = project;
+      state.procedures = new Map([["myFirstMethod", []]]);
+
+      await projectService.editProcedure(state, evidenceDir, evidenceService, {
+        procedureSelector: "scene.myFirstMethod",
+        editSpec: "append-comment:reopened-count-proof",
+      });
+
+      const proof = JSON.parse(
+        fs.readFileSync(path.join(evidenceDir, "first-lesson-code-editor-action-proof.json"), "utf8"),
+      );
+      expect(proof.before_statement_count).toBe(2);
+      expect(proof.after_statement_count).toBe(3);
+
+      const archive = await readProject(fs.readFileSync(path.join(evidenceDir, "edited-project.a3p")));
+      const editedMethod = archive.project.methods.find((candidate) => candidate.name === "myFirstMethod")
+        ?? archive.project.types
+          ?.flatMap((type) => type.methods ?? [])
+          .find((candidate) => candidate.name === "myFirstMethod");
+      expect(editedMethod?.statements).toHaveLength(3);
+    } finally {
+      fs.rmSync(evidenceDir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves an existing target when an allowed project file write fails before rename", async () => {
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "alice-atomic-save-test-"));
+    try {
+      const targetPath = path.join(projectDir, "existing-project.a3p");
+      const originalBytes = Buffer.from("existing project bytes");
+      fs.writeFileSync(targetPath, originalBytes);
+
+      await expect(writeAllowedProjectFile(
+        targetPath,
+        Buffer.from("replacement project bytes"),
+        [projectDir],
+        {
+          beforeRename: () => {
+            throw new Error("injected write failure");
+          },
+        },
+      )).rejects.toThrow(/could not be written/);
+
+      expect(fs.readFileSync(targetPath)).toEqual(originalBytes);
+      expect(fs.readdirSync(projectDir).filter((entry) => entry.endsWith(".tmp"))).toEqual([]);
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
   });
 
   it("exports web packages with project resources but without internal source XML", async () => {

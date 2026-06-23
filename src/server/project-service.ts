@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
+import { randomUUID } from "node:crypto";
 import type { AliceProject } from "../a3p-parser.js";
-import { writeA3P } from "../a3p-writer/archive.js";
 import { TypeScriptExporter } from "../project-export.js";
 import type { TypeScriptSourceManifest } from "../code-generation.js";
 import { createDefaultCameraWorkflowState } from "../camera-workflow.js";
@@ -38,10 +38,13 @@ import { jointStateSidecarPath, writeJointStateSidecar } from "./joint-state-sid
 import {
   buildCurrentProject,
   seedDefaultSceneObjects,
+  syncServerMethodDefinitionsFromProject,
   syncServerSceneObjectsFromProject,
+  syncServerProceduresFromProject,
   type ServerState,
 } from "./state.js";
 import type { EvidenceService } from "./evidence-service.js";
+import { validateProjectPath } from "./validation.js";
 
 export type LaunchProjectResult =
   | { ok: true }
@@ -59,7 +62,7 @@ export interface ProjectService {
     state: ServerState,
     evidenceDir: string,
     evidenceService: EvidenceService,
-    input: { saveSelector?: string; targetPath?: string },
+    input: { saveSelector?: string; targetPath?: string; allowedProjectDirs?: readonly string[] },
   ): Promise<Record<string, unknown>>;
   runWorld(
     state: ServerState,
@@ -167,6 +170,145 @@ export class ProjectExportError extends Error {
   }
 }
 
+export class ProjectSaveError extends Error {
+  readonly status = 400;
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "ProjectSaveError";
+  }
+}
+
+export interface AtomicProjectWriteHooks {
+  beforeRename?: () => Promise<void> | void;
+}
+
+export async function writeAllowedProjectFile(
+  targetPath: string,
+  a3pBytes: Uint8Array,
+  allowedProjectDirs: readonly string[],
+  hooks: AtomicProjectWriteHooks = {},
+): Promise<void> {
+  const pathValidation = validateProjectPath(targetPath, allowedProjectDirs);
+  if (!pathValidation.valid || pathValidation.resolvedPath !== targetPath) {
+    throw new ProjectSaveError("project path is outside allowed directories");
+  }
+
+  const targetDir = path.dirname(targetPath);
+  await fs.promises.mkdir(targetDir, { recursive: true });
+
+  let directoryHandle: fs.promises.FileHandle | null = null;
+  let tempPath: string | null = null;
+  try {
+    directoryHandle = await openValidatedDirectory(targetDir);
+    const directoryFdPath = `/proc/self/fd/${directoryHandle.fd}`;
+    const targetName = path.basename(targetPath);
+    const temp = await createSiblingTempFile(directoryFdPath, targetName);
+    tempPath = temp.path;
+    await writeAndSyncFile(temp.handle, a3pBytes);
+    await hooks.beforeRename?.();
+    await fs.promises.rename(tempPath, path.join(directoryFdPath, targetName));
+    tempPath = null;
+    await syncHandleIfSupported(directoryHandle);
+  } catch (error) {
+    if (error instanceof ProjectSaveError) {
+      throw error;
+    }
+    throw new ProjectSaveError(`project file could not be written: ${targetPath}`, {
+      cause: error instanceof Error ? error : undefined,
+    });
+  } finally {
+    try {
+      if (tempPath) {
+        await removeFileIfExists(tempPath);
+      }
+    } finally {
+      await directoryHandle?.close();
+    }
+  }
+}
+
+async function createSiblingTempFile(
+  directoryPath: string,
+  targetName: string,
+): Promise<{ path: string; handle: fs.promises.FileHandle }> {
+  const flags = fs.constants.O_WRONLY |
+    fs.constants.O_CREAT |
+    fs.constants.O_EXCL |
+    fs.constants.O_NOFOLLOW;
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const tempPath = path.join(directoryPath, `.${targetName}.${process.pid}.${randomUUID()}.tmp`);
+    try {
+      const handle = await fs.promises.open(tempPath, flags, 0o600);
+      return { path: tempPath, handle };
+    } catch (error) {
+      if (getErrorCode(error) === "EEXIST") continue;
+      throw error;
+    }
+  }
+
+  throw new ProjectSaveError(`project file could not be written: ${path.join(directoryPath, targetName)}`);
+}
+
+async function openValidatedDirectory(directoryPath: string): Promise<fs.promises.FileHandle> {
+  const flags = fs.constants.O_RDONLY |
+    fs.constants.O_NOFOLLOW |
+    (fs.constants.O_DIRECTORY ?? 0);
+  let handle: fs.promises.FileHandle | null = null;
+  try {
+    handle = await fs.promises.open(directoryPath, flags);
+    const openedPath = await fs.promises.realpath(`/proc/self/fd/${handle.fd}`);
+    if (openedPath !== directoryPath) {
+      throw new ProjectSaveError("project path is outside allowed directories");
+    }
+    return handle;
+  } catch (error) {
+    await handle?.close();
+    throw error;
+  }
+}
+
+async function writeAndSyncFile(
+  handle: fs.promises.FileHandle,
+  bytes: Uint8Array,
+): Promise<void> {
+  try {
+    await handle.writeFile(bytes);
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function syncHandleIfSupported(handle: fs.promises.FileHandle): Promise<void> {
+  try {
+    await handle.sync();
+  } catch (error) {
+    if (isUnsupportedDirectorySyncError(error)) return;
+    throw error;
+  }
+}
+
+function isUnsupportedDirectorySyncError(error: unknown): boolean {
+  const code = getErrorCode(error);
+  return code === "EINVAL" ||
+    code === "ENOTSUP" ||
+    code === "EOPNOTSUPP" ||
+    code === "EPERM" ||
+    code === "EBADF";
+}
+
+async function removeFileIfExists(filePath: string): Promise<void> {
+  try {
+    await fs.promises.unlink(filePath);
+  } catch (error) {
+    if (getErrorCode(error) !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
 function isMissingProjectFileError(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
@@ -184,12 +326,17 @@ export const projectService: ProjectService = {
       state.projectArchive = loadResult.archive;
       state.resources = new Map(loadResult.archive.resources);
       syncServerSceneObjectsFromProject(state, loadResult.project);
+      syncServerProceduresFromProject(state, loadResult.project);
+      syncServerMethodDefinitionsFromProject(state, loadResult.project);
       state.projectAudio = applyAudioManifest(loadResult.archive.manifest);
       state.aliceAudio = loadResult.archive.aliceAudio ?? createDefaultProjectAudioState();
       state.cameraWorkflow = loadResult.project.cameraWorkflow ?? createDefaultCameraWorkflowState();
     } else {
       state.projectArchive = null;
       state.resources = new Map();
+      state.sceneObjects.clear();
+      syncServerProceduresFromProject(state, null);
+      syncServerMethodDefinitionsFromProject(state, null);
       state.projectAudio = createEmptyProjectAudioState();
       state.aliceAudio = createDefaultProjectAudioState();
       state.sceneObjects.clear();
@@ -222,7 +369,7 @@ export const projectService: ProjectService = {
       state.procedures.set(methodName, []);
     }
     const statements = state.procedures.get(methodName)!;
-    const beforeStatementCount = statements.length;
+    const beforeStatementCount = effectiveProcedureStatementCount(state, methodName, statements.length);
 
     let marker: string;
     if (editSpec.startsWith("append-comment:")) {
@@ -234,37 +381,16 @@ export const projectService: ProjectService = {
     }
 
     statements.push(marker);
-    const afterStatementCount = statements.length;
-
-    if (editSpec.startsWith("append-statement:") && state.parsedProject) {
-      const method = state.parsedProject.methods.find((m) => m.name === methodName);
-      if (method) {
-        method.statements ??= [];
-        method.statements.push({
-          kind: "MethodCall",
-          object: "this",
-          method: marker.trim(),
-          arguments: [],
-        });
-      }
-    }
+    const afterStatementCount = effectiveProcedureStatementCount(state, methodName, statements.length);
 
     const methodNames = Array.from(state.procedures.keys());
 
-    let sourceProjectPath = state.projectPath;
-    if (sourceProjectPath) {
-      try {
-        await fs.promises.access(sourceProjectPath, fs.constants.R_OK);
-      } catch (error) {
-        if (!isMissingProjectFileError(error)) throw error;
-        sourceProjectPath = null;
-      }
-    }
-    const currentProjectBytes = sourceProjectPath
-      ? null
-      : await writeA3P(buildCurrentProject(state));
+    const currentProject = buildCurrentProject(state);
+    const currentProjectBytes = await writeProject(archiveForCurrentProject(state, currentProject), {
+      generateThumbnailFromScene: false,
+    });
     await evidenceService.writeEditedProjectArtifact(
-      sourceProjectPath,
+      null,
       evidenceDir,
       currentProjectBytes,
     );
@@ -303,6 +429,7 @@ export const projectService: ProjectService = {
     const {
       saveSelector = "scene.myFirstMethod",
       targetPath,
+      allowedProjectDirs = [],
     } = input;
 
     const saveDir = path.join(evidenceDir, "project-save");
@@ -321,6 +448,9 @@ export const projectService: ProjectService = {
     }
     const a3pBytes = await writeProject(archive, { generateThumbnailFromScene: false });
     await fs.promises.writeFile(savedProjectPath, a3pBytes);
+    if (targetPath !== undefined) {
+      await writeAllowedProjectFile(targetPath, a3pBytes, allowedProjectDirs);
+    }
 
     const saveArtifactFilename = "desktop-save-operation-result.json";
     const evidenceArtifact = evidenceService.recordSaveProof(
@@ -473,6 +603,24 @@ export const projectService: ProjectService = {
     return result;
   },
 };
+
+function effectiveProcedureStatementCount(
+  state: ServerState,
+  methodName: string,
+  liveEditStatementCount: number,
+): number {
+  return parsedProcedureStatementCount(state.parsedProject, methodName) + liveEditStatementCount;
+}
+
+function parsedProcedureStatementCount(project: AliceProject | null, methodName: string): number {
+  if (!project) {
+    return 0;
+  }
+
+  const sceneType = project.types?.find((type) => type.superTypeName?.includes("SScene"));
+  const method = (sceneType?.methods ?? project.methods).find((candidate) => candidate.name === methodName);
+  return method?.statements?.length ?? 0;
+}
 
 function archiveForCurrentProject(state: ServerState, project: AliceProject): AliceProjectArchive {
   if (state.projectArchive) {
