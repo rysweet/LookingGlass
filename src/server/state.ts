@@ -27,10 +27,25 @@ export interface Position {
   z: number;
 }
 
+export interface Orientation {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}
+
+export interface Size {
+  width: number;
+  height: number;
+  depth: number;
+}
+
 export interface SceneObject {
   name: string;
   className: string;
   position: Position;
+  orientation?: Orientation | null;
+  size?: Size | null;
   modelResourceId?: string;
 }
 
@@ -115,8 +130,8 @@ export function buildCurrentProject(state: ServerState): AliceProject {
       typeName: object.className,
       resourceType: existing?.resourceType ?? null,
       position: object.position,
-      orientation: existing?.orientation ?? null,
-      size: existing?.size ?? null,
+      orientation: object.orientation ?? null,
+      size: object.size ?? null,
       ...(object.modelResourceId !== undefined ? { modelResourceId: object.modelResourceId } : {}),
     });
   }
@@ -246,11 +261,15 @@ export function seedDefaultSceneObjects(state: ServerState): void {
     name: "ground",
     className: "org.lgna.story.SGround",
     position: { ...DEFAULT_POSITION },
+    orientation: null,
+    size: null,
   };
   const camera: SceneObject = {
     name: "camera",
     className: "org.lgna.story.SCamera",
     position: { ...DEFAULT_POSITION },
+    orientation: null,
+    size: null,
   };
   state.sceneObjects.set("ground", ground);
   state.sceneObjects.set("camera", camera);
@@ -263,6 +282,9 @@ export function syncServerSceneObjectsFromProject(state: ServerState, project: A
       name: object.name,
       className: object.typeName,
       position: object.position ?? { ...DEFAULT_POSITION },
+      orientation: object.orientation,
+      size: object.size,
+      ...(object.modelResourceId !== undefined ? { modelResourceId: object.modelResourceId } : {}),
     });
   }
 }

@@ -21,6 +21,15 @@ export interface EvidenceService {
     currentProjectBytes: Uint8Array | null,
   ): Promise<string>;
   recordSceneObjectAdded(evidenceDir: string, objectClassName: string, sceneFieldCountAfter: number): string;
+  recordSceneObjectTransform(
+    evidenceDir: string,
+    input: {
+      objectName: string;
+      position?: unknown;
+      orientation?: unknown;
+      size?: unknown;
+    },
+  ): string;
   recordEditProcedureProof(
     evidenceDir: string,
     input: {
@@ -92,6 +101,23 @@ export const evidenceService: EvidenceService = {
       objectClassName,
       sceneFieldCountAfter,
     });
+  },
+
+  recordSceneObjectTransform(evidenceDir, input) {
+    fs.mkdirSync(evidenceDir, { recursive: true });
+    const artifactPath = path.join(evidenceDir, "scene-object-transform.json");
+    fs.writeFileSync(
+      artifactPath,
+      JSON.stringify({
+        schema_version: "lookingglass.scene-object-transform/v1",
+        status: "transformed",
+        objectName: input.objectName,
+        ...(input.position !== undefined ? { position: input.position } : {}),
+        ...(input.orientation !== undefined ? { orientation: input.orientation } : {}),
+        ...(input.size !== undefined ? { size: input.size } : {}),
+      }, null, 2) + "\n",
+    );
+    return artifactPath;
   },
 
   recordEditProcedureProof(evidenceDir, input) {
