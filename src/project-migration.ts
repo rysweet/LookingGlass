@@ -3,6 +3,7 @@ export type ProjectVersionSource = "version.txt" | "manifest" | "xml" | "default
 export type ProjectResourceKind = "image" | "audio" | "model" | "other";
 export type ProjectMigrationSupport =
   | "alice-3-reader-migration"
+  | "alice-2-scoped-conversion"
   | "alice-2-guidance-only"
   | "unknown-version";
 
@@ -32,7 +33,9 @@ const RESOURCE_SUFFIX_PACKAGES = [
   "vehicle",
 ] as const;
 const ALICE_2_UNSUPPORTED_REASON =
-  "Alice 2 projects require desktop Alice conversion before Alice web import; automatic Alice 2 conversion is not supported.";
+  "Automatic Alice 2 conversion is limited to the scoped empty World subset; use desktop Alice conversion for Alice 2 projects with objects, methods, events, or resources.";
+const ALICE_2_SCOPED_CONVERSION_STEP =
+  "convert scoped Alice 2 empty World to Alice 3 empty scene";
 
 interface MigrationRule {
   readonly toVersion: string;
@@ -246,11 +249,29 @@ export function migrateProjectXml(
   xmlText: string,
   versionInfo: ProjectVersionInfo,
 ): { xmlText: string; versionInfo: ProjectVersionInfo } {
-  if (
-    versionInfo.migrationSupport === "alice-2-guidance-only" ||
+  const isAlice2Migration =
     isAlice2ProjectVersion(versionInfo.originalAliceVersion ?? "") ||
-    isAlice2ProjectVersion(versionInfo.detectedAliceVersion)
-  ) {
+    isAlice2ProjectVersion(versionInfo.detectedAliceVersion) ||
+    versionInfo.migrationSupport === "alice-2-guidance-only";
+  if (isAlice2Migration) {
+    const conversion = convertScopedAlice2WorldXml(xmlText);
+    if (conversion) {
+      return {
+        xmlText: conversion,
+        versionInfo: {
+          ...versionInfo,
+          detectedAliceVersion: CURRENT_ALICE_VERSION,
+          migrationSupport: "alice-2-scoped-conversion",
+          migrated: true,
+          migrationSteps: [
+            ...versionInfo.migrationSteps,
+            `${versionInfo.detectedAliceVersion} -> ${CURRENT_ALICE_VERSION}: ${ALICE_2_SCOPED_CONVERSION_STEP}`,
+          ],
+          unsupportedReason: null,
+        },
+      };
+    }
+
     return {
       xmlText,
       versionInfo: {
@@ -439,6 +460,64 @@ function isAlice2ProjectVersion(value: string): boolean {
 
 function isSupportedAliceVersion(value: string): boolean {
   return isAliceProjectVersion(value) || isAlice2ProjectVersion(value);
+}
+
+function convertScopedAlice2WorldXml(xmlText: string): string | null {
+  const root = matchScopedAlice2WorldRoot(xmlText);
+  if (!root) {
+    return null;
+  }
+
+  const projectName = extractXmlAttribute(root.attributes, "name")
+    ?? extractXmlAttribute(root.attributes, "projectName")
+    ?? "Alice 2 Converted World";
+  return buildMinimalAlice3ProjectXml(projectName);
+}
+
+function matchScopedAlice2WorldRoot(xmlText: string): { attributes: string } | null {
+  const body = xmlText
+    .replace(/^\s*<\?xml[^>]*\?>\s*/u, "")
+    .trim();
+  const worldElement = String.raw`<element\b(?=[^>]*\bclass="edu\.cmu\.cs\.stage3\.alice\.core\.World")[^>]*(?:\/>|\s*>\s*<\/element>)`;
+  const match = body.match(new RegExp(String.raw`^<node\b([^>]*)>\s*${worldElement}\s*<\/node>$`, "u"));
+  return match ? { attributes: match[1] } : null;
+}
+
+function extractXmlAttribute(attributes: string, name: string): string | null {
+  const match = attributes.match(new RegExp(String.raw`\b${name}="([^"]*)"`, "u"));
+  if (!match) {
+    return null;
+  }
+  const value = unescapeXmlText(match[1]).trim();
+  return value.length > 0 ? value : null;
+}
+
+function buildMinimalAlice3ProjectXml(projectName: string): string {
+  const name = escapeXmlText(projectName);
+  return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<node key="1" type="org.lgna.project.ast.NamedUserType" uuid="alice2-converted-program" version="3.10062">
+  <property name="name"><value type="java.lang.String">${name}</value></property>
+  <property name="superType"><node key="2" type="org.lgna.project.ast.JavaType" uuid="alice2-converted-program-super"><type name="org.lgna.story.SProgram"/></node></property>
+  <property name="fields"><collection type="java.util.ArrayList"><node key="scene-field" type="org.lgna.project.ast.UserField" uuid="alice2-converted-scene-field"><property name="name"><value type="java.lang.String">myScene</value></property><property name="valueType"><node key="scene-type" type="org.lgna.project.ast.NamedUserType" uuid="alice2-converted-scene-type"><property name="name"><value type="java.lang.String">Scene</value></property><property name="superType"><node key="scene-super" type="org.lgna.project.ast.JavaType" uuid="alice2-converted-scene-super"><type name="org.lgna.story.SScene"/></node></property><property name="fields"><collection type="java.util.ArrayList"/></property><property name="methods"><collection type="java.util.ArrayList"/></property><property name="constructors"><collection type="java.util.ArrayList"/></property></node></property></node></collection></property>
+  <property name="methods"><collection type="java.util.ArrayList"/></property>
+  <property name="constructors"><collection type="java.util.ArrayList"/></property>
+</node>`;
+}
+
+function escapeXmlText(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function unescapeXmlText(value: string): string {
+  return value
+    .replaceAll("&quot;", '"')
+    .replaceAll("&gt;", ">")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&amp;", "&");
 }
 
 function buildVersionInfo(options: Omit<ProjectVersionInfo, "migrated" | "migrationSteps"> & {

@@ -67,8 +67,8 @@ describe("project-migration", () => {
     expect(migration.xmlText).toContain("org.lgna.story.SThing");
   });
 
-  it("keeps Alice 2 conversion bounded and explicit instead of pretending automatic migration", () => {
-    const alice2Xml = `<?xml version="1.0" encoding="UTF-8"?><node version="2.4.3"><element class="edu.cmu.cs.stage3.alice.core.World"/></node>`;
+  it("converts the scoped empty Alice 2 World subset to an Alice 3 scene", () => {
+    const alice2Xml = `<?xml version="1.0" encoding="UTF-8"?><node version="2.4.3" name="Legacy Intro"><element class="edu.cmu.cs.stage3.alice.core.World"/></node>`;
     const versionInfo = detectProjectVersion("2.4.3", null, alice2Xml);
     const migration = migrateProjectXml(alice2Xml, versionInfo);
 
@@ -77,17 +77,38 @@ describe("project-migration", () => {
       detectedAliceVersion: "2.4.3",
       versionSource: "version.txt",
       migrationSupport: "alice-2-guidance-only",
-      unsupportedReason: expect.stringContaining("automatic Alice 2 conversion is not supported"),
+      unsupportedReason: expect.stringContaining("scoped empty World subset"),
     });
-    expect(migration.xmlText).toBe(alice2Xml);
-    expect(migration.versionInfo.migrated).toBe(false);
-    expect(migration.versionInfo.detectedAliceVersion).toBe("2.4.3");
+    expect(migration.xmlText).not.toBe(alice2Xml);
+    expect(migration.xmlText).toContain("org.lgna.story.SProgram");
+    expect(migration.xmlText).toContain("org.lgna.story.SScene");
+    expect(migration.xmlText).toContain("Legacy Intro");
+    expect(migration.versionInfo.migrated).toBe(true);
+    expect(migration.versionInfo.detectedAliceVersion).toBe(CURRENT_VERSION);
+    expect(migration.versionInfo.migrationSupport).toBe("alice-2-scoped-conversion");
+    expect(migration.versionInfo.unsupportedReason).toBeNull();
     expect(migration.versionInfo.migrationSteps).toEqual([
-      expect.stringContaining("automatic Alice 2 conversion is not supported"),
+      `2.4.3 -> ${CURRENT_VERSION}: convert scoped Alice 2 empty World to Alice 3 empty scene`,
     ]);
   });
 
-  it("detects nested Alice 2 manifest metadata as guidance-only", () => {
+  it("keeps unsupported Alice 2 content as explicit guidance", () => {
+    const alice2Xml = `<?xml version="1.0" encoding="UTF-8"?><node version="2.4.3"><element class="edu.cmu.cs.stage3.alice.core.World"/><element class="edu.cmu.cs.stage3.alice.core.Camera"/></node>`;
+    const migration = migrateProjectXml(
+      alice2Xml,
+      detectProjectVersion("2.4.3", null, alice2Xml),
+    );
+
+    expect(migration.xmlText).toBe(alice2Xml);
+    expect(migration.versionInfo.migrated).toBe(false);
+    expect(migration.versionInfo.detectedAliceVersion).toBe("2.4.3");
+    expect(migration.versionInfo.migrationSupport).toBe("alice-2-guidance-only");
+    expect(migration.versionInfo.migrationSteps).toEqual([
+      expect.stringContaining("scoped empty World subset"),
+    ]);
+  });
+
+  it("detects nested Alice 2 manifest metadata before applying scoped conversion", () => {
     const alice2Xml = `<?xml version="1.0" encoding="UTF-8"?><node><element class="edu.cmu.cs.stage3.alice.core.World"/></node>`;
     const versionInfo = detectProjectVersion(null, {
       project: {
@@ -104,12 +125,12 @@ describe("project-migration", () => {
       versionSource: "manifest",
       migrationSupport: "alice-2-guidance-only",
     });
-    expect(migration.xmlText).toBe(alice2Xml);
+    expect(migration.xmlText).not.toBe(alice2Xml);
     expect(migration.versionInfo).toMatchObject({
-      detectedAliceVersion: "2.4.3",
-      migrated: false,
-      migrationSupport: "alice-2-guidance-only",
-      unsupportedReason: expect.stringContaining("automatic Alice 2 conversion is not supported"),
+      detectedAliceVersion: CURRENT_VERSION,
+      migrated: true,
+      migrationSupport: "alice-2-scoped-conversion",
+      unsupportedReason: null,
     });
   });
 
@@ -170,7 +191,7 @@ describe("project-migration", () => {
     expect(migration.versionInfo.detectedAliceVersion).toBe("2.4.3");
     expect(migration.versionInfo.migrationSupport).toBe("alice-2-guidance-only");
     expect(migration.versionInfo.migrationSteps).toEqual([
-      expect.stringContaining("automatic Alice 2 conversion is not supported"),
+      expect.stringContaining("scoped empty World subset"),
     ]);
   });
 

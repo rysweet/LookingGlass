@@ -203,6 +203,23 @@ describe("project-io", () => {
       expect(bunny?.resourceType).toBe("org.lgna.story.resources.biped.BunnyResource");
     });
 
+    it("reads scoped empty Alice 2 worlds through the automatic conversion path", async () => {
+      const data = await createSyntheticArchive({
+        version: "2.4.3",
+        manifest: { aliceVersion: "2.4.3" },
+        xmlText: `<?xml version="1.0" encoding="UTF-8"?><node version="2.4.3" name="Legacy Intro"><element class="edu.cmu.cs.stage3.alice.core.World"/></node>`,
+      });
+
+      const archive = await readProject(data);
+
+      expect(archive.project.projectName).toBe("Legacy Intro");
+      expect(archive.project.version).toBe("3.10.0.0");
+      expect(archive.versionInfo.migrationSupport).toBe("alice-2-scoped-conversion");
+      expect(archive.versionInfo.migrated).toBe(true);
+      expect(archive.versionInfo.unsupportedReason).toBeNull();
+      expect(archive.manifest).toMatchObject({ aliceVersion: "3.10.0.0" });
+    });
+
     it("returns null manifest when manifest.json is absent", async () => {
       const data = await createSyntheticArchive();
       const archive = await readProject(data);
