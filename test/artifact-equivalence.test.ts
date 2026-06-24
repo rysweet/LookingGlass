@@ -291,6 +291,36 @@ describe("artifact equivalence checks", () => {
     expect(reopenedType).toEqual(exportedPackage.type);
   });
 
+  it("does not report executable class behavior for nested comment-only methods", () => {
+    const project = createMinimalProject();
+    project.types = [
+      {
+        name: "CommentOnlyBehavior",
+        superTypeName: "org.lgna.story.SModel",
+        fields: [],
+        constructors: [],
+        methods: [
+          {
+            name: "notesOnly",
+            isFunction: false,
+            returnType: "void",
+            parameters: [],
+            statements: [
+              {
+                kind: "DoInOrder",
+                body: [{ kind: "Comment", expression: "teacher note only" }],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const exportedPackage = exportClassBehaviorPackage(project, "CommentOnlyBehavior");
+
+    expect(exportedPackage.evidence).not.toContain("class-behavior-methods-preserved");
+  });
+
   it("compares Alice evidence JSON to visible project behavior", () => {
     const project = createEquivalenceProject();
     const artifact = createAliceEvidenceArtifact({

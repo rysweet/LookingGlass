@@ -488,7 +488,30 @@ function buildPackageEvidence(type: AliceTypeDefinition): string[] {
 }
 
 function hasExecutableStatements(method: AliceMethod): boolean {
-  return method.statements.some((statement) => !["Comment", "comment"].includes(statement.kind));
+  return method.statements.some(hasExecutableStatement);
+}
+
+function hasExecutableStatement(statement: AliceStatement): boolean {
+  if (["Comment", "comment"].includes(statement.kind)) {
+    return false;
+  }
+  return [
+    statement.body,
+    statement.ifBody,
+    statement.elseBody,
+    statement.tryBody,
+    statement.catchBody,
+  ].some((statements) => statements?.some(hasExecutableStatement)) || !isStatementContainer(statement);
+}
+
+function isStatementContainer(statement: AliceStatement): boolean {
+  return Boolean(
+    statement.body?.length
+    || statement.ifBody?.length
+    || statement.elseBody?.length
+    || statement.tryBody?.length
+    || statement.catchBody?.length,
+  );
 }
 
 function cloneMethod(method: AliceMethod): AliceMethod {
