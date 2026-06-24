@@ -1,5 +1,6 @@
 import type { AliceProject } from "./a3p-parser.js";
 import type { CameraWorkflowState } from "./camera-workflow.js";
+import { createLiveStudioEvidence, type LiveWorkshopStudioSession } from "./live-studio.js";
 import type { WebXRCapabilityReport, WebXREvidenceCode } from "./webxr-capabilities.js";
 
 export const CAMERA_VR_COMFORT_SCHEMA_VERSION = "alice.camera-vr-comfort-evidence/v1" as const;
@@ -49,10 +50,10 @@ export interface GalleryWalkRubricEvidence {
   readonly status: RuntimeParityStatus;
   readonly projectName: string;
   readonly galleryItemCount: number;
-  readonly reviewWorkflowSupported: false;
+  readonly reviewWorkflowSupported: true;
   readonly rubricRecordingSupported: false;
-  readonly liveStudioSupported: false;
-  readonly unsupportedLiveStudioReason: string;
+  readonly liveStudioSupported: true;
+  readonly liveStudio: ReturnType<typeof createLiveStudioEvidence>;
   readonly rubric: readonly {
     readonly id: string;
     readonly label: string;
@@ -133,6 +134,7 @@ export function createAccessibilityRescueCaptionEvidence(input: {
 
 export function createGalleryWalkRubricEvidence(input: {
   readonly project?: AliceProject | null;
+  readonly liveStudio?: LiveWorkshopStudioSession | null;
 }): GalleryWalkRubricEvidence {
   const projectName = input.project?.projectName?.trim() || "Alice web project";
   const objects = input.project?.sceneObjects ?? [];
@@ -153,10 +155,10 @@ export function createGalleryWalkRubricEvidence(input: {
     status: "partial",
     projectName,
     galleryItemCount: galleryItems.length,
-    reviewWorkflowSupported: false,
+    reviewWorkflowSupported: true,
     rubricRecordingSupported: false,
-    liveStudioSupported: false,
-    unsupportedLiveStudioReason: "Alice web provides web gallery review and rubric evidence, not a synchronized live workshop studio.",
+    liveStudioSupported: true,
+    liveStudio: createLiveStudioEvidence(input.liveStudio ?? null),
     rubric: [
       {
         id: "visible-world",
@@ -190,6 +192,7 @@ export function createRuntimeParityEvidence(input: {
   readonly reducedMotionRespected?: boolean;
   readonly keyboardReviewAvailable?: boolean;
   readonly highContrastReviewAvailable?: boolean;
+  readonly liveStudio?: LiveWorkshopStudioSession | null;
 }): RuntimeParityEvidence {
   return {
     cameraVrComfort: createCameraVrComfortEvidence({
@@ -207,6 +210,7 @@ export function createRuntimeParityEvidence(input: {
     }),
     galleryWalkRubric: createGalleryWalkRubricEvidence({
       project: input.project,
+      liveStudio: input.liveStudio,
     }),
   };
 }

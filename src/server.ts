@@ -8,6 +8,8 @@ import { registerHealthRoutes } from "./server/routes/health-routes.js";
 import { registerJointRoutes } from "./server/routes/joint-routes.js";
 import { registerLaunchRoutes } from "./server/routes/launch-routes.js";
 import { registerAudioRoutes } from "./server/routes/audio-routes.js";
+import { registerCommunityRoutes } from "./server/routes/community-routes.js";
+import { registerLiveStudioRoutes } from "./server/routes/live-studio-routes.js";
 import { registerProjectRoutes } from "./server/routes/project-routes.js";
 import { registerRuntimeParityRoutes } from "./server/routes/runtime-parity-routes.js";
 import { registerSceneRoutes } from "./server/routes/scene-routes.js";
@@ -87,6 +89,8 @@ export function createServer(options: ServerOptions): express.Express {
   registerCodeRoutes(app, context);
   registerAudioRoutes(app, context);
   registerProjectRoutes(app, context);
+  registerCommunityRoutes(app, context);
+  registerLiveStudioRoutes(app, context);
   registerRuntimeParityRoutes(app, context);
   registerWorldRoutes(app, context);
   registerScreenshotRoutes(app, context);

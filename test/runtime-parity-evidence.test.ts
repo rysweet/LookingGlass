@@ -62,7 +62,7 @@ describe("runtime parity evidence", () => {
     expect(evidence.highContrastReviewAvailable).toBe("unknown");
   });
 
-  it("creates gallery walk rubric evidence while keeping live studio unsupported", () => {
+  it("creates gallery walk rubric evidence with live studio runtime support", () => {
     const evidence = createGalleryWalkRubricEvidence({
       project: {
         version: "3.10",
@@ -75,9 +75,15 @@ describe("runtime parity evidence", () => {
       },
     });
 
-    expect(evidence.reviewWorkflowSupported).toBe(false);
+    expect(evidence.reviewWorkflowSupported).toBe(true);
     expect(evidence.rubricRecordingSupported).toBe(false);
-    expect(evidence.liveStudioSupported).toBe(false);
+    expect(evidence.liveStudioSupported).toBe(true);
+    expect(evidence.liveStudio).toMatchObject({
+      supported: true,
+      synchronizationSupported: true,
+      participantOrchestrationSupported: true,
+      handoffSupported: true,
+    });
     expect(evidence.galleryItems.map((item) => item.title)).toEqual(["hero", "goal"]);
     expect(evidence.rubric.map((criterion) => criterion.id)).toContain("accessibility-captions");
   });
