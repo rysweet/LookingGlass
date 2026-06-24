@@ -1,6 +1,8 @@
 import type { AliceProject } from "./a3p-parser.js";
 import type { CameraWorkflowState } from "./camera-workflow.js";
 import type { WebXRCapabilityReport, WebXREvidenceCode } from "./webxr-capabilities.js";
+import type { WebXRLocomotionMode } from "./webxr-locomotion.js";
+import type { WebXRSessionState } from "./webxr-session.js";
 
 export const CAMERA_VR_COMFORT_SCHEMA_VERSION = "alice.camera-vr-comfort-evidence/v1" as const;
 export const ACCESSIBILITY_RESCUE_CAPTIONS_SCHEMA_VERSION = "alice.accessibility-rescue-camera-captions/v1" as const;
@@ -8,6 +10,8 @@ export const GALLERY_WALK_RUBRIC_SCHEMA_VERSION = "alice.gallery-walk-rubric-evi
 
 export type RuntimeParityStatus = "partial";
 export type RuntimeParityMeasuredBoolean = boolean | "unknown";
+export type RuntimeParityMeasuredNumber = number | "unknown";
+export type WebXRSessionEvidenceState = WebXRSessionState | "not-started" | "unmeasured";
 
 export interface CameraVrComfortEvidence {
   readonly schema_version: typeof CAMERA_VR_COMFORT_SCHEMA_VERSION;
@@ -20,6 +24,19 @@ export interface CameraVrComfortEvidence {
   readonly nativeVrSupported: false;
   readonly cameraMode: string;
   readonly evidenceCodes: readonly WebXREvidenceCode[];
+  readonly browserWebXrSession: {
+    readonly sessionState: WebXRSessionEvidenceState;
+    readonly referenceSpaceType: string | "unknown";
+    readonly inputSourceCount: RuntimeParityMeasuredNumber;
+    readonly locomotionMode: WebXRLocomotionMode | "unknown";
+    readonly locomotionEvidenceCodes: readonly WebXREvidenceCode[];
+  };
+  readonly playerComfortPlaytest: {
+    readonly truePlayerComfortPlaytestSupported: false;
+    readonly headsetSessionEvidence: "not-observed" | "browser-webxr-session-only";
+    readonly revisionLoopEvidence: "not-observed";
+    readonly unsupportedReason: string;
+  };
   readonly comfortChecks: {
     readonly discreteMovementStep: boolean;
     readonly stableHorizon: boolean;
@@ -77,8 +94,21 @@ export function createCameraVrComfortEvidence(input: {
   readonly webxrReport?: WebXRCapabilityReport | null;
   readonly keyboardMovementAvailable?: boolean;
   readonly reducedMotionRespected?: boolean;
+  readonly webXRSessionState?: WebXRSessionEvidenceState;
+  readonly webXRReferenceSpaceType?: string | null;
+  readonly webXRInputSourceCount?: number;
+  readonly locomotionMode?: WebXRLocomotionMode;
+  readonly locomotionEvidenceCodes?: readonly WebXREvidenceCode[];
 }): CameraVrComfortEvidence {
   const webxrReport = input.webxrReport ?? null;
+  const sessionState = input.webXRSessionState ?? "unmeasured";
+  const suppliedInputSourceCount = input.webXRInputSourceCount;
+  const inputSourceCount: RuntimeParityMeasuredNumber = typeof suppliedInputSourceCount === "number"
+    && Number.isInteger(suppliedInputSourceCount)
+    && suppliedInputSourceCount >= 0
+    ? suppliedInputSourceCount
+    : "unknown";
+  const locomotionEvidenceCodes = input.locomotionEvidenceCodes ?? [];
   return {
     schema_version: CAMERA_VR_COMFORT_SCHEMA_VERSION,
     status: "partial",
@@ -90,6 +120,19 @@ export function createCameraVrComfortEvidence(input: {
     nativeVrSupported: false,
     cameraMode: input.camera.mode,
     evidenceCodes: webxrReport?.evidence.map((item) => item.code) ?? ["desktop-camera-fallback", "true-vr-unsupported"],
+    browserWebXrSession: {
+      sessionState,
+      referenceSpaceType: input.webXRReferenceSpaceType?.trim() || "unknown",
+      inputSourceCount,
+      locomotionMode: input.locomotionMode ?? "unknown",
+      locomotionEvidenceCodes,
+    },
+    playerComfortPlaytest: {
+      truePlayerComfortPlaytestSupported: false,
+      headsetSessionEvidence: sessionState === "active" ? "browser-webxr-session-only" : "not-observed",
+      revisionLoopEvidence: "not-observed",
+      unsupportedReason: "Alice web can report browser WebXR session and locomotion evidence; true headset player comfort playtesting still requires observed headset sessions, player notes, and a revision loop.",
+    },
     comfortChecks: {
       discreteMovementStep: true,
       stableHorizon: true,
@@ -188,6 +231,11 @@ export function createRuntimeParityEvidence(input: {
   readonly webxrReport?: WebXRCapabilityReport | null;
   readonly keyboardMovementAvailable?: boolean;
   readonly reducedMotionRespected?: boolean;
+  readonly webXRSessionState?: WebXRSessionEvidenceState;
+  readonly webXRReferenceSpaceType?: string | null;
+  readonly webXRInputSourceCount?: number;
+  readonly locomotionMode?: WebXRLocomotionMode;
+  readonly locomotionEvidenceCodes?: readonly WebXREvidenceCode[];
   readonly keyboardReviewAvailable?: boolean;
   readonly highContrastReviewAvailable?: boolean;
 }): RuntimeParityEvidence {
@@ -197,6 +245,11 @@ export function createRuntimeParityEvidence(input: {
       webxrReport: input.webxrReport,
       keyboardMovementAvailable: input.keyboardMovementAvailable,
       reducedMotionRespected: input.reducedMotionRespected,
+      webXRSessionState: input.webXRSessionState,
+      webXRReferenceSpaceType: input.webXRReferenceSpaceType,
+      webXRInputSourceCount: input.webXRInputSourceCount,
+      locomotionMode: input.locomotionMode,
+      locomotionEvidenceCodes: input.locomotionEvidenceCodes,
     }),
     accessibilityRescueCaptions: createAccessibilityRescueCaptionEvidence({
       camera: input.camera,

@@ -54,6 +54,7 @@ import { detectWebXRCapabilities, type WebXREvidence } from "./webxr-capabilitie
 import {
   createCameraVrComfortEvidence,
   createRuntimeParityEvidence,
+  type WebXRSessionEvidenceState,
 } from "./runtime-parity-evidence";
 import { type WebXRInputSourceState, type WebXRInputState } from "./webxr-input";
 import {
@@ -194,6 +195,22 @@ let jointState = new JointSystem.JointStateStore();
 const MOVE_SELECTED_OBJECT_DELTA = { x: 1, y: 0, z: 0 } as const;
 const TURN_SELECTED_OBJECT_RADIANS = Math.PI / 12;
 const RESIZE_SELECTED_OBJECT_SCALE = 1.2;
+
+function webXRSessionEvidenceInput(): {
+  webXRSessionState: WebXRSessionEvidenceState;
+  webXRReferenceSpaceType: string | null | undefined;
+  webXRInputSourceCount: number | undefined;
+  locomotionMode: WebXRLocomotionMode;
+  locomotionEvidenceCodes: readonly WebXREvidence["code"][];
+} {
+  return {
+    webXRSessionState: webXRController?.state ?? (currentScene ? "not-started" : "unmeasured"),
+    webXRReferenceSpaceType: webXRController?.referenceSpaceType,
+    webXRInputSourceCount: webXRController?.input.sources.length,
+    locomotionMode: locomotion.mode,
+    locomotionEvidenceCodes: webXREvidence.map((item) => item.code),
+  };
+}
 
 function createEmptyArchive(): AliceProjectArchive {
   const project: AliceProject = {
@@ -1087,6 +1104,7 @@ function createEvidenceArtifactForCurrentScene(
       project,
       statusText: status.textContent?.trim() || describeProject(project),
       webxrReport: lastWebXRCapabilityReport,
+      ...webXRSessionEvidenceInput(),
     }),
     export: {
       method,
@@ -1679,6 +1697,7 @@ function renderWebXRPanel(state: WebXRSessionState = webXRController?.state ?? "
     cameraComfort: createCameraVrComfortEvidence({
       camera: cameraWorkflow.camera,
       webxrReport: lastWebXRCapabilityReport,
+      ...webXRSessionEvidenceInput(),
     }),
   });
   elements.button.addEventListener("click", () => {
