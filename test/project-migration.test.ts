@@ -149,6 +149,49 @@ describe("project-migration", () => {
     });
   });
 
+  it("ignores unrelated nested dependency versions when project metadata is present", () => {
+    const alice3Xml = `<?xml version="1.0" encoding="UTF-8"?><node><element class="org.lgna.story.SScene"/></node>`;
+    const versionInfo = detectProjectVersion(null, {
+      dependencies: [
+        {
+          name: "External Tool",
+          version: "2.4.3",
+        },
+      ],
+      project: {
+        createdWith: {
+          version: "3.5.0.0",
+        },
+      },
+    }, alice3Xml);
+
+    expect(versionInfo).toMatchObject({
+      originalAliceVersion: "3.5.0.0",
+      detectedAliceVersion: "3.5.0.0",
+      versionSource: "manifest",
+      migrationSupport: "alice-3-reader-migration",
+    });
+  });
+
+  it("ignores unrelated nested dependency versions when no project metadata exists", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><node></node>`;
+    const versionInfo = detectProjectVersion(null, {
+      dependencies: [
+        {
+          name: "External Tool",
+          version: "2.4.3",
+        },
+      ],
+    }, xml);
+
+    expect(versionInfo).toMatchObject({
+      originalAliceVersion: null,
+      detectedAliceVersion: CURRENT_VERSION,
+      versionSource: "default",
+      migrationSupport: "unknown-version",
+    });
+  });
+
   it("prefers explicit Alice 3 XML over unrelated nested Alice 2 manifest strings", () => {
     const alice3Xml = `<?xml version="1.0" encoding="UTF-8"?><node version="3.4.0.0"><element class="org.lgna.story.SScene"/></node>`;
     const versionInfo = detectProjectVersion(null, {

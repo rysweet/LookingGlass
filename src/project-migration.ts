@@ -122,7 +122,7 @@ export function detectProjectVersion(
     : null;
   const nestedManifestVersion = supportedExplicitManifestVersion
     ?? supportedGenericManifestVersion
-    ?? findNestedAliceVersion(manifest);
+    ?? extractProjectManifestVersion(manifest);
   const manifestVersion = supportedExplicitManifestVersion
     ?? supportedGenericManifestVersion
     ?? nestedManifestVersion
@@ -459,6 +459,9 @@ function extractExplicitManifestVersion(manifest: Record<string, unknown> | null
     manifest.aliceVersion,
     manifest.projectVersion,
     isRecord(manifest.createdWith) ? manifest.createdWith.version : undefined,
+    isRecord(manifest.project) && isRecord(manifest.project.createdWith)
+      ? manifest.project.createdWith.version
+      : undefined,
   ];
 
   for (const candidate of directCandidates) {
@@ -475,32 +478,14 @@ function extractGenericManifestVersion(manifest: Record<string, unknown> | null)
   return normalizeCandidate(typeof manifest?.version === "string" ? manifest.version : null);
 }
 
-function findNestedAliceVersion(value: unknown, depth = 0): string | null {
-  if (depth > 4) {
-    return null;
-  }
-  if (typeof value === "string") {
-    return isSupportedAliceVersion(value) ? value.trim() : null;
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const nested = findNestedAliceVersion(entry, depth + 1);
-      if (nested) {
-        return nested;
-      }
-    }
-    return null;
-  }
-  if (!isRecord(value)) {
-    return null;
-  }
-  for (const nestedValue of Object.values(value)) {
-    const nested = findNestedAliceVersion(nestedValue, depth + 1);
-    if (nested) {
-      return nested;
-    }
-  }
-  return null;
+function extractProjectManifestVersion(manifest: Record<string, unknown> | null): string | null {
+  if (!manifest) return null;
+  const project = manifest.project;
+  if (!isRecord(project)) return null;
+  const createdWith = project.createdWith;
+  if (!isRecord(createdWith)) return null;
+  const version = normalizeCandidate(typeof createdWith.version === "string" ? createdWith.version : null);
+  return version && isSupportedAliceVersion(version) ? version : null;
 }
 
 function isAliceProjectVersion(value: string): boolean {
