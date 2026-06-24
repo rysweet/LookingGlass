@@ -266,6 +266,8 @@ export function registerJointRoutes(app: Express, context: ServerContext): void 
         name: name.value,
         className: className.value,
         position: { ...DEFAULT_POSITION },
+        orientation: null,
+        size: null,
       });
       context.state.jointState.registerObject({
         objectName: name.value,

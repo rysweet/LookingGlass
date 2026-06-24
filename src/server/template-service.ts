@@ -66,6 +66,9 @@ export const templateService: TemplateService = {
         position: obj.position
           ? { x: obj.position.x, y: obj.position.y, z: obj.position.z }
           : { ...DEFAULT_POSITION },
+        orientation: obj.orientation,
+        size: obj.size,
+        ...(obj.modelResourceId !== undefined ? { modelResourceId: obj.modelResourceId } : {}),
       });
     }
     state.procedures.clear();
