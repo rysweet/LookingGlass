@@ -20,11 +20,6 @@ type CompletedUiAction = {
 };
 
 type JsonRecord = Record<string, unknown>;
-type SavedProjectEvidence = {
-  programEntry: string;
-  checks: Array<{ value: string; present: boolean }>;
-};
-
 const FIRST_LESSON_WORKFLOW_SOURCE = `class Main {
   void main() {
     doTogether {
@@ -101,23 +96,21 @@ test("completes first-lesson object, code, run, evidence, save, and reopen actio
   await expect(page.getByTestId("alice-evidence-summary")).toContainText(/1 object/i);
   const evidenceArtifactPath = await exportEvidenceArtifact(page, testInfo.outputPath("first-lesson-visible-evidence.json"));
   const evidenceSummary = await page.getByTestId("alice-evidence-summary").innerText();
-  const evidenceArtifact = await expectVisibleEvidenceArtifact(evidenceArtifactPath);
+  await expectVisibleEvidenceArtifact(evidenceArtifactPath);
+  const evidenceDownloadFilename = evidenceArtifactPath.split(/[\\/]/u).pop() ?? evidenceArtifactPath;
   completedActions.push({
     id: "capture-evidence",
     trigger: "click alice-evidence-capture-button and alice-evidence-export-button",
-    observable: `${evidenceSummary}; artifact=${JSON.stringify({
-      format: evidenceArtifact.format,
-      runtime: (evidenceArtifact.application as JsonRecord).runtime,
-      objectCount: ((evidenceArtifact.visibleBehavior as JsonRecord).objects as unknown[]).length,
-    })}`,
+    observable: `${evidenceSummary}; downloaded=${evidenceDownloadFilename}`,
   });
 
   const savedProjectPath = await saveProject(page, testInfo.outputPath("first-lesson-ui-actions.a3p"));
-  const savedXmlEvidence = await expectSavedProjectEvidence(savedProjectPath);
+  const savedProjectDownloadName = savedProjectPath.split(/[\\/]/u).pop() ?? savedProjectPath;
+  await expectSavedProjectEvidence(savedProjectPath);
   completedActions.push({
     id: "save-project",
     trigger: "click alice-save-project-button",
-    observable: JSON.stringify(savedXmlEvidence),
+    observable: `downloaded=${savedProjectDownloadName}; status=${await page.locator("#status").innerText()}`,
   });
 
   await page.reload();
@@ -192,7 +185,7 @@ async function saveProject(page: Page, savedPath: string): Promise<string> {
   return savedPath;
 }
 
-async function expectVisibleEvidenceArtifact(artifactPath: string): Promise<JsonRecord> {
+async function expectVisibleEvidenceArtifact(artifactPath: string): Promise<void> {
   const artifact = JSON.parse(await readFile(artifactPath, "utf-8")) as JsonRecord;
   expect(artifact.format).toBe("alice-visible-behavior-evidence");
   expect(artifact.application).toMatchObject({ name: "Alice", runtime: "alice-web" });
@@ -205,10 +198,9 @@ async function expectVisibleEvidenceArtifact(artifactPath: string): Promise<Json
     typeName: "org.lgna.story.SBox",
     visible: true,
   });
-  return artifact;
 }
 
-async function expectSavedProjectEvidence(projectPath: string): Promise<SavedProjectEvidence> {
+async function expectSavedProjectEvidence(projectPath: string): Promise<void> {
   const { stdout: entriesOutput } = await execFileAsync("unzip", ["-Z1", projectPath], { encoding: "utf-8" });
   const programEntry = String(entriesOutput)
     .split(/\r?\n/u)
@@ -216,19 +208,16 @@ async function expectSavedProjectEvidence(projectPath: string): Promise<SavedPro
   expect(programEntry, "saved Alice project should include program XML").toBeDefined();
   const { stdout } = await execFileAsync("unzip", ["-p", projectPath, programEntry!], { encoding: "utf-8" });
   const programXml = String(stdout);
-  const expectedValues = [
+  for (const expected of [
     "box",
     "org.lgna.story.SBox",
     "setPositionRelativeToVehicle",
     "setOrientationRelativeToVehicle",
     "setSize",
     "1.2",
-  ];
-  const checks = expectedValues.map((value) => ({ value, present: programXml.includes(value) }));
-  for (const check of checks) {
-    expect(check.present, `${check.value} should be present in saved project XML`).toBe(true);
+  ]) {
+    expect(programXml).toContain(expected);
   }
-  return { programEntry: programEntry!, checks };
 }
 
 function expectRecord(value: unknown, label: string): JsonRecord {
