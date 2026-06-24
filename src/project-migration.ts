@@ -379,35 +379,36 @@ function guidanceOnlyAlice2Migration(
 }
 
 function synchronizeAllKnownManifestVersionFields(manifest: Record<string, unknown>, targetVersion: string): void {
-  synchronizeNestedManifestVersionFields(manifest, targetVersion);
+  synchronizeManifestVersionFields(manifest, targetVersion);
 }
 
-function synchronizeNestedManifestVersionFields(value: unknown, targetVersion: string): void {
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      synchronizeNestedManifestVersionFields(entry, targetVersion);
-    }
-    return;
+function synchronizeManifestVersionFields(manifest: Record<string, unknown>, targetVersion: string): void {
+  if (typeof manifest.aliceVersion === "string") {
+    manifest.aliceVersion = targetVersion;
   }
-  if (!isRecord(value)) {
-    return;
+  if (typeof manifest.projectVersion === "string") {
+    manifest.projectVersion = targetVersion;
   }
-  if (typeof value.aliceVersion === "string") {
-    value.aliceVersion = targetVersion;
+  if (typeof manifest.version === "string" && isSupportedAliceVersion(manifest.version)) {
+    manifest.version = targetVersion;
   }
-  if (typeof value.projectVersion === "string") {
-    value.projectVersion = targetVersion;
-  }
-  if (typeof value.version === "string" && isSupportedAliceVersion(value.version)) {
-    value.version = targetVersion;
-  }
-  const createdWith = value.createdWith;
+  const createdWith = manifest.createdWith;
   if (isRecord(createdWith) && typeof createdWith.version === "string" && isSupportedAliceVersion(createdWith.version)) {
     createdWith.version = targetVersion;
-    value.createdWith = createdWith;
+    manifest.createdWith = createdWith;
   }
-  for (const nested of Object.values(value)) {
-    synchronizeNestedManifestVersionFields(nested, targetVersion);
+  const project = manifest.project;
+  if (isRecord(project)) {
+    const projectCreatedWith = project.createdWith;
+    if (
+      isRecord(projectCreatedWith)
+      && typeof projectCreatedWith.version === "string"
+      && isSupportedAliceVersion(projectCreatedWith.version)
+    ) {
+      projectCreatedWith.version = targetVersion;
+      project.createdWith = projectCreatedWith;
+      manifest.project = project;
+    }
   }
 }
 

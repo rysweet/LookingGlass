@@ -293,6 +293,50 @@ describe("project-migration", () => {
     });
   });
 
+  it("preserves unrelated nested manifest versions during scoped conversion", () => {
+    const manifest = synchronizeManifestVersion(
+      {
+        project: {
+          createdWith: {
+            version: "2.4.3",
+            product: "Alice",
+          },
+        },
+        dependencies: [
+          {
+            name: "External Tool",
+            version: "2.4.3",
+          },
+        ],
+      },
+      {
+        originalAliceVersion: "2.4.3",
+        detectedAliceVersion: CURRENT_VERSION,
+        manifestVersion: "2.4.3",
+        xmlVersion: "2.4.3",
+        versionSource: "manifest",
+        migrated: true,
+        migrationSupport: "alice-2-scoped-conversion",
+        migrationSteps: [],
+      },
+    );
+
+    expect(manifest).toEqual({
+      project: {
+        createdWith: {
+          version: CURRENT_VERSION,
+          product: "Alice",
+        },
+      },
+      dependencies: [
+        {
+          name: "External Tool",
+          version: "2.4.3",
+        },
+      ],
+    });
+  });
+
   it("synchronizes the first known direct manifest version field without mutating input", () => {
     const manifest = {
       aliceVersion: "3.1.10.0.0",
