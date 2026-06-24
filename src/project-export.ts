@@ -183,6 +183,7 @@ export interface WebPackageValidation {
 
 export interface ShareArtifactsInput extends WebPackageOptions {
   packageBase64: string;
+  nativeShare?: NativeWebShareOptions;
 }
 
 export interface ShareArtifacts {
@@ -242,16 +243,51 @@ interface AliceWebShareDocument {
     filename: string;
     mimeType: typeof ZIP_MIME_TYPE;
   };
-  delivery: {
-    mode: "browser-download-fallback";
-    nativeWebShare: false;
-    requiresUserDownload: true;
-  };
+  delivery: ShareDelivery;
   links: {
     html: typeof WEB_PACKAGE_ARTIFACTS.entrypoint;
     package: string;
     preview: typeof WEB_PACKAGE_ARTIFACTS.preview;
   };
+}
+
+type ShareDelivery = BrowserDownloadShareDelivery | NativeWebShareDelivery;
+
+interface BrowserDownloadShareDelivery {
+  mode: "browser-download-fallback";
+  nativeWebShare: false;
+  requiresUserDownload: true;
+}
+
+interface NativeWebShareDelivery {
+  mode: "native-web-share";
+  nativeWebShare: true;
+  requiresUserDownload: false;
+  evidence: {
+    api: "navigator.share";
+    status: "shared";
+    packageFilename: string;
+    filesShared: boolean;
+    canShareChecked: boolean;
+  };
+}
+
+export interface NativeWebShareData {
+  title?: string;
+  text?: string;
+  url?: string;
+  files?: readonly unknown[];
+}
+
+export interface NativeWebShareNavigator {
+  canShare?(data: NativeWebShareData): boolean;
+  share(data: NativeWebShareData): Promise<void> | void;
+}
+
+export interface NativeWebShareOptions {
+  navigator: NativeWebShareNavigator;
+  data?: NativeWebShareData;
+  files?: readonly unknown[];
 }
 
 interface AliceWebTeacherShareMetadata {
@@ -681,8 +717,9 @@ export async function generateShareArtifacts(input: ShareArtifactsInput): Promis
 
   const title = input.title?.trim() || validation.package.filename.replace(/\.alice-web\.zip$/, "") || "Alice Project";
   const normalized = normalizeWebPackageOptions({ projectName: title }, input);
+  const nativeDelivery = await tryNativeWebShare(input, normalized, validation.package);
   const share = {
-    ...buildShareDocument(normalized, validation.package.filename),
+    ...buildShareDocument(normalized, validation.package.filename, nativeDelivery),
     package: validation.package,
   };
 
@@ -1119,7 +1156,7 @@ function validateShareDelivery(share: AliceWebShareDocument): WebPackageValidati
   if (share.delivery === null || typeof share.delivery !== "object") {
     return [{
       code: "invalid-share-delivery",
-      message: "share delivery must be browser-download-fallback with nativeWebShare false and requiresUserDownload true",
+      message: "share delivery must be browser-download-fallback or include native Web Share evidence",
       path: WEB_PACKAGE_ARTIFACTS.share,
     }];
   }
@@ -1130,11 +1167,28 @@ function validateShareDelivery(share: AliceWebShareDocument): WebPackageValidati
   ) {
     return [];
   }
+  if (
+    share.delivery.mode === "native-web-share"
+    && share.delivery.nativeWebShare === true
+    && share.delivery.requiresUserDownload === false
+    && isRecord(share.delivery.evidence)
+    && share.delivery.evidence.api === "navigator.share"
+    && share.delivery.evidence.status === "shared"
+    && typeof share.delivery.evidence.packageFilename === "string"
+    && typeof share.delivery.evidence.filesShared === "boolean"
+    && typeof share.delivery.evidence.canShareChecked === "boolean"
+  ) {
+    return [];
+  }
   return [{
     code: "invalid-share-delivery",
-    message: "share delivery must be browser-download-fallback with nativeWebShare false and requiresUserDownload true",
+    message: "share delivery must be browser-download-fallback or include native Web Share evidence",
     path: WEB_PACKAGE_ARTIFACTS.share,
   }];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function validateSharePackageLinks(share: AliceWebShareDocument, filename: string): WebPackageValidationError[] {
@@ -1183,6 +1237,11 @@ function buildPackageManifest(filename: string): AliceWebPackageManifest {
 function buildShareDocument(
   normalized: { title: string; metadata: Omit<HtmlExportMetadata, "preview">; teacher?: AliceWebTeacherShareMetadata },
   filename: string,
+  delivery: ShareDelivery = {
+    mode: "browser-download-fallback",
+    nativeWebShare: false,
+    requiresUserDownload: true,
+  },
 ): AliceWebShareDocument {
   return {
     schemaVersion: "alice-web.share/v1",
@@ -1196,17 +1255,73 @@ function buildShareDocument(
       filename,
       mimeType: ZIP_MIME_TYPE,
     },
-    delivery: {
-      mode: "browser-download-fallback",
-      nativeWebShare: false,
-      requiresUserDownload: true,
-    },
+    delivery,
     links: {
       html: WEB_PACKAGE_ARTIFACTS.entrypoint,
       package: filename,
       preview: WEB_PACKAGE_ARTIFACTS.preview,
     },
   };
+}
+
+async function tryNativeWebShare(
+  input: ShareArtifactsInput,
+  normalized: { title: string; metadata: Omit<HtmlExportMetadata, "preview"> },
+  packageReference: WebPackageReference,
+): Promise<NativeWebShareDelivery | undefined> {
+  const nativeShare = input.nativeShare;
+  if (!nativeShare || typeof nativeShare.navigator?.share !== "function") {
+    return undefined;
+  }
+  const data = nativeShare.data ?? buildNativeWebShareData(nativeShare, normalized, packageReference, input.packageBase64);
+  const canShareChecked = typeof nativeShare.navigator.canShare === "function";
+  if (canShareChecked && !nativeShare.navigator.canShare!(data)) {
+    return undefined;
+  }
+  await nativeShare.navigator.share(data);
+  return {
+    mode: "native-web-share",
+    nativeWebShare: true,
+    requiresUserDownload: false,
+    evidence: {
+      api: "navigator.share",
+      status: "shared",
+      packageFilename: packageReference.filename,
+      filesShared: Array.isArray(data.files) && data.files.length > 0,
+      canShareChecked,
+    },
+  };
+}
+
+function buildNativeWebShareData(
+  nativeShare: NativeWebShareOptions,
+  normalized: { title: string; metadata: Omit<HtmlExportMetadata, "preview"> },
+  packageReference: WebPackageReference,
+  packageBase64: string,
+): NativeWebShareData {
+  return {
+    title: normalized.title,
+    text: normalized.metadata.description,
+    url: normalized.metadata.canonicalUrl,
+    files: nativeShare.files ?? createNativeShareFiles(packageBase64, packageReference),
+  };
+}
+
+function createNativeShareFiles(packageBase64: string, packageReference: WebPackageReference): readonly unknown[] {
+  if (typeof File === "undefined") {
+    return [];
+  }
+  const decoded = decodeBase64Package(packageBase64);
+  if (!decoded.ok) {
+    return [];
+  }
+  const bytes = new Uint8Array(decoded.bytes);
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  return [
+    new File([buffer], packageReference.filename, {
+      type: packageReference.mimeType,
+    }),
+  ];
 }
 
 function buildValidationDocument(hasTeacherMetadata = false): AliceWebValidationDocument {
