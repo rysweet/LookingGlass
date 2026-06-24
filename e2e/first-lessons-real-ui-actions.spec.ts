@@ -20,6 +20,10 @@ type CompletedUiAction = {
 };
 
 type JsonRecord = Record<string, unknown>;
+type SavedProjectEvidence = {
+  programEntry: string;
+  checks: Array<{ value: string; present: boolean }>;
+};
 
 const FIRST_LESSON_WORKFLOW_SOURCE = `class Main {
   void main() {
@@ -39,26 +43,30 @@ test("completes first-lesson object, code, run, evidence, save, and reopen actio
 
   await page.getByTestId("alice-create-shape-button").click();
   await expect(page.locator("#status")).toHaveText(/Created box/);
+  const placedStatusText = await page.locator("#status").innerText();
   await expect(page.getByTestId("alice-scene-object-list")).toContainText("box");
   const placedObjectListText = await page.getByTestId("alice-scene-object-list").innerText();
   completedActions.push({
     id: "place-object",
     trigger: "click alice-create-shape-button",
-    observable: placedObjectListText,
+    observable: `${placedStatusText}; ${placedObjectListText}`,
   });
 
   await page.getByTestId("alice-move-selected-object-button").click();
   await expect(page.locator("#status")).toHaveText(/Moved box/);
+  const movedStatusText = await page.locator("#status").innerText();
   await page.getByTestId("alice-turn-selected-object-button").click();
   await expect(page.locator("#status")).toHaveText(/Turned box/);
+  const turnedStatusText = await page.locator("#status").innerText();
   await page.getByTestId("alice-resize-selected-object-button").click();
   await expect(page.locator("#status")).toHaveText(/Resized box/);
+  const resizedStatusText = await page.locator("#status").innerText();
   await expectSceneObjectTransform(page);
   const adjustedObjectListText = await page.getByTestId("alice-scene-object-list").innerText();
   completedActions.push({
     id: "adjust-object",
     trigger: "click move, turn, and resize selected object buttons",
-    observable: adjustedObjectListText,
+    observable: `${movedStatusText}; ${turnedStatusText}; ${resizedStatusText}; ${adjustedObjectListText}`,
   });
 
   const sourceEditor = page.getByTestId("alice-workflow-source");
@@ -109,7 +117,7 @@ test("completes first-lesson object, code, run, evidence, save, and reopen actio
   completedActions.push({
     id: "save-project",
     trigger: "click alice-save-project-button",
-    observable: savedXmlEvidence,
+    observable: JSON.stringify(savedXmlEvidence),
   });
 
   await page.reload();
@@ -200,7 +208,7 @@ async function expectVisibleEvidenceArtifact(artifactPath: string): Promise<Json
   return artifact;
 }
 
-async function expectSavedProjectEvidence(projectPath: string): Promise<string> {
+async function expectSavedProjectEvidence(projectPath: string): Promise<SavedProjectEvidence> {
   const { stdout: entriesOutput } = await execFileAsync("unzip", ["-Z1", projectPath], { encoding: "utf-8" });
   const programEntry = String(entriesOutput)
     .split(/\r?\n/u)
@@ -208,17 +216,19 @@ async function expectSavedProjectEvidence(projectPath: string): Promise<string> 
   expect(programEntry, "saved Alice project should include program XML").toBeDefined();
   const { stdout } = await execFileAsync("unzip", ["-p", projectPath, programEntry!], { encoding: "utf-8" });
   const programXml = String(stdout);
-  for (const expected of [
+  const expectedValues = [
     "box",
     "org.lgna.story.SBox",
     "setPositionRelativeToVehicle",
     "setOrientationRelativeToVehicle",
     "setSize",
     "1.2",
-  ]) {
-    expect(programXml).toContain(expected);
+  ];
+  const checks = expectedValues.map((value) => ({ value, present: programXml.includes(value) }));
+  for (const check of checks) {
+    expect(check.present, `${check.value} should be present in saved project XML`).toBe(true);
   }
-  return `${programEntry}: ${["box", "setPositionRelativeToVehicle", "setOrientationRelativeToVehicle", "setSize", "1.2"].join(", ")}`;
+  return { programEntry: programEntry!, checks };
 }
 
 function expectRecord(value: unknown, label: string): JsonRecord {
