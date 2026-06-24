@@ -643,7 +643,7 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
     });
   }
   if (share) {
-    const deliveryErrors = validateShareDelivery(share);
+    const deliveryErrors = validateShareDelivery(share, filename);
     errors.push(...deliveryErrors);
     if (deliveryErrors.length === 0 && share.delivery !== undefined) {
       evidence.push("browser-download-fallback");
@@ -1149,7 +1149,7 @@ function isSafePackageFilename(value: string): boolean {
   }
 }
 
-function validateShareDelivery(share: AliceWebShareDocument): WebPackageValidationError[] {
+function validateShareDelivery(share: AliceWebShareDocument, filename: string): WebPackageValidationError[] {
   if (share.delivery === undefined) {
     return [];
   }
@@ -1174,7 +1174,7 @@ function validateShareDelivery(share: AliceWebShareDocument): WebPackageValidati
     && isRecord(share.delivery.evidence)
     && share.delivery.evidence.api === "navigator.share"
     && share.delivery.evidence.status === "shared"
-    && typeof share.delivery.evidence.packageFilename === "string"
+    && share.delivery.evidence.packageFilename === filename
     && share.delivery.evidence.filesShared === true
     && typeof share.delivery.evidence.canShareChecked === "boolean"
   ) {
@@ -1274,7 +1274,7 @@ async function tryNativeWebShare(
     return undefined;
   }
   const data = nativeShare.data ?? buildNativeWebShareData(nativeShare, normalized, packageReference, input.packageBase64);
-  if (!Array.isArray(data.files) || data.files.length === 0) {
+  if (!await containsNativePackageFile(data.files, packageReference)) {
     return undefined;
   }
   const canShareChecked = typeof nativeShare.navigator.canShare === "function";
@@ -1325,6 +1325,33 @@ function createNativeShareFiles(packageBase64: string, packageReference: WebPack
       type: packageReference.mimeType,
     }),
   ];
+}
+
+async function containsNativePackageFile(files: unknown, packageReference: WebPackageReference): Promise<boolean> {
+  if (!Array.isArray(files)) {
+    return false;
+  }
+  for (const file of files) {
+    if (await isNativePackageFile(file, packageReference)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function isNativePackageFile(file: unknown, packageReference: WebPackageReference): Promise<boolean> {
+  if (typeof File === "undefined" || !(file instanceof File)) {
+    return false;
+  }
+  if (
+    file.name !== packageReference.filename
+    || file.type !== packageReference.mimeType
+    || file.size !== packageReference.sizeBytes
+  ) {
+    return false;
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return createHash("sha256").update(bytes).digest("hex") === packageReference.sha256;
 }
 
 function buildValidationDocument(hasTeacherMetadata = false): AliceWebValidationDocument {

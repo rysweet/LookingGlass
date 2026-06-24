@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { exportWebPackage, generateShareArtifacts } from "../src/project-export.js";
+import JSZip from "jszip";
+import { exportWebPackage, generateShareArtifacts, validateWebPackage } from "../src/project-export.js";
 import { createMinimalProject } from "./test-utils.js";
 
 describe("project export native Web Share evidence", () => {
@@ -13,10 +14,10 @@ describe("project export native Web Share evidence", () => {
     });
     const canShare = vi.fn(() => true);
     const share = vi.fn(async () => {});
-    const file = {
-      name: exported.package.filename,
+    const packageBytes = Buffer.from(exported.package.base64, "base64");
+    const file = new File([packageBytes], exported.package.filename, {
       type: exported.package.mimeType,
-    };
+    });
 
     const result = await generateShareArtifacts({
       packageBase64: exported.package.base64,
@@ -98,5 +99,35 @@ describe("project export native Web Share evidence", () => {
       nativeWebShare: false,
       requiresUserDownload: true,
     });
+  });
+
+  it("rejects native Web Share evidence for a different package filename", async () => {
+    const project = createMinimalProject();
+    const exported = await exportWebPackage(project, { title: "Forged native share proof" });
+    const zip = await JSZip.loadAsync(Buffer.from(exported.package.base64, "base64"));
+    const shareEntry = zip.file("share.json");
+    if (!shareEntry) throw new Error("share.json missing from exported package");
+    const share = JSON.parse(await shareEntry.async("string")) as Record<string, unknown>;
+    share.delivery = {
+      mode: "native-web-share",
+      nativeWebShare: true,
+      requiresUserDownload: false,
+      evidence: {
+        api: "navigator.share",
+        status: "shared",
+        packageFilename: "different-package.alice-web.zip",
+        filesShared: true,
+        canShareChecked: true,
+      },
+    };
+    zip.file("share.json", JSON.stringify(share, null, 2));
+    const forgedPackageBase64 = Buffer.from(await zip.generateAsync({ type: "uint8array" })).toString("base64");
+
+    const validation = await validateWebPackage({ packageBase64: forgedPackageBase64 });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-share-delivery" }),
+    ]));
   });
 });
