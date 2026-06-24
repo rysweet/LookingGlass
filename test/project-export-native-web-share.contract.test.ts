@@ -185,6 +185,30 @@ describe("project export native Web Share evidence", () => {
       expect.objectContaining({ code: "invalid-share-delivery" }),
     ]));
   });
+
+  it("rejects browser-download delivery carrying native Web Share evidence", async () => {
+    const project = createMinimalProject();
+    const exported = await exportWebPackage(project, { title: "Fallback with forged native evidence" });
+    const validation = await validateNativeDelivery(exported.package.base64, {
+      mode: "browser-download-fallback",
+      nativeWebShare: false,
+      requiresUserDownload: true,
+      evidence: {
+        api: "navigator.share",
+        status: "shared",
+        packageFilename: exported.package.filename,
+        packageSizeBytes: exported.package.sizeBytes,
+        packageSha256: exported.package.sha256,
+        filesShared: true,
+        canShareChecked: true,
+      },
+    });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-share-delivery" }),
+    ]));
+  });
 });
 
 async function validateNativeDelivery(packageBase64: string, delivery: unknown) {

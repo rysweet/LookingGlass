@@ -1167,6 +1167,7 @@ function validateShareDelivery(share: AliceWebShareDocument): WebPackageValidati
     share.delivery.mode === "browser-download-fallback"
     && share.delivery.nativeWebShare === false
     && share.delivery.requiresUserDownload === true
+    && hasExactKeys(share.delivery, ["mode", "nativeWebShare", "requiresUserDownload"])
   ) {
     return [];
   }
@@ -1179,6 +1180,12 @@ function validateShareDelivery(share: AliceWebShareDocument): WebPackageValidati
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasExactKeys(value: object, expectedKeys: readonly string[]): boolean {
+  const expected = new Set(expectedKeys);
+  const actual = Object.keys(value);
+  return actual.length === expected.size && actual.every((key) => expected.has(key));
 }
 
 function validateSharePackageLinks(share: AliceWebShareDocument, filename: string): WebPackageValidationError[] {
