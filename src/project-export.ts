@@ -646,7 +646,7 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
     const deliveryErrors = validateShareDelivery(share, filename);
     errors.push(...deliveryErrors);
     if (deliveryErrors.length === 0 && share.delivery !== undefined) {
-      evidence.push("browser-download-fallback");
+      evidence.push(share.delivery.mode);
     }
     const shareLinkErrors = validateSharePackageLinks(share, filename);
     errors.push(...shareLinkErrors);
@@ -1278,10 +1278,14 @@ async function tryNativeWebShare(
     return undefined;
   }
   const canShareChecked = typeof nativeShare.navigator.canShare === "function";
-  if (canShareChecked && !nativeShare.navigator.canShare!(data)) {
+  if (canShareChecked && !safeCanShare(nativeShare.navigator, data)) {
     return undefined;
   }
-  await nativeShare.navigator.share(data);
+  try {
+    await nativeShare.navigator.share(data);
+  } catch {
+    return undefined;
+  }
   return {
     mode: "native-web-share",
     nativeWebShare: true,
@@ -1294,6 +1298,14 @@ async function tryNativeWebShare(
       canShareChecked,
     },
   };
+}
+
+function safeCanShare(navigator: NativeWebShareNavigator, data: NativeWebShareData): boolean {
+  try {
+    return navigator.canShare?.(data) === true;
+  } catch {
+    return false;
+  }
 }
 
 function buildNativeWebShareData(

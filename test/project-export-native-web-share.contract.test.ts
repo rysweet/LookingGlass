@@ -50,6 +50,11 @@ describe("project export native Web Share evidence", () => {
       },
     });
     expect(result.validation.valid).toBe(true);
+    expect(result.validation.errors).toEqual([]);
+    const validation = await validateNativeDelivery(exported.package.base64, result.share.delivery);
+    expect(validation.valid).toBe(true);
+    expect(validation.evidence).toContain("native-web-share");
+    expect(validation.evidence).not.toContain("browser-download-fallback");
   });
 
   it("keeps the browser-download fallback when native Web Share cannot accept the package", async () => {
@@ -101,6 +106,34 @@ describe("project export native Web Share evidence", () => {
     });
   });
 
+  it("keeps browser-download fallback when native Web Share rejects the package file", async () => {
+    const project = createMinimalProject();
+    const exported = await exportWebPackage(project, { title: "Rejected native share proof" });
+    const packageBytes = Buffer.from(exported.package.base64, "base64");
+    const file = new File([packageBytes], exported.package.filename, {
+      type: exported.package.mimeType,
+    });
+    const share = vi.fn(async () => {
+      throw new Error("files unsupported");
+    });
+
+    const result = await generateShareArtifacts({
+      packageBase64: exported.package.base64,
+      title: "Rejected native share proof",
+      nativeShare: {
+        navigator: { share },
+        files: [file],
+      },
+    });
+
+    expect(share).toHaveBeenCalledTimes(1);
+    expect(result.share.delivery).toMatchObject({
+      mode: "browser-download-fallback",
+      nativeWebShare: false,
+      requiresUserDownload: true,
+    });
+  });
+
   it("rejects native Web Share evidence for a different package filename", async () => {
     const project = createMinimalProject();
     const exported = await exportWebPackage(project, { title: "Forged native share proof" });
@@ -131,3 +164,15 @@ describe("project export native Web Share evidence", () => {
     ]));
   });
 });
+
+async function validateNativeDelivery(packageBase64: string, delivery: unknown) {
+  const zip = await JSZip.loadAsync(Buffer.from(packageBase64, "base64"));
+  const shareEntry = zip.file("share.json");
+  if (!shareEntry) throw new Error("share.json missing from exported package");
+  const share = JSON.parse(await shareEntry.async("string")) as Record<string, unknown>;
+  share.delivery = delivery;
+  zip.file("share.json", JSON.stringify(share, null, 2));
+  return validateWebPackage({
+    packageBase64: Buffer.from(await zip.generateAsync({ type: "uint8array" })).toString("base64"),
+  });
+}
