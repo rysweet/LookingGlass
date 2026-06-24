@@ -1175,7 +1175,7 @@ function validateShareDelivery(share: AliceWebShareDocument): WebPackageValidati
     && share.delivery.evidence.api === "navigator.share"
     && share.delivery.evidence.status === "shared"
     && typeof share.delivery.evidence.packageFilename === "string"
-    && typeof share.delivery.evidence.filesShared === "boolean"
+    && share.delivery.evidence.filesShared === true
     && typeof share.delivery.evidence.canShareChecked === "boolean"
   ) {
     return [];
@@ -1274,6 +1274,9 @@ async function tryNativeWebShare(
     return undefined;
   }
   const data = nativeShare.data ?? buildNativeWebShareData(nativeShare, normalized, packageReference, input.packageBase64);
+  if (!Array.isArray(data.files) || data.files.length === 0) {
+    return undefined;
+  }
   const canShareChecked = typeof nativeShare.navigator.canShare === "function";
   if (canShareChecked && !nativeShare.navigator.canShare!(data)) {
     return undefined;
@@ -1287,7 +1290,7 @@ async function tryNativeWebShare(
       api: "navigator.share",
       status: "shared",
       packageFilename: packageReference.filename,
-      filesShared: Array.isArray(data.files) && data.files.length > 0,
+      filesShared: true,
       canShareChecked,
     },
   };

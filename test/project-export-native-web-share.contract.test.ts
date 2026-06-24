@@ -74,4 +74,29 @@ describe("project export native Web Share evidence", () => {
       requiresUserDownload: true,
     });
   });
+
+  it("keeps browser-download fallback when native Web Share data omits the package file", async () => {
+    const project = createMinimalProject();
+    const exported = await exportWebPackage(project, { title: "No file share proof" });
+    const share = vi.fn(async () => {});
+
+    const result = await generateShareArtifacts({
+      packageBase64: exported.package.base64,
+      title: "No file share proof",
+      nativeShare: {
+        navigator: { share },
+        data: {
+          title: "No file share proof",
+          text: "metadata-only share is not enough",
+        },
+      },
+    });
+
+    expect(share).not.toHaveBeenCalled();
+    expect(result.share.delivery).toMatchObject({
+      mode: "browser-download-fallback",
+      nativeWebShare: false,
+      requiresUserDownload: true,
+    });
+  });
 });
