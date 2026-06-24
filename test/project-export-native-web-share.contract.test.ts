@@ -45,16 +45,14 @@ describe("project export native Web Share evidence", () => {
         api: "navigator.share",
         status: "shared",
         packageFilename: exported.package.filename,
+        packageSizeBytes: exported.package.sizeBytes,
+        packageSha256: exported.package.sha256,
         filesShared: true,
         canShareChecked: true,
       },
     });
     expect(result.validation.valid).toBe(true);
     expect(result.validation.errors).toEqual([]);
-    const validation = await validateNativeDelivery(exported.package.base64, result.share.delivery);
-    expect(validation.valid).toBe(true);
-    expect(validation.evidence).toContain("native-web-share");
-    expect(validation.evidence).not.toContain("browser-download-fallback");
   });
 
   it("keeps the browser-download fallback when native Web Share cannot accept the package", async () => {
@@ -157,6 +155,30 @@ describe("project export native Web Share evidence", () => {
     const forgedPackageBase64 = Buffer.from(await zip.generateAsync({ type: "uint8array" })).toString("base64");
 
     const validation = await validateWebPackage({ packageBase64: forgedPackageBase64 });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-share-delivery" }),
+    ]));
+  });
+
+  it("rejects embedded native Web Share delivery for the same package filename", async () => {
+    const project = createMinimalProject();
+    const exported = await exportWebPackage(project, { title: "Forged same-name share proof" });
+    const validation = await validateNativeDelivery(exported.package.base64, {
+      mode: "native-web-share",
+      nativeWebShare: true,
+      requiresUserDownload: false,
+      evidence: {
+        api: "navigator.share",
+        status: "shared",
+        packageFilename: exported.package.filename,
+        packageSizeBytes: exported.package.sizeBytes,
+        packageSha256: exported.package.sha256,
+        filesShared: true,
+        canShareChecked: true,
+      },
+    });
 
     expect(validation.valid).toBe(false);
     expect(validation.errors).toEqual(expect.arrayContaining([

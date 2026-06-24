@@ -267,6 +267,8 @@ interface NativeWebShareDelivery {
     api: "navigator.share";
     status: "shared";
     packageFilename: string;
+    packageSizeBytes: number;
+    packageSha256: string;
     filesShared: boolean;
     canShareChecked: boolean;
   };
@@ -625,6 +627,7 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
   }
 
   const filename = validatedPackageFilename(manifest, errors);
+  const packageReference = buildPackageReference(filename, decoded.bytes);
   if (
     !manifest?.package
     || !isSafePackageFilename(manifest.package.filename)
@@ -643,7 +646,7 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
     });
   }
   if (share) {
-    const deliveryErrors = validateShareDelivery(share, filename);
+    const deliveryErrors = validateShareDelivery(share);
     errors.push(...deliveryErrors);
     if (deliveryErrors.length === 0 && share.delivery !== undefined) {
       evidence.push(share.delivery.mode);
@@ -656,7 +659,7 @@ export async function validateWebPackage(input: ValidateWebPackageInput): Promis
   }
   return buildValidationResult(evidence, errors, {
     runtime: manifest?.packageName === ALICE_WEB_PACKAGE ? ALICE_WEB_PACKAGE : undefined,
-    package: buildPackageReference(filename, decoded.bytes),
+    package: packageReference,
     ...(manifest ? { manifest } : {}),
   });
 }
@@ -1149,7 +1152,7 @@ function isSafePackageFilename(value: string): boolean {
   }
 }
 
-function validateShareDelivery(share: AliceWebShareDocument, filename: string): WebPackageValidationError[] {
+function validateShareDelivery(share: AliceWebShareDocument): WebPackageValidationError[] {
   if (share.delivery === undefined) {
     return [];
   }
@@ -1167,22 +1170,9 @@ function validateShareDelivery(share: AliceWebShareDocument, filename: string): 
   ) {
     return [];
   }
-  if (
-    share.delivery.mode === "native-web-share"
-    && share.delivery.nativeWebShare === true
-    && share.delivery.requiresUserDownload === false
-    && isRecord(share.delivery.evidence)
-    && share.delivery.evidence.api === "navigator.share"
-    && share.delivery.evidence.status === "shared"
-    && share.delivery.evidence.packageFilename === filename
-    && share.delivery.evidence.filesShared === true
-    && typeof share.delivery.evidence.canShareChecked === "boolean"
-  ) {
-    return [];
-  }
   return [{
     code: "invalid-share-delivery",
-    message: "share delivery must be browser-download-fallback or include native Web Share evidence",
+    message: "package share delivery must be browser-download-fallback; native Web Share evidence is only valid as runtime share output",
     path: WEB_PACKAGE_ARTIFACTS.share,
   }];
 }
@@ -1294,6 +1284,8 @@ async function tryNativeWebShare(
       api: "navigator.share",
       status: "shared",
       packageFilename: packageReference.filename,
+      packageSizeBytes: packageReference.sizeBytes,
+      packageSha256: packageReference.sha256,
       filesShared: true,
       canShareChecked,
     },
