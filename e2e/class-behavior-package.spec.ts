@@ -95,7 +95,7 @@ test("shows imported executable class behavior and persists a created instance",
         },
       ],
     },
-    evidence: ["test-executable-class-behavior"],
+    evidence: ["class-behavior-methods-preserved"],
   }, null, 2)));
 
   await page.getByTestId("alice-import-class-behavior-input").setInputFiles(behaviorPackagePath);

@@ -446,9 +446,6 @@ function collectStatementBehavior(statements: readonly AliceStatement[]): string
 }
 
 function describeStatementBehavior(statement: AliceStatement): string | null {
-  if ((statement.kind === "Comment" || statement.kind === "comment") && statement.expression?.trim()) {
-    return statement.expression.trim();
-  }
   if ((statement.kind === "MethodCall" || statement.kind === "call") && statement.method) {
     return `${statement.object ?? "this"}.${statement.method}(${(statement.arguments ?? []).join(", ")})`;
   }

@@ -483,8 +483,12 @@ function buildPackageEvidence(type: AliceTypeDefinition): string[] {
     ...(type.superTypeName ? ["class-behavior-supertype-preserved"] : []),
     ...((type.fields?.length ?? 0) > 0 ? ["class-behavior-fields-preserved"] : []),
     ...((type.constructors?.length ?? 0) > 0 ? ["class-behavior-constructors-preserved"] : []),
-    ...((type.methods?.length ?? 0) > 0 ? ["class-behavior-methods-preserved"] : []),
+    ...((type.methods ?? []).some(hasExecutableStatements) ? ["class-behavior-methods-preserved"] : []),
   ];
+}
+
+function hasExecutableStatements(method: AliceMethod): boolean {
+  return method.statements.some((statement) => !["Comment", "comment"].includes(statement.kind));
 }
 
 function cloneMethod(method: AliceMethod): AliceMethod {
